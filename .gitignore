@@ -1,17 +1,119 @@
-node_modules
+# Dependencies
+node_modules/
+client/node_modules/
+
+# Environment variables
 .env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Build outputs
+client/dist/
+client/build/
+dist/
+build/
 
 # Hardhat files
-/cache
-/artifacts
+cache/
+artifacts/build-info/
+typechain-types/
 
-# TypeChain files
-/typechain
-/typechain-types
+# Keep essential artifacts for deployment
+!/artifacts/contracts/
 
-# solidity-coverage files
-/coverage
-/coverage.json
+# Coverage reports
+coverage/
+coverage.json
+.nyc_output/
 
-# Hardhat Ignition default folder for deployments against a local node
-ignition/deployments/chain-31337
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Microbundle cache
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# parcel-bundler cache (https://parceljs.org/)
+.cache
+.parcel-cache
+
+# Next.js build output
+.next
+
+# Nuxt.js build / generate output
+.nuxt
+dist
+
+# Storybook build outputs
+.out
+.storybook-out
+
+# Temporary folders
+tmp/
+temp/
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*~
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+
+# Hardhat Ignition deployments (keep only mainnet/testnet)
+ignition/deployments/chain-31337/
+
+# Cleanup and temporary files
+CLEANUP_PLAN.md
+*.tmp
+*.temp
+
+# Test artifacts
+test-results/
+playwright-report/
+test-results.xml
+
+# Local development files
+*.local
+.vscode
+artifacts

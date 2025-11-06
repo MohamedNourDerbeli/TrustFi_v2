@@ -1,0 +1,38 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom styles for TrustFi */
+@layer base {
+  body {
+    @apply bg-gray-50 text-gray-900;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+  }
+  
+  .btn-secondary {
+    @apply bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+  }
+  
+  .card {
+    @apply bg-white rounded-lg shadow-md p-6 border border-gray-200;
+  }
+  
+  .nav-link {
+    @apply text-gray-600 hover:text-blue-600 font-medium transition-colors duration-200;
+  }
+  
+  .nav-link.active {
+    @apply text-blue-600 border-b-2 border-blue-600;
+  }
+}
+
+/* Modal styles - prevent body scroll when modal is open */
+body.modal-open {
+  overflow: hidden !important;
+  height: 100vh !important;
+}
