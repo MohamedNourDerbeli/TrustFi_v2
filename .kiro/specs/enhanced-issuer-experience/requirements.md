@@ -1,130 +1,261 @@
-# Enhanced Issuer Experience Requirements
+# Requirements Document
 
 ## Introduction
 
-The Enhanced Issuer Experience system provides comprehensive tools for credential issuers to create claimable reputation NFTs, manage task-based achievement systems, and track user engagement. This system enables issuers to set up quests, achievements, and verification tasks where users can mint NFTs themselves after completing requirements, integrating seamlessly with dApps and external systems.
+This document outlines the requirements for enhancing the issuer experience on the TrustFi Reputation Platform. Currently, issuers can only mint reputation cards directly to recipients. This enhancement introduces a flexible minting system where issuers can choose between two approaches: direct minting (issuer mints the NFT and assigns it to a recipient) or collectible minting (issuer creates a collectible NFT that users can mint themselves). This flexibility enables new use cases such as event badges, achievement unlocks, and community rewards while maintaining the platform's reputation integrity.
 
 ## Glossary
 
-- **Issuer Dashboard**: A comprehensive interface for creating and managing claimable NFT campaigns and tracking user engagement
-- **Claimable NFT**: A reputation NFT that users can mint themselves after completing specified tasks or achievements
-- **Task Campaign**: A structured achievement system where issuers define requirements users must complete to claim NFTs
-- **Claim Condition**: Specific criteria or proof required for users to be eligible to mint a claimable NFT
-- **Proof System**: Mechanism for generating and validating signatures or attestations that authorize NFT minting
-- **dApp Integration**: API and tools allowing external applications to integrate with the claimable NFT system
-- **Mint Authorization**: Cryptographic proof (EIP-712 signature) that allows a user to mint a specific NFT
-- **Campaign Analytics**: Metrics showing engagement, completion rates, and impact of issuer's NFT campaigns
-- **Bulk Campaign Setup**: System allowing issuers to create multiple claimable NFT campaigns simultaneously
-- **Quest Template**: Pre-configured campaign formats for common achievement types and verification methods
-- **Soulbound NFT**: Non-transferable NFT that remains permanently bound to the recipient's profile to maintain reputation integrity
-- **Transfer Control**: Issuer-defined setting that determines whether claimed NFTs can be transferred or remain permanently soulbound
+- **TrustFi Platform**: The decentralized reputation system built on Ethereum
+- **Issuer**: An authorized entity that can create and distribute reputation cards
+- **Reputation Card**: A verifiable credential issued as an NFT on the blockchain
+- **Direct Minting**: The process where an issuer mints an NFT and assigns it directly to a specific recipient's wallet address
+- **Collectible Minting**: The process where an issuer creates a claimable NFT that eligible users can mint to their own wallets
+- **Minting Mode**: The configuration setting that determines whether a reputation card uses direct or collectible minting
+- **Claim Eligibility**: The criteria that determine which users are allowed to mint a collectible reputation card
+- **Mint Transaction**: The blockchain transaction that creates a new NFT token
+- **Gas Fee**: The transaction cost paid to execute blockchain operations
+- **Smart Contract**: The on-chain code that manages reputation card creation and ownership
+- **Issuer Dashboard**: The interface where issuers manage their reputation cards and minting configurations
 
 ## Requirements
 
 ### Requirement 1
 
-**User Story:** As an issuer, I want a comprehensive dashboard to create and manage claimable NFT campaigns, so that I can track user engagement and campaign performance.
+**User Story:** As an issuer, I want to choose between direct minting and collectible minting when creating a reputation card, so that I can select the appropriate distribution method for my use case
 
 #### Acceptance Criteria
 
-1. WHEN an authorized issuer accesses the dashboard, THE Issuer Dashboard SHALL display campaign statistics including active campaigns, total claims, and user engagement metrics
-2. THE Issuer Dashboard SHALL provide quick action tools for creating new campaigns, managing claim conditions, and viewing recent claims
-3. THE Issuer Dashboard SHALL display system-wide statistics including total claimable NFTs created and claim success rates
-4. THE Issuer Dashboard SHALL update metrics in real-time when users claim NFTs from campaigns
-5. THE Issuer Dashboard SHALL provide visual indicators showing campaign progress and completion rates
+1. WHEN an issuer creates a new reputation card type, THE Issuer Dashboard SHALL display a minting mode selection with two options
+2. WHEN the issuer selects direct minting mode, THE Issuer Dashboard SHALL configure the card for issuer-controlled distribution
+3. WHEN the issuer selects collectible minting mode, THE Issuer Dashboard SHALL configure the card for user-initiated claiming
+4. WHEN saving the card configuration, THE Smart Contract SHALL store the minting mode as immutable metadata
+5. WHEN viewing existing card types, THE Issuer Dashboard SHALL display the configured minting mode for each card
 
 ### Requirement 2
 
-**User Story:** As an issuer, I want to create task-based campaigns with specific claim conditions, so that users can earn and mint NFTs by completing achievements in my dApp.
+**User Story:** As an issuer using direct minting, I want to mint reputation cards to specific wallet addresses, so that I can award credentials to verified recipients
 
 #### Acceptance Criteria
 
-1. WHEN an issuer creates a campaign, THE Task Campaign system SHALL allow definition of specific completion criteria including task types, verification methods, and proof requirements
-2. THE Task Campaign system SHALL support multiple claim condition types including time-based, action-based, and verification-based requirements
-3. THE Task Campaign system SHALL generate unique campaign IDs and claimable NFT metadata for each campaign
-4. THE Task Campaign system SHALL allow issuers to set campaign limits including maximum claims, time windows, and user eligibility criteria
-5. THE Task Campaign system SHALL provide preview functionality showing how the campaign will appear to users in integrated dApps
+1. WHEN an issuer selects a direct minting card type, THE Issuer Dashboard SHALL provide an interface to enter recipient wallet addresses
+2. WHEN the issuer initiates direct minting, THE Smart Contract SHALL mint the NFT to the specified recipient address
+3. WHEN the minting transaction completes, THE Smart Contract SHALL transfer ownership to the recipient immediately
+4. WHEN direct minting succeeds, THE Issuer Dashboard SHALL display a confirmation with the transaction hash
+5. WHEN the recipient has a profile, THE TrustFi Platform SHALL notify the recipient of the new reputation card
 
 ### Requirement 3
 
-**User Story:** As an issuer, I want quest templates and smart campaign creation tools, so that I can quickly set up consistent, engaging achievement systems.
+**User Story:** As an issuer using collectible minting, I want to create claimable reputation cards with eligibility criteria, so that qualified users can mint them independently
 
 #### Acceptance Criteria
 
-1. THE Quest Template system SHALL provide pre-configured templates for common achievement types including skill verification, community participation, learning completion, and milestone achievements
-2. WHEN an issuer selects a template, THE Quest Template system SHALL auto-populate campaign structure, claim conditions, and suggested NFT metadata
-3. THE Quest Template system SHALL allow issuers to create and save custom templates for their specific dApp integration needs
-4. THE Quest Template system SHALL provide campaign preview showing how users will interact with the claiming process
-5. THE Quest Template system SHALL suggest appropriate reward values and claim limits based on achievement difficulty and historical data
+1. WHEN an issuer creates a collectible card type, THE Issuer Dashboard SHALL provide options to configure claim eligibility criteria
+2. WHEN the issuer sets eligibility criteria, THE Smart Contract SHALL store the requirements on-chain or reference them verifiably
+3. WHEN the issuer publishes a collectible card, THE Smart Contract SHALL make it available for claiming by eligible users
+4. WHEN a collectible card is published, THE TrustFi Platform SHALL display it in the collectibles gallery for eligible users
+5. WHEN the issuer updates eligibility criteria, THE Smart Contract SHALL apply changes to future claims without affecting existing tokens
 
 ### Requirement 4
 
-**User Story:** As an issuer, I want bulk campaign setup and dApp integration tools, so that I can efficiently create multiple achievement campaigns and integrate them with my applications.
+**User Story:** As a user, I want to browse available collectible reputation cards, so that I can discover and claim credentials I am eligible for
 
 #### Acceptance Criteria
 
-1. WHEN an issuer uploads a campaign configuration file, THE Bulk Campaign Setup SHALL validate all campaign parameters and claim conditions before deployment
-2. THE Bulk Campaign Setup SHALL provide templates for common campaign types including CSV import for multiple similar achievements
-3. THE dApp Integration system SHALL provide API endpoints and SDKs for external applications to check claim eligibility and generate mint authorizations
-4. THE dApp Integration system SHALL support webhook notifications when users complete tasks or claim NFTs
-5. THE dApp Integration system SHALL provide documentation and code examples for common integration patterns including React hooks and smart contract interactions
+1. WHEN a user accesses the collectibles section, THE TrustFi Platform SHALL display all available collectible reputation cards
+2. WHEN displaying collectibles, THE TrustFi Platform SHALL indicate which cards the user is eligible to claim
+3. WHEN a user views a collectible card, THE TrustFi Platform SHALL show the eligibility requirements and claim instructions
+4. WHEN a collectible has limited supply, THE TrustFi Platform SHALL display the remaining quantity available
+5. WHEN a user has already claimed a collectible, THE TrustFi Platform SHALL indicate the card as already owned
 
 ### Requirement 5
 
-**User Story:** As an issuer, I want comprehensive analytics of my campaigns and user engagement, so that I can optimize my achievement systems and measure their effectiveness.
+**User Story:** As a user, I want to mint collectible reputation cards to my wallet, so that I can claim credentials I have earned or qualify for
 
 #### Acceptance Criteria
 
-1. THE Campaign Analytics system SHALL maintain complete records of all campaigns including creation dates, claim rates, and user engagement metrics
-2. THE Campaign Analytics system SHALL calculate and display campaign performance including completion rates, time-to-claim, and user retention
-3. THE Campaign Analytics system SHALL provide category breakdown showing which types of achievements generate the most user engagement
-4. THE Campaign Analytics system SHALL generate reports showing campaign trends, popular achievement types, and user behavior patterns
-5. THE Campaign Analytics system SHALL allow comparison of campaign performance and provide recommendations for optimization
+1. WHEN a user clicks claim on an eligible collectible, THE TrustFi Platform SHALL initiate the minting transaction
+2. WHEN the user confirms the transaction, THE Smart Contract SHALL verify eligibility before minting
+3. WHEN eligibility is confirmed, THE Smart Contract SHALL mint the NFT to the user's wallet address
+4. WHEN minting completes successfully, THE TrustFi Platform SHALL display the new card in the user's collection
+5. WHEN the user pays gas fees, THE Smart Contract SHALL execute the mint without additional payment to the issuer
 
 ### Requirement 6
 
-**User Story:** As an issuer, I want proof generation and verification systems, so that I can securely authorize NFT minting and prevent unauthorized claims.
+**User Story:** As an issuer, I want to set supply limits for collectible reputation cards, so that I can create scarcity and exclusivity
 
 #### Acceptance Criteria
 
-1. WHEN a user completes campaign requirements, THE Proof System SHALL generate cryptographic signatures (EIP-712) that authorize specific NFT minting
-2. THE Proof System SHALL validate user eligibility against campaign conditions before generating mint authorization
-3. THE Proof System SHALL prevent duplicate claims by tracking completed tasks and issued authorizations per user
-4. THE Proof System SHALL support time-limited proofs that expire after a specified period to maintain security
-5. THE Proof System SHALL provide audit trails showing all proof generations and claim attempts for compliance and debugging
+1. WHEN creating a collectible card type, THE Issuer Dashboard SHALL provide an option to set maximum supply
+2. WHEN a supply limit is set, THE Smart Contract SHALL enforce the maximum number of tokens that can be minted
+3. WHEN the supply limit is reached, THE Smart Contract SHALL prevent further minting attempts
+4. WHEN a collectible approaches its supply limit, THE TrustFi Platform SHALL display the remaining quantity to users
+5. WHERE no supply limit is set, THE Smart Contract SHALL allow unlimited minting by eligible users
 
 ### Requirement 7
 
-**User Story:** As an issuer, I want campaign lifecycle management and automated workflows, so that I can efficiently manage long-running achievement programs and user progression.
+**User Story:** As an issuer, I want to configure time-based availability for collectible cards, so that I can create time-limited claiming opportunities
 
 #### Acceptance Criteria
 
-1. THE Campaign Lifecycle system SHALL allow issuers to create draft campaigns, test them, and deploy them when ready
-2. THE Campaign Lifecycle system SHALL support campaign scheduling with automatic activation and deactivation based on time or conditions
-3. THE Campaign Lifecycle system SHALL provide automated user notifications when new campaigns become available or when they complete requirements
-4. THE Campaign Lifecycle system SHALL enable campaign updates and modifications without disrupting active user progress
-5. THE Campaign Lifecycle system SHALL maintain complete audit trails of all campaign changes and user interactions
+1. WHEN creating a collectible card type, THE Issuer Dashboard SHALL provide options to set start and end claim dates
+2. WHEN a start date is configured, THE Smart Contract SHALL prevent claiming before the specified timestamp
+3. WHEN an end date is configured, THE Smart Contract SHALL prevent claiming after the specified timestamp
+4. WHEN a collectible is not yet available, THE TrustFi Platform SHALL display the start date to users
+5. WHEN a collectible has expired, THE TrustFi Platform SHALL indicate that claiming is no longer available
 
 ### Requirement 8
 
-**User Story:** As an issuer, I want marketplace and discovery features, so that users can find and engage with my achievement campaigns across different dApps.
+**User Story:** As an issuer, I want to define eligibility criteria for collectible cards, so that only qualified users can claim them
 
 #### Acceptance Criteria
 
-1. THE Campaign Marketplace SHALL allow issuers to publish campaigns for discovery by users across the platform ecosystem
-2. THE Campaign Marketplace SHALL display issuer profiles with specialization areas, campaign history, and user engagement ratings
-3. THE Campaign Marketplace SHALL provide search and filtering capabilities for users to find relevant achievement opportunities
-4. THE Campaign Marketplace SHALL show campaign statistics including difficulty level, completion rates, and reward values
-5. THE Campaign Marketplace SHALL enable cross-dApp campaign promotion where issuers can showcase achievements available in their applications
+1. WHEN configuring a collectible card, THE Issuer Dashboard SHALL provide eligibility options including whitelist, token ownership, and open access
+2. WHEN whitelist eligibility is selected, THE Smart Contract SHALL only allow addresses on the approved list to mint
+3. WHEN token ownership eligibility is selected, THE Smart Contract SHALL verify the user owns required tokens before minting
+4. WHEN open access is selected, THE Smart Contract SHALL allow any user to mint the collectible
+5. WHEN a user attempts to claim, THE Smart Contract SHALL validate eligibility before executing the mint transaction
 
 ### Requirement 9
 
-**User Story:** As an issuer, I want to control the transferability of claimed NFTs, so that I can maintain reputation integrity by making achievements soulbound to user profiles.
+**User Story:** As an issuer, I want to view analytics on collectible card claims, so that I can understand engagement and distribution
 
 #### Acceptance Criteria
 
-1. WHEN an issuer creates a campaign, THE Transfer Control system SHALL allow setting NFTs as soulbound (non-transferable) or transferable
-2. THE Soulbound NFT system SHALL prevent transfer of soulbound NFTs while allowing them to remain viewable and verifiable on user profiles
-3. THE Transfer Control system SHALL default to soulbound mode to maintain reputation integrity unless explicitly enabled by the issuer
-4. WHEN a user attempts to transfer a soulbound NFT, THE Soulbound NFT system SHALL reject the transaction and display appropriate error messages
-5. THE Transfer Control system SHALL allow issuers to modify transferability settings for future campaigns but not retroactively change existing NFTs
+1. WHEN viewing a collectible card in the dashboard, THE Issuer Dashboard SHALL display the total number of claims
+2. WHEN analytics are shown, THE Issuer Dashboard SHALL provide a list of wallet addresses that have claimed the card
+3. WHEN viewing claim analytics, THE Issuer Dashboard SHALL show the claim timeline with dates and quantities
+4. WHEN a supply limit exists, THE Issuer Dashboard SHALL display the percentage of supply that has been claimed
+5. WHEN viewing multiple collectibles, THE Issuer Dashboard SHALL provide comparative analytics across card types
+
+### Requirement 10
+
+**User Story:** As a user, I want to see clear visual distinction between directly minted and collectible reputation cards, so that I understand how I obtained each credential
+
+#### Acceptance Criteria
+
+1. WHEN viewing reputation cards in my collection, THE TrustFi Platform SHALL display a badge indicating the minting method
+2. WHEN a card was directly minted, THE TrustFi Platform SHALL show an "Awarded" or "Issued" indicator
+3. WHEN a card was self-claimed, THE TrustFi Platform SHALL show a "Claimed" or "Collected" indicator
+4. WHEN viewing card details, THE TrustFi Platform SHALL display the minting method and relevant metadata
+5. WHEN filtering cards, THE TrustFi Platform SHALL provide options to filter by minting method
+
+### Requirement 11
+
+**User Story:** As an issuer, I want to pause and resume collectible card claiming, so that I can control distribution timing without deleting the card
+
+#### Acceptance Criteria
+
+1. WHEN managing a collectible card, THE Issuer Dashboard SHALL provide pause and resume controls
+2. WHEN an issuer pauses a collectible, THE Smart Contract SHALL prevent new claims until resumed
+3. WHEN a collectible is paused, THE TrustFi Platform SHALL display a paused status to users
+4. WHEN an issuer resumes a collectible, THE Smart Contract SHALL allow eligible users to claim again
+5. WHEN a collectible is paused, THE Issuer Dashboard SHALL display the pause status and resume option
+
+### Requirement 12
+
+**User Story:** As a user, I want to receive notifications about new collectible cards I am eligible for, so that I don't miss claiming opportunities
+
+#### Acceptance Criteria
+
+1. WHEN a new collectible card is published, THE TrustFi Platform SHALL identify eligible users based on criteria
+2. WHEN a user is eligible for a new collectible, THE TrustFi Platform SHALL display a notification badge
+3. WHEN viewing notifications, THE TrustFi Platform SHALL show details about the new collectible and claim instructions
+4. WHEN a collectible has a time limit, THE TrustFi Platform SHALL display the expiration date in the notification
+5. WHEN a user claims a collectible, THE TrustFi Platform SHALL remove the notification for that card
+
+### Requirement 13
+
+**User Story:** As an issuer, I want to preview how my collectible card will appear to users, so that I can ensure the presentation is correct before publishing
+
+#### Acceptance Criteria
+
+1. WHEN creating a collectible card, THE Issuer Dashboard SHALL provide a preview mode
+2. WHEN in preview mode, THE Issuer Dashboard SHALL display the card as it will appear in the collectibles gallery
+3. WHEN previewing, THE Issuer Dashboard SHALL show eligibility requirements as users will see them
+4. WHEN previewing, THE Issuer Dashboard SHALL display supply limits and time restrictions
+5. WHEN satisfied with the preview, THE Issuer Dashboard SHALL allow the issuer to publish the collectible
+
+### Requirement 14
+
+**User Story:** As a user, I want to see the gas cost estimate before claiming a collectible card, so that I can decide whether to proceed with the transaction
+
+#### Acceptance Criteria
+
+1. WHEN a user initiates a claim, THE TrustFi Platform SHALL estimate the gas cost for the minting transaction
+2. WHEN displaying the gas estimate, THE TrustFi Platform SHALL show the cost in both native currency and USD equivalent
+3. WHEN gas prices are high, THE TrustFi Platform SHALL display a warning about elevated transaction costs
+4. WHEN the user confirms the transaction, THE TrustFi Platform SHALL proceed with the mint using the user's wallet
+5. IF the user's wallet has insufficient funds for gas, THEN THE TrustFi Platform SHALL display an error with the required amount
+
+### Requirement 15
+
+**User Story:** As an issuer, I want to edit collectible card metadata before any claims occur, so that I can correct mistakes or update information
+
+#### Acceptance Criteria
+
+1. WHEN no claims have been made, THE Issuer Dashboard SHALL allow editing of card metadata
+2. WHEN editing metadata, THE Issuer Dashboard SHALL allow changes to title, description, and image
+3. WHEN saving metadata changes, THE Smart Contract SHALL update the card configuration
+4. WHEN claims have already occurred, THE Issuer Dashboard SHALL prevent metadata changes to maintain consistency
+5. WHEN metadata cannot be edited, THE Issuer Dashboard SHALL display a message explaining that claims have already been made
+
+### Requirement 16
+
+**User Story:** As a user, I want to share collectible cards I've claimed on social media, so that I can showcase my achievements
+
+#### Acceptance Criteria
+
+1. WHEN viewing a claimed collectible card, THE TrustFi Platform SHALL provide social sharing options
+2. WHEN sharing to social media, THE TrustFi Platform SHALL generate a preview image with card details
+3. WHEN sharing, THE TrustFi Platform SHALL include a link to the public verification page
+4. WHEN the share link is accessed, THE TrustFi Platform SHALL display the card with blockchain verification
+5. WHERE supported, THE TrustFi Platform SHALL include Open Graph metadata for rich social media previews
+
+### Requirement 17
+
+**User Story:** As an issuer, I want to create collectible cards with different rarity tiers, so that I can offer varied levels of achievement recognition
+
+#### Acceptance Criteria
+
+1. WHEN creating a collectible card, THE Issuer Dashboard SHALL provide rarity tier options
+2. WHEN a rarity tier is selected, THE Smart Contract SHALL store the rarity as card metadata
+3. WHEN displaying collectibles, THE TrustFi Platform SHALL use visual styling based on rarity tier
+4. WHEN a user claims a rare collectible, THE TrustFi Platform SHALL display a special celebration animation
+5. WHEN viewing analytics, THE Issuer Dashboard SHALL show claim statistics grouped by rarity tier
+
+### Requirement 18
+
+**User Story:** As a user, I want to see a history of collectible cards I've claimed, so that I can track my collection progress over time
+
+#### Acceptance Criteria
+
+1. WHEN viewing my profile, THE TrustFi Platform SHALL provide a claim history section
+2. WHEN displaying claim history, THE TrustFi Platform SHALL show each collectible with claim date and transaction hash
+3. WHEN viewing claim history, THE TrustFi Platform SHALL sort claims chronologically with most recent first
+4. WHEN clicking a claim entry, THE TrustFi Platform SHALL display full card details and blockchain verification
+5. WHEN filtering my collection, THE TrustFi Platform SHALL provide an option to view only claimed collectibles
+
+### Requirement 19
+
+**User Story:** As an issuer, I want to revoke or burn specific collectible tokens if needed, so that I can handle cases of fraud or policy violations
+
+#### Acceptance Criteria
+
+1. WHEN managing issued collectibles, THE Issuer Dashboard SHALL provide a revocation interface for specific tokens
+2. WHEN an issuer initiates revocation, THE Smart Contract SHALL verify the issuer's authority
+3. WHEN revocation is confirmed, THE Smart Contract SHALL burn the token or mark it as revoked
+4. WHEN a token is revoked, THE TrustFi Platform SHALL update the user's collection to reflect the revocation
+5. WHEN viewing a revoked token, THE TrustFi Platform SHALL display a revocation notice with reason if provided
+
+### Requirement 20
+
+**User Story:** As a user, I want to see trending and popular collectible cards, so that I can discover high-value credentials to claim
+
+#### Acceptance Criteria
+
+1. WHEN browsing collectibles, THE TrustFi Platform SHALL display a trending section based on claim activity
+2. WHEN calculating trending status, THE TrustFi Platform SHALL consider claim velocity and recency
+3. WHEN displaying trending collectibles, THE TrustFi Platform SHALL show claim counts and time remaining
+4. WHEN a collectible is nearly sold out, THE TrustFi Platform SHALL highlight it in the trending section
+5. WHEN viewing trending collectibles, THE TrustFi Platform SHALL provide sorting options by popularity, scarcity, and expiration
