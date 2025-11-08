@@ -1,29 +1,27 @@
 import { ethers } from 'ethers';
 import { CONTRACT_ADDRESSES, type SupportedChainId } from '../config/contracts';
 import { ProfileNFT_ABI } from '../config/ProfileNFT.abi';
+import { metadataService, type ProfileMetadata } from './metadataService';
 
-export interface Profile {
-  name: string;
-  bio: string;
+export interface ProfileOnChain {
   reputationScore: number;
   createdAt: number;
+  lastUpdated: number;
   isActive: boolean;
 }
 
-export interface ProfileWithId extends Profile {
+export interface ProfileWithMetadata extends ProfileOnChain {
   tokenId: number;
+  metadata: ProfileMetadata;
+  metadataURI: string;
 }
 
-// Custom error types for better error handling
+// Custom error types
 export class ContractError extends Error {
   public code?: string;
   public originalError?: any;
 
-  constructor(
-    message: string,
-    code?: string,
-    originalError?: any
-  ) {
+  constructor(message: string, code?: string, originalError?: any) {
     super(message);
     this.name = 'ContractError';
     this.code = code;
@@ -53,286 +51,243 @@ export class TransactionError extends ContractError {
 }
 
 export class ContractService {
-  private provider: ethers.BrowserProvider | null = null;
   private signer: ethers.Signer | null = null;
   private chainId: SupportedChainId | null = null;
 
   async initialize(provider: ethers.BrowserProvider): Promise<boolean> {
     try {
-      if (!provider) {
-        throw new ValidationError('Provider is required for initialization');
+      this.signer = await provider.getSigner();
+      const network = await provider.getNetwork();
+      const chainIdNum = Number(network.chainId);
+      this.chainId = chainIdNum.toString() as SupportedChainId;
+
+      if (!CONTRACT_ADDRESSES[this.chainId]) {
+        throw new NetworkError(`Unsupported network: ${this.chainId}`);
       }
 
-      this.provider = provider;
-      this.signer = await provider.getSigner();
-      
-      // Get network information
-      const network = await provider.getNetwork();
-      this.chainId = Number(network.chainId) as SupportedChainId;
-      
-      // Validate that we support this network
-      if (!CONTRACT_ADDRESSES[this.chainId]) {
-        throw new NetworkError(
-          `Unsupported network: ${this.chainId}. Please switch to a supported network.`
-        );
-      }
-      
       return true;
-    } catch (error) {
-      
-      // Reset state on initialization failure
-      this.provider = null;
-      this.signer = null;
-      this.chainId = null;
-      
-      if (error instanceof ContractError) {
-        throw error;
-      }
-      
+    } catch (error: any) {
+      console.error('Failed to initialize contract service:', error);
       throw new NetworkError('Failed to initialize contract service', error);
     }
   }
 
-  private getProfileNFTContract(): ethers.Contract {
+  isInitialized(): boolean {
+    return this.signer !== null && this.chainId !== null;
+  }
+
+  private getContract(): ethers.Contract {
     if (!this.signer || !this.chainId) {
-      throw new ContractError('Contract service not initialized. Please connect your wallet first.');
+      throw new ContractError('Contract service not initialized');
     }
 
-    const contractAddress = CONTRACT_ADDRESSES[this.chainId].ProfileNFT;
-    if (!contractAddress) {
-      throw new NetworkError(`No ProfileNFT contract address found for network ${this.chainId}`);
-    }
-
-    try {
-      return new ethers.Contract(contractAddress, ProfileNFT_ABI, this.signer);
-    } catch (error) {
-      throw new ContractError('Failed to create contract instance', 'CONTRACT_CREATION_ERROR', error);
-    }
+    const address = CONTRACT_ADDRESSES[this.chainId].ProfileNFT;
+    return new ethers.Contract(address, ProfileNFT_ABI, this.signer);
   }
 
-  private async handleContractCall<T>(
-    operation: () => Promise<T>,
-    errorMessage: string
-  ): Promise<T> {
+  /**
+   * Create a new profile with metadata URI
+   */
+  async createProfile(metadataURI: string): Promise<number> {
     try {
-      return await operation();
-    } catch (error: any) {
-      
-      // Handle specific error types
-      if (error.code === 'CALL_EXCEPTION') {
-        throw new ContractError(`Contract call failed: ${error.reason || error.message}`);
-      }
-      
-      if (error.code === 'TRANSACTION_REPLACED') {
-        throw new TransactionError('Transaction was replaced or cancelled');
-      }
-      
-      if (error.code === 'INSUFFICIENT_FUNDS') {
-        throw new TransactionError('Insufficient funds for transaction');
-      }
-      
-      if (error.code === 'USER_REJECTED') {
-        throw new TransactionError('Transaction was rejected by user');
-      }
-      
-      if (error.code === 'NETWORK_ERROR') {
-        throw new NetworkError('Network connection error. Please check your connection.');
-      }
-      
-      // Handle custom contract errors
-      if (error.reason) {
-        switch (error.reason) {
-          case 'ProfileAlreadyExists':
-            throw new ValidationError('A profile already exists for this wallet address');
-          case 'ProfileNotFound':
-            throw new ValidationError('Profile not found');
-          case 'UnauthorizedAccess':
-            throw new ValidationError('You are not authorized to perform this action');
-          case 'InvalidProfileData':
-            throw new ValidationError('Invalid profile data provided');
-          default:
-            throw new ContractError(`Contract error: ${error.reason}`);
-        }
-      }
-      
-      // Generic error handling
-      if (error instanceof ContractError) {
-        throw error;
-      }
-      
-      throw new ContractError(errorMessage, 'UNKNOWN_ERROR', error);
-    }
-  }
+      const contract = this.getContract();
 
-  async createProfile(name: string, bio: string): Promise<number> {
-    // Validate inputs before making contract call
-    this.validateProfileData(name, bio);
+      // Validate metadata URI
+      if (!metadataURI || metadataURI.trim().length === 0) {
+        throw new ValidationError('Metadata URI is required');
+      }
 
-    return this.handleContractCall(async () => {
-      const contract = this.getProfileNFTContract();
-      
-      const tx = await contract.createProfile(name.trim(), bio.trim());
+      // Call contract
+      const tx = await contract.createProfile(metadataURI);
       const receipt = await tx.wait();
-      
-      // Find the ProfileCreated event to get the token ID
-      const event = receipt.logs.find((log: any) => {
-        try {
-          const parsed = contract.interface.parseLog(log);
-          return parsed?.name === 'ProfileCreated';
-        } catch {
-          return false;
-        }
-      });
 
-      if (event) {
-        const parsed = contract.interface.parseLog(event);
-        const tokenId = Number(parsed?.args.tokenId);
-        return tokenId;
+      // Extract token ID from event using ethers v6 approach
+      const profileCreatedEvent = receipt?.logs
+        .map((log: any) => {
+          try {
+            return contract.interface.parseLog({
+              topics: [...log.topics],
+              data: log.data
+            });
+          } catch {
+            return null;
+          }
+        })
+        .find((event: any) => event?.name === 'ProfileCreated');
+
+      if (!profileCreatedEvent || !profileCreatedEvent.args) {
+        throw new ContractError('Failed to get token ID from transaction');
       }
-      
-      throw new TransactionError('Profile creation event not found in transaction receipt');
-    }, 'Failed to create profile');
-  }
 
-  private validateProfileData(name: string, bio: string): void {
-    if (!name || !name.trim()) {
-      throw new ValidationError('Profile name is required');
-    }
-    if (name.length > 50) {
-      throw new ValidationError('Profile name must be 50 characters or less');
-    }
-    if (bio.length > 200) {
-      throw new ValidationError('Profile bio must be 200 characters or less');
-    }
-  }
+      return Number(profileCreatedEvent.args.tokenId);
+    } catch (error: any) {
+      console.error('Failed to create profile:', error);
 
-  async getProfile(tokenId: number): Promise<Profile> {
-    if (!tokenId || tokenId <= 0) {
-      throw new ValidationError('Valid token ID is required');
-    }
-
-    return this.handleContractCall(async () => {
-      const contract = this.getProfileNFTContract();
-      const profile = await contract.getProfile(tokenId);
-      
-      return {
-        name: profile.name,
-        bio: profile.bio,
-        reputationScore: Number(profile.reputationScore),
-        createdAt: Number(profile.createdAt),
-        isActive: profile.isActive
-      };
-    }, 'Failed to get profile');
-  }
-
-  async getProfileByOwner(ownerAddress: string): Promise<ProfileWithId | null> {
-    if (!ownerAddress || !ethers.isAddress(ownerAddress)) {
-      throw new ValidationError('Valid wallet address is required');
-    }
-
-    return this.handleContractCall(async () => {
-      const contract = this.getProfileNFTContract();
-      const result = await contract.getProfileByOwner(ownerAddress);
-      
-      const tokenId = Number(result.tokenId);
-      const profile = result.profile;
-      
-      // Check if profile exists (tokenId will be 0 if no profile)
-      if (tokenId === 0) {
-        return null;
+      if (error.message?.includes('ProfileAlreadyExists')) {
+        throw new ValidationError('You already have a profile', error);
       }
-      
+      if (error.message?.includes('user rejected')) {
+        throw new TransactionError('Transaction was rejected by user', error);
+      }
+
+      throw new TransactionError('Failed to create profile', error);
+    }
+  }
+
+  /**
+   * Update profile metadata
+   */
+  async updateProfileMetadata(tokenId: number, newMetadataURI: string): Promise<void> {
+    try {
+      const contract = this.getContract();
+
+      const tx = await contract.updateProfileMetadata(tokenId, newMetadataURI);
+      await tx.wait();
+    } catch (error: any) {
+      console.error('Failed to update profile metadata:', error);
+
+      if (error.message?.includes('UnauthorizedAccess')) {
+        throw new ValidationError('You are not authorized to update this profile', error);
+      }
+      if (error.message?.includes('user rejected')) {
+        throw new TransactionError('Transaction was rejected by user', error);
+      }
+
+      throw new TransactionError('Failed to update profile metadata', error);
+    }
+  }
+
+  /**
+   * Get profile by token ID with metadata
+   */
+  async getProfile(tokenId: number): Promise<ProfileWithMetadata> {
+    try {
+      const contract = this.getContract();
+
+      const [profileData, metadataURI] = await contract.getProfile(tokenId);
+
+      // Fetch metadata from URI
+      const metadata = await metadataService.fetchMetadata(metadataURI);
+
       return {
         tokenId,
-        name: profile.name,
-        bio: profile.bio,
-        reputationScore: Number(profile.reputationScore),
-        createdAt: Number(profile.createdAt),
-        isActive: profile.isActive
+        reputationScore: Number(profileData.reputationScore),
+        createdAt: Number(profileData.createdAt),
+        lastUpdated: Number(profileData.lastUpdated),
+        isActive: profileData.isActive,
+        metadata,
+        metadataURI,
       };
-    }, 'Failed to get profile by owner');
+    } catch (error: any) {
+      // Check for ProfileNotFound error by error code or message
+      const errorData = error?.data?.data || error?.data || '';
+      const isProfileNotFound = 
+        error.message?.includes('ProfileNotFound') ||
+        errorData === '0x72da560b' || // ProfileNotFound error selector
+        error.code === 'CALL_EXCEPTION';
+
+      if (isProfileNotFound) {
+        throw new ValidationError('Profile not found', error);
+      }
+
+      console.error('Failed to get profile:', error);
+      throw new ContractError('Failed to get profile', error);
+    }
   }
 
-  async updateProfile(tokenId: number, name: string, bio: string): Promise<void> {
-    if (!tokenId || tokenId <= 0) {
-      throw new ValidationError('Valid token ID is required');
+  /**
+   * Get profile by owner address with metadata
+   */
+  async getProfileByOwner(address: string): Promise<ProfileWithMetadata> {
+    // Validate address first to prevent contract errors
+    if (!address || !ethers.isAddress(address)) {
+      throw new ValidationError('Invalid Ethereum address');
     }
-    
-    this.validateProfileData(name, bio);
 
-    return this.handleContractCall(async () => {
-      const contract = this.getProfileNFTContract();
-      const tx = await contract.updateProfile(tokenId, name.trim(), bio.trim());
+    try {
+      const contract = this.getContract();
+
+      const [tokenId, profileData, metadataURI] = await contract.getProfileByOwner(address);
+
+      // Fetch metadata from URI (with fallback for invalid URIs)
+      let metadata;
+      try {
+        metadata = await metadataService.fetchMetadata(metadataURI);
+      } catch (metadataError) {
+        console.warn('Failed to fetch metadata, using defaults:', metadataError);
+        // Use default metadata if fetch fails
+        metadata = {
+          name: `User ${address.slice(0, 6)}`,
+          description: 'TrustFi Profile',
+          image: '',
+        };
+      }
+
+      return {
+        tokenId: Number(tokenId),
+        reputationScore: Number(profileData.reputationScore),
+        createdAt: Number(profileData.createdAt),
+        lastUpdated: Number(profileData.lastUpdated),
+        isActive: profileData.isActive,
+        metadata,
+        metadataURI,
+      };
+    } catch (error: any) {
+      // Check for ProfileNotFound error by error code or message
+      const errorData = error?.data?.data || error?.data || '';
+      const isProfileNotFound = 
+        error.message?.includes('ProfileNotFound') ||
+        errorData === '0x72da560b' || // ProfileNotFound error selector
+        error.code === 'CALL_EXCEPTION';
+
+      if (isProfileNotFound) {
+        throw new ValidationError('Profile not found for this address', error);
+      }
+
+      // Log unexpected errors
+      console.error('Failed to get profile by owner:', error);
+      throw new ContractError('Failed to get profile by owner', error);
+    }
+  }
+
+  /**
+   * Deactivate profile
+   */
+  async deactivateProfile(tokenId: number): Promise<void> {
+    try {
+      const contract = this.getContract();
+
+      const tx = await contract.deactivateProfile(tokenId);
       await tx.wait();
-    }, 'Failed to update profile');
-  }
+    } catch (error: any) {
+      console.error('Failed to deactivate profile:', error);
 
-  async profileExists(tokenId: number): Promise<boolean> {
-    if (!tokenId || tokenId <= 0) {
-      throw new ValidationError('Valid token ID is required');
+      if (error.message?.includes('UnauthorizedAccess')) {
+        throw new ValidationError('You are not authorized to deactivate this profile', error);
+      }
+      if (error.message?.includes('user rejected')) {
+        throw new TransactionError('Transaction was rejected by user', error);
+      }
+
+      throw new TransactionError('Failed to deactivate profile', error);
     }
-
-    return this.handleContractCall(async () => {
-      const contract = this.getProfileNFTContract();
-      return await contract.profileExists(tokenId);
-    }, 'Failed to check if profile exists');
   }
 
-  async getTotalProfiles(): Promise<number> {
-    return this.handleContractCall(async () => {
-      const contract = this.getProfileNFTContract();
-      const total = await contract.totalProfiles();
-      return Number(total);
-    }, 'Failed to get total profiles');
-  }
-
-  // Utility methods
+  /**
+   * Get current chain ID
+   */
   getCurrentChainId(): SupportedChainId | null {
     return this.chainId;
   }
 
-  getContractAddress(): string | null {
-    if (!this.chainId) return null;
-    return CONTRACT_ADDRESSES[this.chainId].ProfileNFT;
-  }
-
-  isInitialized(): boolean {
-    return this.provider !== null && this.signer !== null && this.chainId !== null;
-  }
-
-  async getCurrentWalletAddress(): Promise<string> {
-    if (!this.signer) {
-      throw new ContractError('Wallet not connected');
-    }
-    
-    try {
-      return await this.signer.getAddress();
-    } catch (error) {
-      throw new NetworkError('Failed to get wallet address', error);
-    }
-  }
-
-  async getBalance(): Promise<string> {
-    if (!this.provider || !this.signer) {
-      throw new ContractError('Wallet not connected');
-    }
-
-    try {
-      const address = await this.signer.getAddress();
-      const balance = await this.provider.getBalance(address);
-      return ethers.formatEther(balance);
-    } catch (error) {
-      throw new NetworkError('Failed to get wallet balance', error);
-    }
-  }
-
-  // Reset the service state (useful for wallet disconnection)
+  /**
+   * Reset service
+   */
   reset(): void {
-    this.provider = null;
     this.signer = null;
     this.chainId = null;
   }
 }
 
-// Export a singleton instance
+// Export singleton instance
 export const contractService = new ContractService();

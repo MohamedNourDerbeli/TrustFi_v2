@@ -1,227 +1,660 @@
-import React, { useState } from 'react';
-import { useContract } from '../hooks/useContract';
-import type { ProfileWithId } from '../services/contractService';
+import { useState, useEffect } from 'react';
+import { useLocation } from 'wouter';
+import { useWallet } from '@/contexts/WalletContext';
+import { useProfile } from '@/contexts/ProfileContext';
+import { useToast } from '@/hooks/use-toast';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { 
+  User, 
+  Mail, 
+  Globe, 
+  Twitter, 
+  Github, 
+  Linkedin, 
+  MessageCircle,
+  Send,
+  Image as ImageIcon,
+  Check,
+  X
+} from 'lucide-react';
 
 interface ProfileEditFormProps {
-  profile: ProfileWithId;
-  onProfileUpdated?: (updatedProfile: ProfileWithId) => void;
-  onCancel?: () => void;
+  address: string;
 }
 
-interface FormData {
-  name: string;
-  bio: string;
-}
+export default function ProfileEditForm({ address }: ProfileEditFormProps) {
+  const [, setLocation] = useLocation();
+  const { provider } = useWallet();
+  const { offChainData } = useProfile();
+  const { toast } = useToast();
 
-interface FormErrors {
-  name?: string;
-  bio?: string;
-}
+  const [editUsername, setEditUsername] = useState('');
+  const [editDisplayName, setEditDisplayName] = useState('');
+  const [editBio, setEditBio] = useState('');
+  const [isCheckingUsername, setIsCheckingUsername] = useState(false);
+  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
+  const [usernameError, setUsernameError] = useState<string>('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editWebsite, setEditWebsite] = useState('');
+  const [editTwitter, setEditTwitter] = useState('');
+  const [editGithub, setEditGithub] = useState('');
+  const [editLinkedin, setEditLinkedin] = useState('');
+  const [editDiscord, setEditDiscord] = useState('');
+  const [editTelegram, setEditTelegram] = useState('');
+  const [editImageFile, setEditImageFile] = useState<File | null>(null);
+  const [editBannerFile, setEditBannerFile] = useState<File | null>(null);
+  const [editImagePreview, setEditImagePreview] = useState<string>('');
+  const [editBannerPreview, setEditBannerPreview] = useState<string>('');
+  const [isUpdating, setIsUpdating] = useState(false);
+  
+  // Track original values for change detection
+  const [originalValues, setOriginalValues] = useState<any>(null);
+  const [hasChanges, setHasChanges] = useState(false);
 
-const ProfileEditForm: React.FC<ProfileEditFormProps> = ({
-  profile,
-  onProfileUpdated,
-  onCancel
-}) => {
-  const { updateProfile, loading, error, clearError } = useContract();
-  const [formData, setFormData] = useState<FormData>({
-    name: profile.name,
-    bio: profile.bio
-  });
-  const [formErrors, setFormErrors] = useState<FormErrors>({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  // Load existing profile data
+  useEffect(() => {
+    const loadData = async () => {
+      if (!address || !provider) return;
 
-  const validateForm = (): boolean => {
-    const errors: FormErrors = {};
-    
-    // Name validation
-    if (!formData.name.trim()) {
-      errors.name = 'Profile name is required';
-    } else if (formData.name.trim().length > 50) {
-      errors.name = 'Profile name must be 50 characters or less';
-    }
-    
-    // Bio validation
-    if (formData.bio.length > 200) {
-      errors.bio = 'Profile bio must be 200 characters or less';
-    }
-    
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
-  const handleInputChange = (field: keyof FormData, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
-    
-    // Clear field-specific error when user starts typing
-    if (formErrors[field]) {
-      setFormErrors(prev => ({
-        ...prev,
-        [field]: undefined
-      }));
-    }
-    
-    // Clear general error when user makes changes
-    if (error) {
-      clearError();
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!validateForm()) {
-      return;
-    }
-    
-    setIsSubmitting(true);
-    
-    try {
-      const success = await updateProfile(profile.tokenId, formData.name.trim(), formData.bio.trim());
-      
-      if (success) {
-        // Profile updated successfully
-        const updatedProfile: ProfileWithId = {
-          ...profile,
-          name: formData.name.trim(),
-          bio: formData.bio.trim()
+      if (offChainData) {
+        const values = {
+          username: offChainData.username || '',
+          display_name: offChainData.display_name || '',
+          bio: offChainData.bio || '',
+          email: offChainData.email || '',
+          websiteUrl: offChainData.websiteUrl || '',
+          twitterHandle: offChainData.twitterHandle || '',
+          githubHandle: offChainData.githubHandle || '',
+          linkedinUrl: offChainData.linkedinUrl || '',
+          discordHandle: offChainData.discordHandle || '',
+          telegramHandle: offChainData.telegramHandle || '',
+          avatar: offChainData.avatar || '',
+          banner: offChainData.banner || '',
         };
         
-        if (onProfileUpdated) {
-          onProfileUpdated(updatedProfile);
+        setOriginalValues(values);
+        setEditUsername(values.username);
+        setEditDisplayName(values.display_name);
+        setEditBio(values.bio);
+        setEditEmail(values.email);
+        setEditWebsite(values.websiteUrl);
+        setEditTwitter(values.twitterHandle);
+        setEditGithub(values.githubHandle);
+        setEditLinkedin(values.linkedinUrl);
+        setEditDiscord(values.discordHandle);
+        setEditTelegram(values.telegramHandle);
+        
+        if (values.avatar) {
+          setEditImagePreview(values.avatar);
         }
+        if (values.banner) {
+          setEditBannerPreview(values.banner);
+        }
+        return;
       }
-    } catch (err) {
-      // Error is handled by the useContract hook
-      console.error('Profile update failed:', err);
+
+      try {
+        const { profileService } = await import('@/services/profileService');
+        const data = await profileService.getProfile(address);
+        
+        if (data) {
+          const values = {
+            username: data.username || '',
+            display_name: data.display_name || '',
+            bio: data.bio || '',
+            email: data.email || '',
+            websiteUrl: data.websiteUrl || '',
+            twitterHandle: data.twitterHandle || '',
+            githubHandle: data.githubHandle || '',
+            linkedinUrl: data.linkedinUrl || '',
+            discordHandle: data.discordHandle || '',
+            telegramHandle: data.telegramHandle || '',
+            avatar: data.avatar || '',
+            banner: data.banner || '',
+          };
+          
+          setOriginalValues(values);
+          setEditUsername(values.username);
+          setEditDisplayName(values.display_name);
+          setEditBio(values.bio);
+          setEditEmail(values.email);
+          setEditWebsite(values.websiteUrl);
+          setEditTwitter(values.twitterHandle);
+          setEditGithub(values.githubHandle);
+          setEditLinkedin(values.linkedinUrl);
+          setEditDiscord(values.discordHandle);
+          setEditTelegram(values.telegramHandle);
+          
+          if (values.avatar) {
+            setEditImagePreview(values.avatar);
+          }
+          if (values.banner) {
+            setEditBannerPreview(values.banner);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading profile:', error);
+      }
+    };
+
+    loadData();
+  }, [address, provider, offChainData]);
+
+  // Check for changes whenever form values change
+  useEffect(() => {
+    if (!originalValues) {
+      setHasChanges(false);
+      return;
+    }
+
+    const changed = 
+      editUsername !== originalValues.username ||
+      editDisplayName !== originalValues.display_name ||
+      editBio !== originalValues.bio ||
+      editEmail !== originalValues.email ||
+      editWebsite !== originalValues.websiteUrl ||
+      editTwitter !== originalValues.twitterHandle ||
+      editGithub !== originalValues.githubHandle ||
+      editLinkedin !== originalValues.linkedinUrl ||
+      editDiscord !== originalValues.discordHandle ||
+      editTelegram !== originalValues.telegramHandle ||
+      editImageFile !== null ||
+      editBannerFile !== null;
+
+    setHasChanges(changed);
+  }, [
+    originalValues,
+    editUsername,
+    editDisplayName,
+    editBio,
+    editEmail,
+    editWebsite,
+    editTwitter,
+    editGithub,
+    editLinkedin,
+    editDiscord,
+    editTelegram,
+    editImageFile,
+    editBannerFile,
+  ]);
+
+  const checkUsername = async (username: string) => {
+    if (username === offChainData?.username) {
+      setUsernameAvailable(true);
+      setUsernameError('');
+      return;
+    }
+
+    setIsCheckingUsername(true);
+    setUsernameError('');
+
+    try {
+      const { profileService } = await import('@/services/profileService');
+      const available = await profileService.isUsernameAvailable(username);
+      setUsernameAvailable(available);
+      
+      if (!available) {
+        setUsernameError('Username is already taken');
+      }
+    } catch (error) {
+      console.error('Error checking username:', error);
+      setUsernameError('Error checking username availability');
     } finally {
-      setIsSubmitting(false);
+      setIsCheckingUsername(false);
     }
   };
 
   const handleCancel = () => {
-    // Reset form to original values
-    setFormData({
-      name: profile.name,
-      bio: profile.bio
-    });
-    setFormErrors({});
-    clearError();
-    
-    if (onCancel) {
-      onCancel();
+    if (!originalValues) return;
+
+    // Reset all fields to original values
+    setEditUsername(originalValues.username);
+    setEditDisplayName(originalValues.display_name);
+    setEditBio(originalValues.bio);
+    setEditEmail(originalValues.email);
+    setEditWebsite(originalValues.websiteUrl);
+    setEditTwitter(originalValues.twitterHandle);
+    setEditGithub(originalValues.githubHandle);
+    setEditLinkedin(originalValues.linkedinUrl);
+    setEditDiscord(originalValues.discordHandle);
+    setEditTelegram(originalValues.telegramHandle);
+    setEditImageFile(null);
+    setEditBannerFile(null);
+    setEditImagePreview(originalValues.avatar);
+    setEditBannerPreview(originalValues.banner);
+    setUsernameAvailable(null);
+    setUsernameError('');
+  };
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast({
+        title: 'Invalid File',
+        description: 'Please select an image file',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      toast({
+        title: 'File Too Large',
+        description: 'Image must be less than 5MB',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setEditImageFile(file);
+    const reader = new FileReader();
+    reader.onload = () => setEditImagePreview(reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const handleBannerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast({
+        title: 'Invalid File',
+        description: 'Please select an image file',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      toast({
+        title: 'File Too Large',
+        description: 'Image must be less than 5MB',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setEditBannerFile(file);
+    const reader = new FileReader();
+    reader.onload = () => setEditBannerPreview(reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveProfile = async () => {
+    if (!editUsername.trim()) {
+      toast({
+        title: 'Username Required',
+        description: 'Please enter a username',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (usernameAvailable === false) {
+      toast({
+        title: 'Username Unavailable',
+        description: 'Please choose a different username',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      setIsUpdating(true);
+
+      toast({
+        title: 'Sign Message',
+        description: 'Please sign the message to update your profile (free!)',
+      });
+
+      const { profileService } = await import('@/services/profileService');
+      
+      const updatedProfile = await profileService.updateProfile(
+        provider!,
+        address!,
+        {
+          username: editUsername.trim().toLowerCase(),
+          display_name: editDisplayName.trim() || undefined,
+          bio: editBio.trim(),
+          email: editEmail.trim() || undefined,
+          websiteUrl: editWebsite.trim() || undefined,
+          twitterHandle: editTwitter.trim() || undefined,
+          githubHandle: editGithub.trim() || undefined,
+          linkedinUrl: editLinkedin.trim() || undefined,
+          discordHandle: editDiscord.trim() || undefined,
+          telegramHandle: editTelegram.trim() || undefined,
+          avatar: editImageFile || undefined,
+          banner: editBannerFile || undefined,
+        }
+      );
+
+      toast({
+        title: 'Success!',
+        description: 'Your profile has been updated!',
+      });
+
+      // Update the context immediately with new data
+      const { setOffChainData } = await import('@/contexts/ProfileContext');
+      // Force reload profile data from ProfileContext
+      window.dispatchEvent(new CustomEvent('profile-updated', { detail: updatedProfile }));
+      
+      // Don't redirect - stay on settings page
+    } catch (error: any) {
+      toast({
+        title: 'Update Failed',
+        description: error.message || 'Failed to update profile',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsUpdating(false);
     }
   };
 
-  const isFormDisabled = loading || isSubmitting;
-  const hasChanges = formData.name.trim() !== profile.name || formData.bio.trim() !== profile.bio;
-
   return (
-    <div className="card">
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">Edit Profile</h2>
-        <p className="text-gray-600">Update your profile information on the blockchain.</p>
-      </div>
-      
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Name Field */}
-        <div>
-          <label htmlFor="edit-name" className="block text-sm font-medium text-gray-700 mb-1">
-            Profile Name *
-          </label>
-          <input
-            type="text"
-            id="edit-name"
-            value={formData.name}
-            onChange={(e) => handleInputChange('name', e.target.value)}
-            disabled={isFormDisabled}
-            className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-              formErrors.name 
-                ? 'border-red-300 bg-red-50' 
-                : 'border-gray-300'
-            } ${isFormDisabled ? 'bg-gray-100 cursor-not-allowed' : ''}`}
-            placeholder="Enter your profile name"
-            maxLength={50}
-          />
-          {formErrors.name && (
-            <p className="mt-1 text-sm text-red-600">{formErrors.name}</p>
+    <div className="space-y-10">
+      {/* Banner with Profile Picture Overlay */}
+      <div className="relative">
+        {/* Banner */}
+        <div className="relative group cursor-pointer" onClick={() => document.getElementById('banner-upload')?.click()}>
+          {editBannerPreview ? (
+            <img
+              src={editBannerPreview}
+              alt="Banner"
+              className="w-full h-48 object-cover rounded-lg"
+            />
+          ) : (
+            <div className="w-full h-48 bg-gradient-to-r from-primary/20 to-primary/10 rounded-lg flex items-center justify-center">
+              <ImageIcon className="w-12 h-12 text-muted-foreground" />
+            </div>
           )}
-          <p className="mt-1 text-xs text-gray-500">
-            {formData.name.length}/50 characters
-          </p>
-        </div>
-
-        {/* Bio Field */}
-        <div>
-          <label htmlFor="edit-bio" className="block text-sm font-medium text-gray-700 mb-1">
-            Bio
-          </label>
-          <textarea
-            id="edit-bio"
-            value={formData.bio}
-            onChange={(e) => handleInputChange('bio', e.target.value)}
-            disabled={isFormDisabled}
-            rows={4}
-            className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-vertical ${
-              formErrors.bio 
-                ? 'border-red-300 bg-red-50' 
-                : 'border-gray-300'
-            } ${isFormDisabled ? 'bg-gray-100 cursor-not-allowed' : ''}`}
-            placeholder="Tell us about yourself (optional)"
-            maxLength={200}
-          />
-          {formErrors.bio && (
-            <p className="mt-1 text-sm text-red-600">{formErrors.bio}</p>
-          )}
-          <p className="mt-1 text-xs text-gray-500">
-            {formData.bio.length}/200 characters
-          </p>
-        </div>
-
-        {/* Error Display */}
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-md p-3">
-            <p className="text-sm text-red-600">{error}</p>
+          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
+            <p className="text-white font-medium">Click to change banner</p>
           </div>
-        )}
+        </div>
+        <input
+          id="banner-upload"
+          type="file"
+          accept="image/*"
+          onChange={handleBannerChange}
+          className="hidden"
+        />
+
+        {/* Profile Picture */}
+        <div className="absolute -bottom-16 left-8">
+          <div className="relative group cursor-pointer" onClick={() => document.getElementById('avatar-upload')?.click()}>
+            {editImagePreview ? (
+              <img
+                src={editImagePreview}
+                alt="Avatar"
+                className="w-32 h-32 rounded-full border-4 border-background object-cover"
+              />
+            ) : (
+              <div className="w-32 h-32 rounded-full border-4 border-background bg-muted flex items-center justify-center">
+                <User className="w-16 h-16 text-muted-foreground" />
+              </div>
+            )}
+            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-full flex items-center justify-center">
+              <ImageIcon className="w-8 h-8 text-white" />
+            </div>
+          </div>
+          <input
+            id="avatar-upload"
+            type="file"
+            accept="image/*"
+            onChange={handleImageChange}
+            className="hidden"
+          />
+        </div>
+      </div>
+
+      {/* Form Fields */}
+      <div className="space-y-6 pt-16">
+        {/* Display Name */}
+        <div>
+          <Label htmlFor="displayName" className="text-sm font-semibold mb-2 block">
+            Display Name
+            <span className="text-muted-foreground font-normal ml-2">
+              (Your full name or preferred name)
+            </span>
+          </Label>
+          <Input
+            id="displayName"
+            value={editDisplayName}
+            onChange={(e) => setEditDisplayName(e.target.value)}
+            disabled={isUpdating}
+            maxLength={50}
+            placeholder="e.g., Akira"
+            className="text-sm"
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            This is the main name shown on your profile
+          </p>
+        </div>
+
+        {/* Username */}
+        <div>
+          <Label htmlFor="username" className="text-sm font-semibold mb-2 block">
+            Username
+            <span className="text-muted-foreground font-normal ml-2">
+              (Your unique @username)
+            </span>
+          </Label>
+          <div className="relative">
+            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+              @
+            </div>
+            <Input
+              id="username"
+              value={editUsername}
+              onChange={(e) => {
+                const value = e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '');
+                setEditUsername(value);
+                if (value.length >= 3) {
+                  checkUsername(value);
+                } else {
+                  setUsernameAvailable(null);
+                  setUsernameError('');
+                }
+              }}
+              disabled={isUpdating}
+              maxLength={20}
+              placeholder="your_username"
+              className="text-sm pl-7"
+            />
+            {isCheckingUsername && (
+              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              </div>
+            )}
+            {!isCheckingUsername && usernameAvailable === true && editUsername.length >= 3 && (
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 text-green-500">
+                <Check className="w-4 h-4" />
+              </div>
+            )}
+            {!isCheckingUsername && usernameAvailable === false && (
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 text-destructive">
+                <X className="w-4 h-4" />
+              </div>
+            )}
+          </div>
+          {usernameError && (
+            <p className="text-xs text-destructive mt-1">{usernameError}</p>
+          )}
+          {usernameAvailable === true && editUsername.length >= 3 && (
+            <p className="text-xs text-green-600 mt-1">✓ Username is available</p>
+          )}
+          <p className="text-xs text-muted-foreground mt-1">
+            3-20 characters, lowercase, letters, numbers, and underscore only
+          </p>
+          {editUsername && (
+            <p className="text-xs text-muted-foreground mt-1">
+              Your profile URL: /{editUsername}
+            </p>
+          )}
+        </div>
+
+        {/* Bio */}
+        <div>
+          <Label htmlFor="bio" className="text-sm font-semibold mb-2 block">
+            Bio
+          </Label>
+          <Textarea
+            id="bio"
+            value={editBio}
+            onChange={(e) => setEditBio(e.target.value)}
+            disabled={isUpdating}
+            maxLength={200}
+            className="min-h-[100px] text-sm"
+            placeholder="Tell the world your story!"
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            {editBio.length}/200 characters
+          </p>
+        </div>
+
+        {/* Email */}
+        <div>
+          <Label htmlFor="email" className="text-sm font-semibold mb-2 block flex items-center gap-2">
+            <Mail className="w-4 h-4" />
+            Email Address
+          </Label>
+          <Input
+            id="email"
+            type="email"
+            value={editEmail}
+            onChange={(e) => setEditEmail(e.target.value)}
+            disabled={isUpdating}
+            placeholder="your@email.com"
+            className="text-sm"
+          />
+        </div>
+
+        {/* Website */}
+        <div>
+          <Label htmlFor="website" className="text-sm font-semibold mb-2 block flex items-center gap-2">
+            <Globe className="w-4 h-4" />
+            Website
+          </Label>
+          <Input
+            id="website"
+            type="url"
+            value={editWebsite}
+            onChange={(e) => setEditWebsite(e.target.value)}
+            disabled={isUpdating}
+            placeholder="https://yourwebsite.com"
+            className="text-sm"
+          />
+        </div>
+
+        {/* Social Links */}
+        <div className="space-y-4">
+          <Label className="text-sm font-semibold">Social Connections</Label>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="twitter" className="text-xs flex items-center gap-2 mb-1">
+                <Twitter className="w-3.5 h-3.5" />
+                Twitter
+              </Label>
+              <Input
+                id="twitter"
+                value={editTwitter}
+                onChange={(e) => setEditTwitter(e.target.value)}
+                disabled={isUpdating}
+                placeholder="@username"
+                className="text-sm"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="github" className="text-xs flex items-center gap-2 mb-1">
+                <Github className="w-3.5 h-3.5" />
+                GitHub
+              </Label>
+              <Input
+                id="github"
+                value={editGithub}
+                onChange={(e) => setEditGithub(e.target.value)}
+                disabled={isUpdating}
+                placeholder="username"
+                className="text-sm"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="linkedin" className="text-xs flex items-center gap-2 mb-1">
+                <Linkedin className="w-3.5 h-3.5" />
+                LinkedIn
+              </Label>
+              <Input
+                id="linkedin"
+                type="url"
+                value={editLinkedin}
+                onChange={(e) => setEditLinkedin(e.target.value)}
+                disabled={isUpdating}
+                placeholder="https://linkedin.com/in/username"
+                className="text-sm"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="discord" className="text-xs flex items-center gap-2 mb-1">
+                <MessageCircle className="w-3.5 h-3.5" />
+                Discord
+              </Label>
+              <Input
+                id="discord"
+                value={editDiscord}
+                onChange={(e) => setEditDiscord(e.target.value)}
+                disabled={isUpdating}
+                placeholder="username#1234"
+                className="text-sm"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="telegram" className="text-xs flex items-center gap-2 mb-1">
+                <Send className="w-3.5 h-3.5" />
+                Telegram
+              </Label>
+              <Input
+                id="telegram"
+                value={editTelegram}
+                onChange={(e) => setEditTelegram(e.target.value)}
+                disabled={isUpdating}
+                placeholder="@username"
+                className="text-sm"
+              />
+            </div>
+          </div>
+        </div>
 
         {/* Action Buttons */}
-        <div className="flex space-x-3 pt-4">
-          <button
-            type="button"
+        <div className="flex justify-start gap-3 pt-6">
+          <Button
+            onClick={handleSaveProfile}
+            disabled={isUpdating || !editUsername.trim() || usernameAvailable === false || !hasChanges}
+            className="px-8"
+          >
+            {isUpdating ? 'Saving...' : 'Save Changes'}
+          </Button>
+          <Button
+            variant="outline"
             onClick={handleCancel}
-            disabled={isFormDisabled}
-            className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            disabled={isUpdating || !hasChanges}
+            className="px-8"
           >
             Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={isFormDisabled || !formData.name.trim() || !hasChanges}
-            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
-          >
-            {isSubmitting ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                Updating...
-              </>
-            ) : (
-              'Save Changes'
-            )}
-          </button>
+          </Button>
         </div>
-      </form>
-
-      <div className="mt-6 text-center">
-        <p className="text-xs text-gray-500">
-          Profile updates are stored on the blockchain and may take a few moments to confirm.
-        </p>
       </div>
     </div>
   );
-};
-
-export default ProfileEditForm;
+}

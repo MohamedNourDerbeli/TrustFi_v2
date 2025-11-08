@@ -35,8 +35,7 @@ export const getFilteredCards = (
   }
   
   return cards.filter(card => {
-    const cardCategory = card.category || deriveCategory(card.achievementType);
-    return cardCategory === selectedCategory;
+    return card.category === selectedCategory;
   });
 };
 
@@ -45,11 +44,6 @@ export const getFilteredCards = (
  */
 export const calculateTotalPoints = (cards: ReputationCard[]): number => {
   return cards.reduce((sum, card) => {
-    try {
-      const metadata = JSON.parse(card.metadata);
-      return sum + (card.value || metadata.value || 0);
-    } catch {
-      return sum + (card.value || 0);
-    }
+    return sum + (card.value || 0);
   }, 0);
 };

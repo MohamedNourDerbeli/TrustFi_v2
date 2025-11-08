@@ -14,10 +14,10 @@ import "./ProfileNFT.sol";
 contract ReputationCard is ERC721, Ownable, Pausable {
     
     // Reputation card data structure
+    // Only essential data stored on-chain to minimize gas costs
+    // Descriptive data (category, description, etc.) stored in metadata
     struct Card {
         uint256 profileId;
-        string category;
-        string description;
         uint256 value;
         uint256 issuedAt;
         address issuer;
@@ -27,8 +27,12 @@ contract ReputationCard is ERC721, Ownable, Pausable {
     // State variables
     uint256 private _nextCardId = 1;
     mapping(uint256 => Card) private _cards;
+    mapping(uint256 => string) private _tokenURIs; // cardId => metadata URI
     mapping(uint256 => uint256[]) private _profileCards; // profileId => cardIds[]
     mapping(address => bool) private _authorizedIssuers;
+    
+    // Category stored separately for filtering (optional - can be removed to save more gas)
+    mapping(uint256 => bytes32) private _cardCategories; // cardId => category hash
     
     // Reference to ProfileNFT contract
     ProfileNFT public immutable profileNFT;
@@ -38,8 +42,9 @@ contract ReputationCard is ERC721, Ownable, Pausable {
         uint256 indexed cardId, 
         uint256 indexed profileId, 
         address indexed issuer,
-        string category,
-        uint256 value
+        bytes32 categoryHash,
+        uint256 value,
+        string metadataURI
     );
     event CardRevoked(uint256 indexed cardId, address indexed revoker);
     event IssuerAuthorized(address indexed issuer);
@@ -63,16 +68,16 @@ contract ReputationCard is ERC721, Ownable, Pausable {
     /**
      * @dev Issues a new reputation card to a profile
      * @param profileId The ID of the profile receiving the card
-     * @param category The category of the reputation card
-     * @param description Description of the achievement or activity
+     * @param categoryHash Hash of the category (for filtering/indexing)
      * @param value The reputation value of this card
+     * @param metadataURI IPFS URI containing full card metadata (category, description, image, proof, etc.)
      * @return cardId The ID of the newly issued card
      */
     function issueCard(
         uint256 profileId,
-        string memory category,
-        string memory description,
-        uint256 value
+        bytes32 categoryHash,
+        uint256 value,
+        string memory metadataURI
     ) external whenNotPaused returns (uint256) {
         // Check if caller is authorized to issue cards
         if (!_authorizedIssuers[msg.sender] && owner() != msg.sender) {
@@ -85,28 +90,29 @@ contract ReputationCard is ERC721, Ownable, Pausable {
         }
         
         // Validate input data
-        if (bytes(category).length == 0 || bytes(category).length > 50) {
-            revert InvalidCardData();
-        }
-        if (bytes(description).length == 0 || bytes(description).length > 200) {
-            revert InvalidCardData();
-        }
         if (value == 0 || value > 1000) { // Max value of 1000 points per card
+            revert InvalidCardData();
+        }
+        if (bytes(metadataURI).length == 0) {
             revert InvalidCardData();
         }
         
         uint256 cardId = _nextCardId++;
         
-        // Create the reputation card
+        // Create the reputation card with minimal on-chain data
         _cards[cardId] = Card({
             profileId: profileId,
-            category: category,
-            description: description,
             value: value,
             issuedAt: block.timestamp,
             issuer: msg.sender,
             isValid: true
         });
+        
+        // Store category hash for filtering
+        _cardCategories[cardId] = categoryHash;
+        
+        // Store the metadata URI
+        _tokenURIs[cardId] = metadataURI;
         
         // Add card to profile's card list
         _profileCards[profileId].push(cardId);
@@ -118,7 +124,7 @@ contract ReputationCard is ERC721, Ownable, Pausable {
         // Update the profile's reputation score
         _updateProfileReputationScore(profileId);
         
-        emit CardIssued(cardId, profileId, msg.sender, category, value);
+        emit CardIssued(cardId, profileId, msg.sender, categoryHash, value, metadataURI);
         
         return cardId;
     }
@@ -127,13 +133,19 @@ contract ReputationCard is ERC721, Ownable, Pausable {
      * @dev Retrieves reputation card data for a given card ID
      * @param cardId The ID of the reputation card
      * @return card The reputation card data
+     * @return categoryHash The category hash
+     * @return metadataURI The metadata URI
      */
-    function getCard(uint256 cardId) external view returns (Card memory) {
+    function getCard(uint256 cardId) external view returns (
+        Card memory card,
+        bytes32 categoryHash,
+        string memory metadataURI
+    ) {
         if (!_exists(cardId)) {
             revert CardNotFound();
         }
         
-        return _cards[cardId];
+        return (_cards[cardId], _cardCategories[cardId], _tokenURIs[cardId]);
     }
     
     /**
@@ -271,6 +283,222 @@ contract ReputationCard is ERC721, Ownable, Pausable {
     }
     
     /**
+     * @dev Calculates reputation score for a specific category
+     * @param profileId The ID of the profile
+     * @param categoryHash The hash of the category to calculate score for
+     * @return categoryScore The reputation score for this category
+     */
+    function getReputationByCategory(uint256 profileId, bytes32 categoryHash) 
+        public 
+        view 
+        returns (uint256) 
+    {
+        if (!profileNFT.profileExists(profileId)) {
+            revert ProfileNotFound();
+        }
+        
+        uint256[] memory cardIds = _profileCards[profileId];
+        uint256 categoryScore = 0;
+        
+        for (uint256 i = 0; i < cardIds.length; i++) {
+            Card memory card = _cards[cardIds[i]];
+            
+            // Only count valid cards in this category
+            if (card.isValid && _cardCategories[cardIds[i]] == categoryHash) {
+                categoryScore += card.value;
+            }
+        }
+        
+        return categoryScore;
+    }
+    
+    /**
+     * @dev Gets all unique category hashes for a profile
+     * @param profileId The ID of the profile
+     * @return categoryHashes Array of unique category hashes
+     */
+    function getProfileCategories(uint256 profileId) 
+        public 
+        view 
+        returns (bytes32[] memory) 
+    {
+        if (!profileNFT.profileExists(profileId)) {
+            revert ProfileNotFound();
+        }
+        
+        uint256[] memory cardIds = _profileCards[profileId];
+        bytes32[] memory tempCategories = new bytes32[](cardIds.length);
+        uint256 uniqueCount = 0;
+        
+        for (uint256 i = 0; i < cardIds.length; i++) {
+            bytes32 categoryHash = _cardCategories[cardIds[i]];
+            
+            // Check if category already exists
+            bool exists = false;
+            for (uint256 j = 0; j < uniqueCount; j++) {
+                if (tempCategories[j] == categoryHash) {
+                    exists = true;
+                    break;
+                }
+            }
+            
+            if (!exists) {
+                tempCategories[uniqueCount] = categoryHash;
+                uniqueCount++;
+            }
+        }
+        
+        // Create result array with exact size
+        bytes32[] memory categoryHashes = new bytes32[](uniqueCount);
+        for (uint256 i = 0; i < uniqueCount; i++) {
+            categoryHashes[i] = tempCategories[i];
+        }
+        
+        return categoryHashes;
+    }
+    
+    /**
+     * @dev Gets reputation breakdown by all categories
+     * @param profileId The ID of the profile
+     * @return categoryHashes Array of category hashes
+     * @return scores Array of scores corresponding to each category
+     */
+    function getReputationBreakdown(uint256 profileId) 
+        external 
+        view 
+        returns (
+            bytes32[] memory categoryHashes,
+            uint256[] memory scores
+        ) 
+    {
+        categoryHashes = getProfileCategories(profileId);
+        scores = new uint256[](categoryHashes.length);
+        
+        for (uint256 i = 0; i < categoryHashes.length; i++) {
+            scores[i] = getReputationByCategory(profileId, categoryHashes[i]);
+        }
+        
+        return (categoryHashes, scores);
+    }
+    
+    /**
+     * @dev Gets all card IDs for a specific category
+     * @param profileId The ID of the profile
+     * @param categoryHash The category hash to filter by
+     * @return cardIds Array of card IDs in this category
+     */
+    function getCardsByCategory(uint256 profileId, bytes32 categoryHash) 
+        external 
+        view 
+        returns (uint256[] memory) 
+    {
+        if (!profileNFT.profileExists(profileId)) {
+            revert ProfileNotFound();
+        }
+        
+        uint256[] memory allCardIds = _profileCards[profileId];
+        
+        // Count matching cards
+        uint256 count = 0;
+        for (uint256 i = 0; i < allCardIds.length; i++) {
+            if (_cardCategories[allCardIds[i]] == categoryHash) {
+                count++;
+            }
+        }
+        
+        // Build result array
+        uint256[] memory cardIds = new uint256[](count);
+        uint256 index = 0;
+        for (uint256 i = 0; i < allCardIds.length; i++) {
+            if (_cardCategories[allCardIds[i]] == categoryHash) {
+                cardIds[index] = allCardIds[i];
+                index++;
+            }
+        }
+        
+        return cardIds;
+    }
+    
+    /**
+     * @dev Gets card IDs filtered by category and issuer
+     * @param profileId The ID of the profile
+     * @param categoryHash The category hash to filter by
+     * @param issuer The issuer address to filter by
+     * @return cardIds Array of card IDs matching both filters
+     */
+    function getCardsByCategoryAndIssuer(
+        uint256 profileId,
+        bytes32 categoryHash,
+        address issuer
+    ) external view returns (uint256[] memory) {
+        if (!profileNFT.profileExists(profileId)) {
+            revert ProfileNotFound();
+        }
+        
+        uint256[] memory allCardIds = _profileCards[profileId];
+        
+        // Count matching cards
+        uint256 count = 0;
+        for (uint256 i = 0; i < allCardIds.length; i++) {
+            Card memory card = _cards[allCardIds[i]];
+            if (_cardCategories[allCardIds[i]] == categoryHash && card.issuer == issuer) {
+                count++;
+            }
+        }
+        
+        // Build result array
+        uint256[] memory cardIds = new uint256[](count);
+        uint256 index = 0;
+        for (uint256 i = 0; i < allCardIds.length; i++) {
+            Card memory card = _cards[allCardIds[i]];
+            if (_cardCategories[allCardIds[i]] == categoryHash && card.issuer == issuer) {
+                cardIds[index] = allCardIds[i];
+                index++;
+            }
+        }
+        
+        return cardIds;
+    }
+    
+    /**
+     * @dev Gets all card IDs issued by a specific issuer for a profile
+     * @param profileId The ID of the profile
+     * @param issuer The issuer address to filter by
+     * @return cardIds Array of card IDs from this issuer
+     */
+    function getCardsByIssuer(uint256 profileId, address issuer) 
+        external 
+        view 
+        returns (uint256[] memory) 
+    {
+        if (!profileNFT.profileExists(profileId)) {
+            revert ProfileNotFound();
+        }
+        
+        uint256[] memory allCardIds = _profileCards[profileId];
+        
+        // Count matching cards
+        uint256 count = 0;
+        for (uint256 i = 0; i < allCardIds.length; i++) {
+            if (_cards[allCardIds[i]].issuer == issuer) {
+                count++;
+            }
+        }
+        
+        // Build result array
+        uint256[] memory cardIds = new uint256[](count);
+        uint256 index = 0;
+        for (uint256 i = 0; i < allCardIds.length; i++) {
+            if (_cards[allCardIds[i]].issuer == issuer) {
+                cardIds[index] = allCardIds[i];
+                index++;
+            }
+        }
+        
+        return cardIds;
+    }
+    
+    /**
      * @dev Pauses the contract (only owner)
      */
     function pause() external onlyOwner {
@@ -320,6 +548,39 @@ contract ReputationCard is ERC721, Ownable, Pausable {
         }
         
         return super._update(to, tokenId, auth);
+    }
+    
+    /**
+     * @dev Returns the metadata URI for a given token ID
+     * @param tokenId The ID of the token
+     * @return The metadata URI string
+     */
+    function tokenURI(uint256 tokenId) public view override returns (string memory) {
+        if (!_exists(tokenId)) {
+            revert CardNotFound();
+        }
+        
+        return _tokenURIs[tokenId];
+    }
+    
+    /**
+     * @dev Updates the metadata URI for a card (only issuer or owner)
+     * @param cardId The ID of the card
+     * @param newMetadataURI The new metadata URI
+     */
+    function updateMetadataURI(uint256 cardId, string memory newMetadataURI) external {
+        if (!_exists(cardId)) {
+            revert CardNotFound();
+        }
+        
+        Card storage card = _cards[cardId];
+        
+        // Only the issuer or contract owner can update metadata
+        if (card.issuer != msg.sender && owner() != msg.sender) {
+            revert UnauthorizedAccess();
+        }
+        
+        _tokenURIs[cardId] = newMetadataURI;
     }
     
     /**

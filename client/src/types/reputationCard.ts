@@ -1,26 +1,50 @@
 export interface ReputationCard {
-  cardId: number;
+  id?: number;
+  cardId?: number;
   profileId: number;
+  category: string;
+  description: string;
+  value: number;
+  issuedAt: number;
   issuer: string;
-  achievementType: string; // bytes32 converted to string for display
-  timestamp: number;
-  expiryDate: number;
-  metadata: string; // bytes converted to string for display
-  // Derived fields for UI
-  category?: string; // Derived from achievementType or metadata
-  description?: string; // Derived from metadata
-  value?: number; // Derived from achievementType or metadata
-  isValid?: boolean; // Derived from expiryDate vs current time
+  isValid: boolean;
+  metadataURI?: string;
+  categoryHash?: string;
+  metadata?: {
+    title?: string;
+    description?: string;
+    category?: string;
+    image?: string;
+    proofDocument?: string;
+    issuerName?: string;
+    issuerLogo?: string;
+    externalUrl?: string;
+    attributes?: Array<{
+      trait_type: string;
+      value: string | number;
+    }>;
+  };
 }
 
 export interface ReputationCardsByCategory {
   [category: string]: ReputationCard[];
 }
 
+export interface CategoryScore {
+  category: string;
+  score: number;
+  cardCount: number;
+}
+
+export interface ReputationBreakdown {
+  categories: string[];
+  scores: number[];
+}
+
 // Helper type for creating cards (matches contract parameters)
 export interface CreateReputationCardParams {
   profileId: number;
-  achievementType: string; // Will be converted to bytes32
-  expiryDate: number;
-  metadata: string; // Will be converted to bytes
+  category: string;
+  description: string;
+  value: number;
 }

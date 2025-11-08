@@ -2,25 +2,67 @@ const { ethers } = require("hardhat");
 
 async function main() {
   // Simple configuration - just edit these values
-  const RECIPIENT = "0x91e1c3ecb63b6be4512dbf367e9a822b06459993"; // Your target address
-  const AMOUNT = "100"; // Change this amount (in ETH)
+  const RECIPIENTS = [
+    "0x91ed606b65d33e3446d9450ad15115f6a1e0e7f5",
+    "0xdda82d845696f6fbf6fe6d4e8084a520ccc27ceb",
+    "0x91e1c3ecb63b6be4512dbf367e9a822b06459993"
+  ];
+  const AMOUNT = "5"; // Amount per recipient (in ETH) - reduced to fit available balance
 
   // Get the first signer (uses Hardhat's default accounts)
   const [signer] = await ethers.getSigners();
   
-  console.log(`Sending ${AMOUNT} ETH`);
-  console.log(`From: ${signer.address}`);
-  console.log(`To: ${RECIPIENT}`);
+  // Check balance first
+  const balance = await ethers.provider.getBalance(signer.address);
+  const balanceInEth = ethers.formatEther(balance);
+  
+  console.log(`\n💰 Sender Balance: ${balanceInEth} ETH`);
+  console.log(`📤 Sending: ${AMOUNT} ETH to each recipient`);
+  console.log(`📍 From: ${signer.address}`);
+  console.log(`👥 Recipients: ${RECIPIENTS.length}`);
+  
+  // Check if sender has enough balance for all recipients
+  const amountToSend = ethers.parseEther(AMOUNT);
+  const totalAmount = amountToSend * BigInt(RECIPIENTS.length);
+  if (balance < totalAmount) {
+    console.error(`\n❌ Error: Insufficient balance!`);
+    console.error(`   Need: ${ethers.formatEther(totalAmount)} ETH (${AMOUNT} ETH × ${RECIPIENTS.length} recipients)`);
+    console.error(`   Have: ${balanceInEth} ETH`);
+    console.error(`\n💡 Tip: Reduce the AMOUNT in the script or use a different account`);
+    process.exit(1);
+  }
 
-  // Send transaction
-  const tx = await signer.sendTransaction({
-    to: RECIPIENT,
-    value: ethers.parseEther(AMOUNT)
+  // Send transactions to all recipients
+  console.log(`\n⏳ Sending transactions...`);
+  const txPromises = [];
+  
+  for (let i = 0; i < RECIPIENTS.length; i++) {
+    const recipient = RECIPIENTS[i];
+    console.log(`\n📍 [${i + 1}/${RECIPIENTS.length}] To: ${recipient}`);
+    
+    const tx = await signer.sendTransaction({
+      to: recipient,
+      value: amountToSend
+    });
+    
+    console.log(`   📝 Transaction Hash: ${tx.hash}`);
+    txPromises.push(tx.wait());
+  }
+
+  console.log(`\n⏳ Waiting for all confirmations...`);
+  await Promise.all(txPromises);
+  
+  // Show new balance
+  const newBalance = await ethers.provider.getBalance(signer.address);
+  const newBalanceInEth = ethers.formatEther(newBalance);
+  
+  console.log(`\n✅ All transactions confirmed!`);
+  console.log(`💰 New Balance: ${newBalanceInEth} ETH`);
+  console.log(`📊 Total Sent: ${ethers.formatEther(totalAmount)} ETH (${AMOUNT} ETH × ${RECIPIENTS.length})`);
+  console.log(`\n✨ Recipients:`);
+  RECIPIENTS.forEach((addr, i) => {
+    console.log(`   ${i + 1}. ${addr} - ${AMOUNT} ETH`);
   });
-
-  console.log(`Transaction: ${tx.hash}`);
-  await tx.wait();
-  console.log("✅ Done!");
 }
 
 main().catch(console.error);
