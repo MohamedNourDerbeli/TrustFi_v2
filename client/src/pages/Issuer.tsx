@@ -69,6 +69,10 @@ export default function Issuer() {
     loadIssuedCredentials();
   }, [userProfile, address]);
 
+  const formatAddress = (addr: string) => {
+    return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+  };
+
   const handleBadgeImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -202,7 +206,7 @@ export default function Issuer() {
 
       toast({
         title: 'Credential Issued!',
-        description: `Successfully issued credential (Card ID: ${cardId}). Metadata: ${metadataURI}`,
+        description: `Successfully issued credential #${cardId} to ${formatAddress(formData.recipientAddress)}`,
       });
 
       // Reset form
