@@ -331,7 +331,17 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
       }
       return null;
     } catch (error: any) {
-      toast({ title: 'Connection Failed', description: error.message, variant: 'destructive' });
+      // Don't show error if user rejected the connection
+      const isUserRejection = 
+        error.code === 4001 || 
+        error.code === 'ACTION_REJECTED' ||
+        error.message?.includes('User rejected') ||
+        error.message?.includes('user rejected') ||
+        error.message?.includes('User denied');
+      
+      if (!isUserRejection) {
+        toast({ title: 'Connection Failed', description: error.message, variant: 'destructive' });
+      }
       return null;
     } finally {
       setIsConnecting(false);

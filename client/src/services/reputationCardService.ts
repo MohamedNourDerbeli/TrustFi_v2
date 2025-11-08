@@ -383,6 +383,20 @@ export class ReputationCardService {
   }
 
   /**
+   * Get all cards issued by a specific issuer address (across all profiles)
+   */
+  async getAllCardsIssuedBy(issuerAddress: string): Promise<number[]> {
+    try {
+      const contract = this.getContract();
+      const cardIds = await contract.getAllCardsIssuedBy(issuerAddress);
+      return cardIds.map((id: bigint) => Number(id));
+    } catch (error: any) {
+      console.error('Failed to get cards issued by address:', error);
+      throw new ContractError('Failed to get cards issued by address', error);
+    }
+  }
+
+  /**
    * Get current chain ID
    */
   getCurrentChainId(): SupportedChainId | null {

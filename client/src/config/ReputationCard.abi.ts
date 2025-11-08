@@ -1,5 +1,5 @@
 // Auto-generated ABI - Do not edit manually
-// Generated: 2025-11-08T17:55:31.630Z
+// Generated: 2025-11-08T18:41:50.621Z
 
 export const ReputationCard_ABI = [
   {
@@ -469,6 +469,25 @@ export const ReputationCard_ABI = [
         "internalType": "uint256",
         "name": "",
         "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "issuer",
+        "type": "address"
+      }
+    ],
+    "name": "getAllCardsIssuedBy",
+    "outputs": [
+      {
+        "internalType": "uint256[]",
+        "name": "",
+        "type": "uint256[]"
       }
     ],
     "stateMutability": "view",

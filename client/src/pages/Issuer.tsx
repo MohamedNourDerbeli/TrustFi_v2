@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Navigation from '@/components/Navigation';
-import { Shield, Send, Clock, CheckCircle2, Loader2, Upload, X, FileText, Image as ImageIcon } from 'lucide-react';
+import { Shield, Send, Clock, CheckCircle2, Loader2, Upload, X, FileText, Image as ImageIcon, Award } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useWallet } from '@/contexts/WalletContext';
 import { contractService } from '@/services/contractService';
@@ -45,6 +45,8 @@ export default function Issuer() {
     title: string;
     date: string;
     status: string;
+    category: string;
+    value: number;
   }>>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
@@ -55,12 +57,57 @@ export default function Issuer() {
 
       try {
         setIsLoadingHistory(true);
-        // Get all cards issued by this address
-        // Note: This requires iterating through profiles or implementing an indexer
-        // For now, we'll show a placeholder
-        setIssuedCredentials([]);
+        // Get all card IDs issued by this address
+        const cardIds = await reputationCardService.getAllCardsIssuedBy(address);
+        
+        // Format for display
+        const formattedCards = await Promise.all(
+          cardIds.map(async (cardId) => {
+            try {
+              // Get the full card details
+              const card = await reputationCardService.getCard(cardId);
+              
+              // Get recipient address by getting the owner of the profile NFT
+              const recipientAddress = await contractService.getProfileOwner(card.profileId);
+              
+              // Fetch metadata from IPFS
+              let metadata: any = {};
+              try {
+                if (card.metadataURI) {
+                  const metadataResponse = await fetch(
+                    card.metadataURI.startsWith('ipfs://') 
+                      ? `https://${import.meta.env.VITE_PINATA_GATEWAY}/ipfs/${card.metadataURI.replace('ipfs://', '')}`
+                      : card.metadataURI
+                  );
+                  metadata = await metadataResponse.json();
+                }
+              } catch (metadataError) {
+                console.error('Failed to fetch metadata:', metadataError);
+              }
+              
+              return {
+                id: cardId.toString(),
+                recipient: recipientAddress,
+                title: metadata.title || 'Untitled Credential',
+                date: new Date(card.issuedAt * 1000).toISOString(),
+                status: card.isValid ? 'verified' : 'revoked',
+                category: metadata.category || 'unknown',
+                value: card.value,
+              };
+            } catch (error) {
+              console.error(`Failed to process card ${cardId}:`, error);
+              return null;
+            }
+          })
+        );
+        
+        // Filter out null values and sort by date (newest first)
+        const validCards = formattedCards.filter(card => card !== null);
+        validCards.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        
+        setIssuedCredentials(validCards);
       } catch (error) {
-        // Failed to load issued credentials
+        console.error('Failed to load issued credentials:', error);
       } finally {
         setIsLoadingHistory(false);
       }
@@ -604,6 +651,41 @@ export default function Issuer() {
           </TabsContent>
 
           <TabsContent value="history">
+            {/* Summary Stats */}
+            {!isLoadingHistory && issuedCredentials.length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                <Card className="p-4 bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20">
+                  <div className="flex items-center gap-3 mb-2">
+                    <Shield className="w-5 h-5 text-primary" />
+                    <span className="text-sm font-medium text-muted-foreground">Total Issued</span>
+                  </div>
+                  <p className="text-3xl font-bold text-primary">
+                    {issuedCredentials.length}
+                  </p>
+                </Card>
+                
+                <Card className="p-4 bg-gradient-to-br from-green-500/10 to-green-500/5 border-green-500/20">
+                  <div className="flex items-center gap-3 mb-2">
+                    <CheckCircle2 className="w-5 h-5 text-green-600" />
+                    <span className="text-sm font-medium text-muted-foreground">Active</span>
+                  </div>
+                  <p className="text-3xl font-bold text-green-600">
+                    {issuedCredentials.filter(c => c.status === 'verified').length}
+                  </p>
+                </Card>
+                
+                <Card className="p-4 bg-gradient-to-br from-purple-500/10 to-purple-500/5 border-purple-500/20">
+                  <div className="flex items-center gap-3 mb-2">
+                    <Award className="w-5 h-5 text-purple-600" />
+                    <span className="text-sm font-medium text-muted-foreground">Total Reputation</span>
+                  </div>
+                  <p className="text-3xl font-bold text-purple-600">
+                    {issuedCredentials.reduce((sum, c) => sum + c.value, 0)}
+                  </p>
+                </Card>
+              </div>
+            )}
+
             <Card className="p-6">
               <h2 className="text-xl font-semibold mb-6">Recently Issued Credentials</h2>
               {isLoadingHistory ? (
@@ -621,29 +703,43 @@ export default function Issuer() {
                   {issuedCredentials.map((credential) => (
                     <div
                       key={credential.id}
-                      className="flex items-center justify-between p-4 rounded-lg border hover-elevate"
+                      className="flex items-start justify-between p-4 rounded-lg border hover:border-primary/50 transition-colors"
                       data-testid={`credential-row-${credential.id}`}
                     >
-                      <div className="flex-1">
-                        <h3 className="font-semibold mb-1">{credential.title}</h3>
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                          <span className="font-mono">{credential.recipient}</span>
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            {new Date(credential.date).toLocaleDateString()}
-                          </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-2">
+                          <h3 className="font-semibold truncate">{credential.title}</h3>
+                          <Badge variant="outline" className="text-xs capitalize">
+                            {credential.category}
+                          </Badge>
+                        </div>
+                        <div className="flex flex-col gap-1 text-sm text-muted-foreground">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs">Recipient:</span>
+                            <span className="font-mono text-xs">{formatAddress(credential.recipient)}</span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="flex items-center gap-1">
+                              <Shield className="w-3 h-3" />
+                              +{credential.value} reputation
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              {new Date(credential.date).toLocaleDateString()}
+                            </span>
+                          </div>
                         </div>
                       </div>
-                      <div>
+                      <div className="flex-shrink-0 ml-4">
                         {credential.status === 'verified' ? (
-                          <Badge variant="secondary" className="gap-1">
+                          <Badge variant="secondary" className="gap-1 bg-green-500/10 text-green-700 dark:text-green-400">
                             <CheckCircle2 className="w-3 h-3" />
-                            Verified
+                            Active
                           </Badge>
                         ) : (
-                          <Badge variant="secondary" className="gap-1 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400">
-                            <Clock className="w-3 h-3" />
-                            Pending
+                          <Badge variant="secondary" className="gap-1 bg-red-500/10 text-red-700 dark:text-red-400">
+                            <X className="w-3 h-3" />
+                            Revoked
                           </Badge>
                         )}
                       </div>

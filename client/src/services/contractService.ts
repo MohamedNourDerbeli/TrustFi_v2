@@ -274,6 +274,20 @@ export class ContractService {
   }
 
   /**
+   * Get the owner address of a profile by token ID
+   */
+  async getProfileOwner(tokenId: number): Promise<string> {
+    try {
+      const contract = this.getContract();
+      const owner = await contract.ownerOf(tokenId);
+      return owner;
+    } catch (error: any) {
+      console.error('Failed to get profile owner:', error);
+      throw new ContractError('Failed to get profile owner', error);
+    }
+  }
+
+  /**
    * Get current chain ID
    */
   getCurrentChainId(): SupportedChainId | null {

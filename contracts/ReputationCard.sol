@@ -499,6 +499,35 @@ contract ReputationCard is ERC721, Ownable, Pausable {
     }
     
     /**
+     * @dev Gets all cards issued by a specific issuer across all profiles
+     * @param issuer The issuer address
+     * @return cardIds Array of all card IDs issued by this address
+     */
+    function getAllCardsIssuedBy(address issuer) external view returns (uint256[] memory) {
+        uint256 totalCardsCount = _nextCardId - 1;
+        
+        // Count matching cards
+        uint256 count = 0;
+        for (uint256 i = 1; i <= totalCardsCount; i++) {
+            if (_exists(i) && _cards[i].issuer == issuer) {
+                count++;
+            }
+        }
+        
+        // Build result array
+        uint256[] memory cardIds = new uint256[](count);
+        uint256 index = 0;
+        for (uint256 i = 1; i <= totalCardsCount; i++) {
+            if (_exists(i) && _cards[i].issuer == issuer) {
+                cardIds[index] = i;
+                index++;
+            }
+        }
+        
+        return cardIds;
+    }
+    
+    /**
      * @dev Pauses the contract (only owner)
      */
     function pause() external onlyOwner {
