@@ -1,3 +1,5 @@
+import { useEffect } from 'react';
+import { useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import WalletConnectButton from '@/components/WalletConnectButton';
 import ThemeToggle from '@/components/ThemeToggle';
@@ -16,28 +18,38 @@ import freelanceImage from '@assets/generated_images/Freelancer_home_workspace_e
 import web3Image from '@assets/generated_images/Web3_community_collaboration_cd6cb4dc.png';
 
 export default function Home() {
-  const { connectWallet, userProfile, connected, address } = useWallet();
+  const [, setLocation] = useLocation();
+  const { connectWallet, userProfile, connected, address, isInitializing } = useWallet();
   const { offChainData } = useProfile();
+
+  // Redirect logged-in users to dashboard
+  useEffect(() => {
+    // Wait for wallet initialization to complete
+    if (isInitializing) return;
+    
+    // If user is connected, redirect to dashboard
+    if (connected && address) {
+      setLocation('/dashboard');
+    }
+  }, [connected, address, isInitializing, setLocation]);
 
   const handleCreateProfileClick = async (e: React.MouseEvent) => {
     e.preventDefault();
     
-    // If already connected, go to profile page
+    // If already connected, go to dashboard (OpenSea-style)
     if (connected) {
-      if (offChainData?.username) {
-        window.location.href = `/${offChainData.username}`;
-      } else if (address) {
-        window.location.href = `/${address}`;
-      } else {
-        window.location.href = '/dashboard';
-      }
+      setLocation('/dashboard');
       return;
     }
     
-    // Connect wallet and go to profile
+    // Not connected - connect wallet first, then redirect to dashboard
     const result = await connectWallet();
     if (result && result.address) {
-      window.location.href = `/${result.address}`;
+      // After connecting, redirect to dashboard (profile is auto-created)
+      // Small delay to ensure profile creation completes
+      setTimeout(() => {
+        setLocation('/dashboard');
+      }, 500);
     }
   };
 

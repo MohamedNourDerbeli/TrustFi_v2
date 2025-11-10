@@ -145,8 +145,8 @@ export default function PublicProfile() {
   const isLoadingData = !offChainData && !profileData;
   const displayName = offChainData?.display_name || offChainData?.username || profileData?.metadata?.name || (isLoadingData ? '' : 'Anonymous User');
   const displayBio = (showBio && offChainData?.bio) || profileData?.metadata?.bio || '';
-  const avatarUrl = offChainData?.avatar || profileData?.metadata?.image;
-  const bannerUrl = offChainData?.banner;
+  const avatarUrl = offChainData?.avatar_url || profileData?.metadata?.image;
+  const bannerUrl = offChainData?.banner_url;
 
   return (
     <div className="min-h-screen bg-background">
@@ -194,7 +194,19 @@ export default function PublicProfile() {
                 {isLoadingData ? (
                   <Skeleton className="h-8 w-48" />
                 ) : (
-                  <h1 className="text-2xl md:text-3xl font-semibold truncate">{displayName || 'Anonymous User'}</h1>
+                  <>
+                    <h1 className="text-2xl md:text-3xl font-semibold truncate">{displayName || 'Anonymous User'}</h1>
+                    {offChainData?.is_verified && (
+                      <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary flex items-center justify-center" title="Verified Profile">
+                        <Check className="w-4 h-4 text-primary-foreground" />
+                      </div>
+                    )}
+                    {offChainData?.is_featured && (
+                      <div className="flex-shrink-0" title="Featured Profile">
+                        <Award className="w-6 h-6 text-yellow-500 fill-yellow-500" />
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
               <div className="flex items-center gap-2 flex-wrap">
@@ -210,7 +222,7 @@ export default function PublicProfile() {
                         {formatAddress(resolvedAddress)}
                       </div>
                     )}
-                    {offChainData?.profile_views !== undefined && offChainData.profile_views > 0 && (
+                    {isOwnProfile && offChainData?.profile_views !== undefined && offChainData.profile_views > 0 && (
                       <div className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-muted/50 rounded text-xs">
                         <Eye className="w-3 h-3" />
                         <span>{offChainData.profile_views.toLocaleString()} views</span>
@@ -282,11 +294,19 @@ export default function PublicProfile() {
             <Skeleton className="h-4 w-3/4" />
           </div>
         ) : (
-          showBio && displayBio && (
-            <div className="mt-4 max-w-lg">
-              <p className="text-sm text-muted-foreground">{displayBio}</p>
-            </div>
-          )
+          <>
+            {showBio && displayBio && (
+              <div className="mt-4 max-w-lg">
+                <p className="text-sm text-muted-foreground">{displayBio}</p>
+              </div>
+            )}
+            {offChainData?.created_at && (
+              <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Calendar className="w-3.5 h-3.5" />
+                <span>Member since {new Date(offChainData.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</span>
+              </div>
+            )}
+          </>
         )}
 
         {/* Social Links - Simple like OpenSea */}

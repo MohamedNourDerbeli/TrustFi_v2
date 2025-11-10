@@ -17,10 +17,6 @@ export default function Navigation() {
     ? `/${address}` 
     : '/profile';
 
-  // Check if user has any profile (on-chain or off-chain)
-  const hasOffChainProfile = !!offChainData;
-  const hasOnChainProfile = !!userProfile?.hasProfile;
-
   const navLinks = [
     {
       href: '/search',
@@ -30,12 +26,12 @@ export default function Navigation() {
     {
       href: '/dashboard',
       label: 'Dashboard',
-      show: hasOnChainProfile, // Only show if activated
+      show: !!address, // Show if wallet connected
     },
     {
       href: profileUrl,
       label: 'Profile',
-      show: hasOffChainProfile || hasOnChainProfile, // Show if any profile exists
+      show: !!address, // Show if wallet connected (profile auto-created)
     },
     {
       href: '/issuer',

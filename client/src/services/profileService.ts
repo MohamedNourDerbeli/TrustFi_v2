@@ -13,14 +13,21 @@ export interface OffChainProfile {
   bio?: string;
   email?: string;
   websiteUrl?: string;
-  avatar?: string;
-  banner?: string;
+  avatar_url?: string;
+  banner_url?: string;
   twitterHandle?: string;
   githubHandle?: string;
   linkedinUrl?: string;
   discordHandle?: string;
   telegramHandle?: string;
-  updatedAt?: string;
+  is_verified?: boolean;
+  is_featured?: boolean;
+  profile_views?: number;
+  activation_status?: 'none' | 'pending' | 'active' | 'failed';
+  activation_tx_hash?: string;
+  created_at?: string;
+  updated_at?: string;
+  last_login_at?: string;
   visibility?: string;
   privacy_settings?: any;
   tracking_preferences?: any;
@@ -36,14 +43,12 @@ export class ProfileService {
         .from('profiles')
         .select('*')
         .eq('address', address.toLowerCase())
-        .single();
+        .maybeSingle(); // Use maybeSingle instead of single to avoid errors when not found
       
       if (error) {
-        if (error.code === 'PGRST116') {
-          // No profile found - this is normal
-          return null;
-        }
-        throw error;
+        console.error('Supabase error fetching profile:', error);
+        // Return null instead of throwing - profile might not exist yet
+        return null;
       }
       
       if (!data) return null;
@@ -87,12 +92,19 @@ export class ProfileService {
    */
   async isUsernameAvailable(username: string): Promise<boolean> {
     try {
-      const { data, error } = await supabase.rpc('is_username_available', {
-        check_username: username.toLowerCase()
-      });
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('username')
+        .eq('username', username.toLowerCase())
+        .maybeSingle();
       
-      if (error) throw error;
-      return data as boolean;
+      if (error) {
+        console.error('Error checking username availability:', error);
+        return false;
+      }
+      
+      // Username is available if no profile found with that username
+      return !data;
     } catch (error) {
       console.error('Error checking username availability:', error);
       return false;
@@ -183,18 +195,45 @@ export class ProfileService {
       bio: data.bio,
       email: data.email,
       websiteUrl: data.website_url,
-      avatar: data.avatar_url,
-      banner: data.banner_url,
+      avatar_url: data.avatar_url,
+      banner_url: data.banner_url,
       twitterHandle: data.twitter_handle,
       githubHandle: data.github_handle,
       linkedinUrl: data.linkedin_url,
       discordHandle: data.discord_handle,
       telegramHandle: data.telegram_handle,
-      updatedAt: data.updated_at,
+      is_verified: data.is_verified,
+      is_featured: data.is_featured,
+      profile_views: data.profile_views,
+      activation_status: data.activation_status || 'none',
+      activation_tx_hash: data.activation_tx_hash,
+      created_at: data.created_at,
+      updated_at: data.updated_at,
+      last_login_at: data.last_login_at,
       visibility: data.visibility,
       privacy_settings: data.privacy_settings,
       tracking_preferences: data.tracking_preferences,
     };
+  }
+
+  /**
+   * Update activation status
+   */
+  async updateActivationStatus(
+    address: string,
+    status: 'pending' | 'active' | 'failed',
+    txHash?: string
+  ): Promise<void> {
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        activation_status: status,
+        activation_tx_hash: txHash,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('address', address.toLowerCase());
+
+    if (error) throw error;
   }
 
   /**

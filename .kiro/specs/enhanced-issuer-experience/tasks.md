@@ -1,6 +1,9 @@
 # Implementation Plan
 
 - [ ] 1. Extend ReputationCard smart contract with collectible minting structures
+
+
+
   - Add CollectibleTemplate struct with all required fields (templateId, category, description, value, maxSupply, currentSupply, startTime, endTime, eligibilityType, eligibilityData, isPaused, isActive, metadataURI, rarityTier)
   - Add EligibilityType enum (OPEN, WHITELIST, TOKEN_HOLDER, PROFILE_REQUIRED)
   - Add MintingMode enum (DIRECT, COLLECTIBLE)

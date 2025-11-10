@@ -1,6 +1,7 @@
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
+import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { WalletProvider } from "@/contexts/WalletContext";
@@ -32,7 +33,7 @@ function Router() {
         </ProtectedRoute>
       </Route>
       <Route path="/dashboard">
-        <ProtectedRoute requireProfile>
+        <ProtectedRoute>
           <Dashboard />
         </ProtectedRoute>
       </Route>
@@ -60,6 +61,7 @@ function App() {
           <TooltipProvider>
             <Toaster />
             <Router />
+            <ReactQueryDevtools initialIsOpen={false} />
           </TooltipProvider>
         </ProfileProvider>
       </WalletProvider>

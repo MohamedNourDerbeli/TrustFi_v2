@@ -73,29 +73,75 @@ export default function ActivateProfileDialog({
 
       const metadataURI = `data:application/json;base64,${btoa(JSON.stringify(metadata))}`;
 
+      // Set status to pending immediately
+      const { profileService } = await import('@/services/profileService');
+      await profileService.updateActivationStatus(address, 'pending');
+
+      // Invalidate cache immediately to show pending status
+      const { queryClient } = await import('@/lib/queryClient');
+      await queryClient.invalidateQueries({ queryKey: ['profile', 'offchain', address.toLowerCase()] });
+
       toast({
         title: 'Confirm Transaction',
         description: 'Please confirm the transaction in your wallet',
       });
 
-      // Create on-chain profile
-      await contractService.createProfile(metadataURI);
+      // Close dialog immediately - don't make user wait
+      onOpenChange(false);
 
       toast({
-        title: 'Profile Activated!',
-        description: 'You can now receive reputation cards and mint credentials',
+        title: 'Transaction Submitted!',
+        description: 'Your profile is being activated. You can continue using the app.',
       });
 
-      // Wait for blockchain confirmation
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Create on-chain profile in background
+      try {
+        const tokenId = await contractService.createProfile(metadataURI);
 
-      // Refresh profile
-      await refreshProfile();
-      
-      onOpenChange(false);
-      onSuccess?.();
+        // Update status to active
+        await profileService.updateActivationStatus(address, 'active');
+
+        // Invalidate React Query cache
+        await queryClient.invalidateQueries({ queryKey: ['profile', 'offchain', address.toLowerCase()] });
+
+        toast({
+          title: 'Profile Activated!',
+          description: 'You can now receive reputation cards and mint credentials',
+        });
+
+        // Refresh profile
+        await refreshProfile();
+        
+        onSuccess?.();
+      } catch (bgError: any) {
+        console.error('Background activation error:', bgError);
+        
+        // Update status to failed
+        await profileService.updateActivationStatus(address, 'failed');
+        await queryClient.invalidateQueries({ queryKey: ['profile', 'offchain', address.toLowerCase()] });
+        
+        toast({
+          title: 'Activation Failed',
+          description: 'The transaction failed. Please try again.',
+          variant: 'destructive',
+        });
+      }
     } catch (error: any) {
       console.error('Activation error:', error);
+      
+      // Update status to failed if transaction was submitted
+      if (address && !error.message?.includes('user rejected') && !error.code === 'ACTION_REJECTED') {
+        try {
+          const { profileService } = await import('@/services/profileService');
+          await profileService.updateActivationStatus(address, 'failed');
+          
+          // Invalidate cache
+          const { queryClient } = await import('@/lib/queryClient');
+          await queryClient.invalidateQueries({ queryKey: ['profile', 'offchain', address.toLowerCase()] });
+        } catch (updateError) {
+          console.error('Failed to update status:', updateError);
+        }
+      }
       
       if (error.message?.includes('ProfileAlreadyExists')) {
         toast({

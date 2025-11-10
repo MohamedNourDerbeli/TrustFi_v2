@@ -85,14 +85,20 @@ export function usePublicProfile(
           try {
             const { profileService } = await import('@/services/profileService');
             const offChain = await profileService.getProfile(addressToLoad);
+            console.log('Off-chain profile loaded:', offChain);
             setOffChainData(offChain);
+            
+            // If we have off-chain data, we're not in an error state
+            if (offChain) {
+              setError(null);
+            }
           } catch (err) {
-            console.log('No off-chain data found');
+            console.error('Error loading off-chain data:', err);
           }
         };
 
         // Start loading off-chain data immediately (don't wait)
-        loadOffChainData();
+        await loadOffChainData();
 
         // Load on-chain profile using wallet provider if available
         if (walletProvider) {

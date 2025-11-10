@@ -54,63 +54,12 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
 
   const truncateAddress = (addr: string) => `${addr.substring(0, 6)}...${addr.substring(addr.length - 4)}`;
 
-  // Function to check user profile and roles
+  // Function to check user profile and roles (kept for backward compatibility)
   const refreshProfile = useCallback(async (): Promise<UserProfile | null> => {
-    if (!address || !provider || !ethers.isAddress(address)) {
-      setUserProfile(null);
-      setIsLoadingProfile(false);
-      return null;
-    }
-
-    try {
-      setIsLoadingProfile(true);
-      
-      // Import services dynamically to avoid circular dependencies
-      const { contractService } = await import('@/services/contractService');
-      const { reputationCardService } = await import('@/services/reputationCardService');
-      
-      // Initialize contract services if needed
-      if (!contractService.isInitialized()) {
-        await contractService.initialize(provider);
-      }
-      if (!reputationCardService.isInitialized()) {
-        await reputationCardService.initialize(provider);
-      }
-
-      // Try to get user profile
-      let profileData: UserProfile;
-      
-      try {
-        const profile = await contractService.getProfileByOwner(address);
-        
-        // User has a profile - check roles
-        const isIssuer = await reputationCardService.isAuthorizedIssuer(address);
-        
-        profileData = {
-          tokenId: profile.tokenId.toString(),
-          hasProfile: true,
-          isAdmin: isIssuer,
-          isIssuer: isIssuer,
-        };
-      } catch (error: any) {
-        // No profile found - this is normal for new users
-        profileData = {
-          tokenId: '',
-          hasProfile: false,
-          isAdmin: false,
-          isIssuer: false,
-        };
-      }
-
-      setUserProfile(profileData);
-      return profileData;
-    } catch (error) {
-      setUserProfile(null);
-      return null;
-    } finally {
-      setIsLoadingProfile(false);
-    }
-  }, [address, provider]);
+    // This is now handled by React Query in useOnChainProfile hook
+    // Keeping this for backward compatibility but it's deprecated
+    return userProfile;
+  }, [userProfile]);
 
   const handleDisconnect = useCallback(async () => {
     // Revoke permissions in MetaMask
@@ -171,9 +120,10 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
           localStorage.setItem('isWalletConnected', 'true');
           localStorage.setItem('walletAddress', newAddress);
           
-          // Check/create off-chain profile for the new account
+          // Check/create off-chain profile for the new account (OpenSea-style)
           try {
             const { profileService } = await import('@/services/profileService');
+            const { queryClient } = await import('@/lib/queryClient');
             const { supabase } = await import('@/lib/supabase');
             
             const existingProfile = await profileService.getProfile(newAddress);
@@ -181,13 +131,14 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
             if (!existingProfile) {
               console.log('Creating default off-chain profile for switched account...');
               
-              // Use upsert to avoid duplicate key errors
+              const defaultUsername = `user-${newAddress.slice(2, 8).toLowerCase()}`;
+              
               const { error: insertError } = await supabase
                 .from('profiles')
                 .upsert({
                   address: newAddress.toLowerCase(),
-                  created_at: new Date().toISOString(),
-                  updated_at: new Date().toISOString(),
+                  username: defaultUsername,
+                  display_name: 'Unnamed',
                 }, {
                   onConflict: 'address',
                   ignoreDuplicates: false
@@ -197,6 +148,8 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
                 console.error('Failed to create default profile:', insertError);
               } else {
                 console.log('Default off-chain profile created for switched account');
+                // Invalidate React Query cache
+                queryClient.invalidateQueries({ queryKey: ['profile', 'offchain', newAddress.toLowerCase()] });
               }
             } else {
               console.log('Off-chain profile already exists for switched account');
@@ -267,14 +220,55 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [handleDisconnect, toast]);
 
-  // Load user profile when address changes
+  // Load user profile when address changes using React Query
   useEffect(() => {
-    if (connected && address && provider) {
-      refreshProfile();
-    } else {
-      setUserProfile(null);
-    }
-  }, [connected, address, provider, refreshProfile]);
+    const loadProfile = async () => {
+      if (!connected || !address || !provider) {
+        setUserProfile(null);
+        setIsLoadingProfile(false);
+        return;
+      }
+
+      setIsLoadingProfile(true);
+      
+      try {
+        const { contractService } = await import('@/services/contractService');
+        const { reputationCardService } = await import('@/services/reputationCardService');
+        
+        if (!contractService.isInitialized()) {
+          await contractService.initialize(provider);
+        }
+        if (!reputationCardService.isInitialized()) {
+          await reputationCardService.initialize(provider);
+        }
+
+        try {
+          const profile = await contractService.getProfileByOwner(address);
+          const isIssuer = await reputationCardService.isAuthorizedIssuer(address);
+          
+          setUserProfile({
+            tokenId: profile.tokenId.toString(),
+            hasProfile: true,
+            isAdmin: isIssuer,
+            isIssuer: isIssuer,
+          });
+        } catch (error: any) {
+          setUserProfile({
+            tokenId: '',
+            hasProfile: false,
+            isAdmin: false,
+            isIssuer: false,
+          });
+        }
+      } catch (error) {
+        setUserProfile(null);
+      } finally {
+        setIsLoadingProfile(false);
+      }
+    };
+
+    loadProfile();
+  }, [connected, address, provider]);
 
   const connectWallet = async (): Promise<ConnectionResult | null> => {
     if (!provider) {
@@ -291,9 +285,11 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
         localStorage.setItem('isWalletConnected', 'true');
         localStorage.setItem('walletAddress', userAddress);
         
-        // Auto-create off-chain profile if it doesn't exist
+        // Auto-create off-chain profile if it doesn't exist (OpenSea-style)
+        let profileCreated = false;
         try {
           const { profileService } = await import('@/services/profileService');
+          const { queryClient } = await import('@/lib/queryClient');
           const { supabase } = await import('@/lib/supabase');
           
           const existingProfile = await profileService.getProfile(userAddress);
@@ -301,13 +297,14 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
           if (!existingProfile) {
             console.log('Creating default off-chain profile for new user...');
             
-            // Create minimal off-chain profile in Supabase with upsert to avoid duplicates
+            const defaultUsername = `user-${userAddress.slice(2, 8).toLowerCase()}`;
+            
             const { error: insertError } = await supabase
               .from('profiles')
               .upsert({
                 address: userAddress.toLowerCase(),
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
+                username: defaultUsername,
+                display_name: 'Unnamed',
               }, {
                 onConflict: 'address',
                 ignoreDuplicates: false
@@ -316,7 +313,12 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
             if (insertError) {
               console.error('Failed to create default profile:', insertError);
             } else {
-              console.log('Default off-chain profile created successfully');
+              console.log('Default off-chain profile created successfully with username:', defaultUsername);
+              profileCreated = true;
+              // Invalidate React Query cache and wait a bit for it to propagate
+              await queryClient.invalidateQueries({ queryKey: ['profile', 'offchain', userAddress.toLowerCase()] });
+              // Small delay to ensure database write is complete
+              await new Promise(resolve => setTimeout(resolve, 300));
             }
           } else {
             console.log('Off-chain profile already exists');
@@ -325,7 +327,12 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
           console.log('Could not check/create off-chain profile:', error);
         }
         
-        toast({ title: 'Wallet Connected', description: `Connected to ${truncateAddress(userAddress)}` });
+        toast({ 
+          title: 'Wallet Connected', 
+          description: profileCreated 
+            ? `Welcome! Your profile has been created.`
+            : `Connected to ${truncateAddress(userAddress)}` 
+        });
         
         return { address: userAddress, profile: null };
       }

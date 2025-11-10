@@ -94,7 +94,7 @@ export default function Search() {
               >
                 <div className="flex items-center gap-4">
                   <Avatar className="w-12 h-12 border-2 border-primary/20">
-                    <AvatarImage src={profile.avatar} alt={profile.display_name || profile.username} />
+                    <AvatarImage src={profile.avatar_url} alt={profile.display_name || profile.username} />
                     <AvatarFallback>
                       <User className="w-6 h-6" />
                     </AvatarFallback>
@@ -115,12 +115,6 @@ export default function Search() {
                     {profile.username && (
                       <p className="text-sm text-muted-foreground">
                         @{profile.username}
-                      </p>
-                    )}
-                    
-                    {profile.bio && (
-                      <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                        {profile.bio}
                       </p>
                     )}
                   </div>

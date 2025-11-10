@@ -69,8 +69,8 @@ export default function ProfileEditForm({ address }: ProfileEditFormProps) {
           linkedinUrl: offChainData.linkedinUrl || '',
           discordHandle: offChainData.discordHandle || '',
           telegramHandle: offChainData.telegramHandle || '',
-          avatar: offChainData.avatar || '',
-          banner: offChainData.banner || '',
+          avatar: offChainData.avatar_url || '',
+          banner: offChainData.banner_url || '',
         };
         
         setOriginalValues(values);
@@ -110,8 +110,8 @@ export default function ProfileEditForm({ address }: ProfileEditFormProps) {
             linkedinUrl: data.linkedinUrl || '',
             discordHandle: data.discordHandle || '',
             telegramHandle: data.telegramHandle || '',
-            avatar: data.avatar || '',
-            banner: data.banner || '',
+            avatar: data.avatar_url || '',
+            banner: data.banner_url || '',
           };
           
           setOriginalValues(values);
@@ -144,21 +144,36 @@ export default function ProfileEditForm({ address }: ProfileEditFormProps) {
   // Check for changes whenever form values change
   useEffect(() => {
     if (!originalValues) {
-      setHasChanges(false);
+      // If we have any non-empty values, consider it as changes
+      const hasAnyValue = 
+        editUsername.trim() !== '' ||
+        editDisplayName.trim() !== '' ||
+        editBio.trim() !== '' ||
+        editEmail.trim() !== '' ||
+        editWebsite.trim() !== '' ||
+        editTwitter.trim() !== '' ||
+        editGithub.trim() !== '' ||
+        editLinkedin.trim() !== '' ||
+        editDiscord.trim() !== '' ||
+        editTelegram.trim() !== '' ||
+        editImageFile !== null ||
+        editBannerFile !== null;
+      
+      setHasChanges(hasAnyValue);
       return;
     }
 
     const changed = 
-      editUsername !== originalValues.username ||
-      editDisplayName !== originalValues.display_name ||
-      editBio !== originalValues.bio ||
-      editEmail !== originalValues.email ||
-      editWebsite !== originalValues.websiteUrl ||
-      editTwitter !== originalValues.twitterHandle ||
-      editGithub !== originalValues.githubHandle ||
-      editLinkedin !== originalValues.linkedinUrl ||
-      editDiscord !== originalValues.discordHandle ||
-      editTelegram !== originalValues.telegramHandle ||
+      editUsername.trim() !== (originalValues.username || '').trim() ||
+      editDisplayName.trim() !== (originalValues.display_name || '').trim() ||
+      editBio.trim() !== (originalValues.bio || '').trim() ||
+      editEmail.trim() !== (originalValues.email || '').trim() ||
+      editWebsite.trim() !== (originalValues.websiteUrl || '').trim() ||
+      editTwitter.trim() !== (originalValues.twitterHandle || '').trim() ||
+      editGithub.trim() !== (originalValues.githubHandle || '').trim() ||
+      editLinkedin.trim() !== (originalValues.linkedinUrl || '').trim() ||
+      editDiscord.trim() !== (originalValues.discordHandle || '').trim() ||
+      editTelegram.trim() !== (originalValues.telegramHandle || '').trim() ||
       editImageFile !== null ||
       editBannerFile !== null;
 
@@ -338,8 +353,32 @@ export default function ProfileEditForm({ address }: ProfileEditFormProps) {
         description: 'Your profile has been updated!',
       });
 
+      // Invalidate React Query cache to refresh all profile data
+      const { queryClient } = await import('@/lib/queryClient');
+      await queryClient.invalidateQueries({ queryKey: ['profile', 'offchain', address!.toLowerCase()] });
+
       // Force reload profile data from ProfileContext
       window.dispatchEvent(new CustomEvent('profile-updated', { detail: updatedProfile }));
+      
+      // Reset form to show updated values
+      setOriginalValues({
+        username: updatedProfile.username || '',
+        display_name: updatedProfile.display_name || '',
+        bio: updatedProfile.bio || '',
+        email: updatedProfile.email || '',
+        websiteUrl: updatedProfile.websiteUrl || '',
+        twitterHandle: updatedProfile.twitterHandle || '',
+        githubHandle: updatedProfile.githubHandle || '',
+        linkedinUrl: updatedProfile.linkedinUrl || '',
+        discordHandle: updatedProfile.discordHandle || '',
+        telegramHandle: updatedProfile.telegramHandle || '',
+        avatar: updatedProfile.avatar_url || '',
+        banner: updatedProfile.banner_url || '',
+      });
+      
+      // Clear file inputs
+      setEditImageFile(null);
+      setEditBannerFile(null);
       
       // Don't redirect - stay on settings page
     } catch (error: any) {
