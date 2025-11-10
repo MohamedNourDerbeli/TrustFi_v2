@@ -18,7 +18,7 @@ const config: HardhatUserConfig = {
     localhost: {
       url: "http://127.0.0.1:8545",
       chainId: 31337,
-      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : undefined,
+      // Don't specify accounts - use Hardhat's default funded accounts (10,000 ETH each)
     },
     moonbase: {
       url: "https://rpc.api.moonbase.moonbeam.network",

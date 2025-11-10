@@ -6,16 +6,26 @@ async function main() {
   console.log("🚀 Complete TrustFi Deployment");
   console.log("================================\n");
 
-  // Get deployer account - use specific private key from .env
-  const privateKey = process.env.PRIVATE_KEY;
+  // Get deployer account
+  // For localhost, use the funded account (0x91eD... which now has 5 ETH)
+  // For other networks, use the first signer
+  const network = await ethers.provider.getNetwork();
   let deployer;
   
-  if (privateKey) {
-    deployer = new ethers.Wallet(privateKey, ethers.provider);
-    console.log(`Using custom account from .env`);
+  if (network.chainId === 31337n) {
+    // Localhost - use the custom account that was funded
+    const privateKey = process.env.PRIVATE_KEY;
+    if (privateKey) {
+      deployer = new ethers.Wallet(privateKey, ethers.provider);
+      console.log(`Using funded custom account from .env`);
+    } else {
+      [deployer] = await ethers.getSigners();
+      console.log(`Using default Hardhat account`);
+    }
   } else {
+    // Other networks - use configured account
     [deployer] = await ethers.getSigners();
-    console.log(`Using default Hardhat account`);
+    console.log(`Using configured account`);
   }
   
   console.log(`Deploying with account: ${deployer.address}`);
@@ -37,7 +47,7 @@ async function main() {
     
     // Deploy ProfileNFT
     console.log("   Deploying ProfileNFT...");
-    const ProfileNFT = await ethers.getContractFactory("ProfileNFT");
+    const ProfileNFT = await ethers.getContractFactory("ProfileNFT", deployer);
     const profileNFT = await ProfileNFT.deploy();
     await profileNFT.waitForDeployment();
     const profileNFTAddress = await profileNFT.getAddress();
@@ -45,7 +55,7 @@ async function main() {
 
     // Deploy ReputationCard
     console.log("   Deploying ReputationCard...");
-    const ReputationCard = await ethers.getContractFactory("ReputationCard");
+    const ReputationCard = await ethers.getContractFactory("ReputationCard", deployer);
     const reputationCard = await ReputationCard.deploy(profileNFTAddress);
     await reputationCard.waitForDeployment();
     const reputationCardAddress = await reputationCard.getAddress();
