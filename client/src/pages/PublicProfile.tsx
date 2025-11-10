@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRoute, useLocation } from 'wouter';
 import { useWallet } from '@/contexts/WalletContext';
 import { useProfile } from '@/contexts/ProfileContext';
 import { usePublicProfile } from '@/hooks/usePublicProfile';
 import { useToast } from '@/hooks/use-toast';
+import { profileService } from '@/services/profileService';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -74,6 +75,17 @@ export default function PublicProfile() {
   const error = fetchedError;
 
   const isOwnProfile = isViewingOwnProfile;
+
+  // Track profile views (only for other people's profiles)
+  useEffect(() => {
+    if (resolvedAddress && !isOwnProfile && !error) {
+      // Increment view count in background (don't wait for response)
+      profileService.incrementProfileViews(resolvedAddress).catch(err => {
+        console.error('Failed to track profile view:', err);
+        // Silently fail - view tracking shouldn't break the UI
+      });
+    }
+  }, [resolvedAddress, isOwnProfile, error]);
 
   const copyAddress = () => {
     if (resolvedAddress) {

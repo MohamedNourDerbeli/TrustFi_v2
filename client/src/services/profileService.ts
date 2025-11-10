@@ -119,6 +119,60 @@ export class ProfileService {
   }
 
   /**
+   * Increment profile view count
+   * Call this when someone views a profile (not their own)
+   */
+  async incrementProfileViews(address: string): Promise<void> {
+    try {
+      const { error } = await supabase.rpc('increment_profile_views', {
+        profile_address: address.toLowerCase()
+      });
+      
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error incrementing profile views:', error);
+      // Don't throw - view tracking shouldn't break the app
+    }
+  }
+
+  /**
+   * Get trending profiles by view count
+   */
+  async getTrendingProfiles(limit: number = 10): Promise<OffChainProfile[]> {
+    try {
+      const { data, error } = await supabase.rpc('get_trending_profiles', {
+        limit_count: limit
+      });
+      
+      if (error) throw error;
+      if (!data) return [];
+      
+      return data.map((profile: any) => this.mapProfileData(profile));
+    } catch (error) {
+      console.error('Error fetching trending profiles:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get profile statistics (uses secure view)
+   */
+  async getProfileStats(): Promise<any[]> {
+    try {
+      const { data, error } = await supabase
+        .from('profile_stats')
+        .select('*')
+        .limit(100);
+      
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching profile stats:', error);
+      return [];
+    }
+  }
+
+  /**
    * Map database profile to OffChainProfile
    */
   private mapProfileData(data: any): OffChainProfile {
