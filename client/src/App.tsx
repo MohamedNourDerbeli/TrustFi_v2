@@ -15,6 +15,8 @@ import PrivacySettingsPage from "@/pages/PrivacySettingsPage";
 import Search from "@/pages/Search";
 import Issuer from "@/pages/Issuer";
 import Admin from "@/pages/Admin";
+import CollectiblesGallery from "@/pages/CollectiblesGallery";
+import VerifyCard from "@/pages/VerifyCard";
 import NotFound from "@/pages/NotFound";
 
 function Router() {
@@ -22,6 +24,8 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/search" component={Search} />
+      <Route path="/collectibles" component={CollectiblesGallery} />
+      <Route path="/verify/:chainId/:contractAddress/:cardId" component={VerifyCard} />
       <Route path="/settings/profile">
         <ProtectedRoute>
           <ProfileSettingsPage />

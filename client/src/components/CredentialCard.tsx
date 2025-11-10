@@ -1,6 +1,8 @@
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Shield, Calendar, User } from 'lucide-react';
+import { MintingModeBadge } from '@/components/shared/MintingModeBadge';
+import { MintingMode } from '@/types/collectible';
 
 export interface CredentialCardData {
   id: string;
@@ -11,6 +13,8 @@ export interface CredentialCardData {
   issuedDate: string;
   category: string;
   verified: boolean;
+  mintingMode?: MintingMode;
+  templateId?: number;
 }
 
 interface CredentialCardProps {
@@ -30,9 +34,18 @@ export default function CredentialCard({ credential, onClick }: CredentialCardPr
       data-testid={`card-credential-${credential.id}`}
     >
       <div className="flex items-start justify-between mb-4">
-        <Badge variant="secondary" data-testid="badge-category">
-          {credential.category}
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Badge variant="secondary" data-testid="badge-category">
+            {credential.category}
+          </Badge>
+          {credential.mintingMode !== undefined && (
+            <MintingModeBadge 
+              mintingMode={credential.mintingMode} 
+              size="sm"
+              showIcon={false}
+            />
+          )}
+        </div>
         {credential.verified && (
           <div className="flex items-center gap-1 text-primary">
             <Shield className="w-4 h-4" />

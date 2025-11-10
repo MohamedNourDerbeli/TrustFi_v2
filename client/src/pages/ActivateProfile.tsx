@@ -83,13 +83,59 @@ export default function ActivateProfile() {
         }
       }
 
-      // Create simple metadata (no name/bio needed)
+      toast({
+        title: 'Generating Avatar',
+        description: 'Creating your unique profile avatar...',
+      });
+
+      // Generate unique avatar based on wallet address
+      const { generateAvatarFile } = await import('@/utils/avatarGenerator');
+      const avatarFile = generateAvatarFile(address, 500);
+
+      // Upload avatar to IPFS
+      const { metadataService } = await import('@/services/metadataService');
+      let avatarUrl: string | undefined;
+      
+      try {
+        toast({
+          title: 'Uploading Avatar',
+          description: 'Uploading to IPFS...',
+        });
+        avatarUrl = await metadataService.uploadImage(avatarFile);
+      } catch (uploadError) {
+        console.warn('Failed to upload avatar, using data URL fallback:', uploadError);
+        // Fallback to data URL if IPFS upload fails
+        const { generateAvatarDataURL } = await import('@/utils/avatarGenerator');
+        avatarUrl = generateAvatarDataURL(address, 500);
+      }
+
+      // Create metadata with avatar
       const metadata = {
         name: `User ${address.slice(0, 6)}`,
-        description: 'TrustFi Profile',
+        bio: 'TrustFi Profile',
+        image: avatarUrl,
+        attributes: [
+          {
+            trait_type: 'Profile Type',
+            value: 'Standard',
+          },
+        ],
       };
 
-      const metadataURI = `data:application/json;base64,${btoa(JSON.stringify(metadata))}`;
+      toast({
+        title: 'Creating Profile',
+        description: 'Uploading profile metadata...',
+      });
+
+      // Upload metadata to IPFS
+      let metadataURI: string;
+      try {
+        metadataURI = await metadataService.uploadMetadata(metadata);
+      } catch (metadataError) {
+        console.warn('Failed to upload metadata to IPFS, using data URI:', metadataError);
+        // Fallback to data URI
+        metadataURI = `data:application/json;base64,${btoa(JSON.stringify(metadata))}`;
+      }
 
       toast({
         title: 'Confirm Transaction',

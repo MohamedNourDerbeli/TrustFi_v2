@@ -131,7 +131,7 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
             if (!existingProfile) {
               console.log('Creating default off-chain profile for switched account...');
               
-              const defaultUsername = `user-${newAddress.slice(2, 8).toLowerCase()}`;
+              const defaultUsername = `user${newAddress.slice(2, 10).toLowerCase()}`;
               
               const { error: insertError } = await supabase
                 .from('profiles')
@@ -297,7 +297,7 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
           if (!existingProfile) {
             console.log('Creating default off-chain profile for new user...');
             
-            const defaultUsername = `user-${userAddress.slice(2, 8).toLowerCase()}`;
+            const defaultUsername = `user${userAddress.slice(2, 10).toLowerCase()}`;
             
             const { error: insertError } = await supabase
               .from('profiles')

@@ -1,6 +1,14 @@
 # Implementation Plan
 
-- [ ] 1. Extend ReputationCard smart contract with collectible minting structures
+- [x] 1. Extend ReputationCard smart contract with collectible minting structures
+
+
+
+
+
+
+
+
 
 
 
@@ -12,8 +20,15 @@
   - Add _nextTemplateId counter variable
   - _Requirements: 1.1, 1.2, 1.3, 1.4_
 
-- [ ] 2. Implement collectible creation and management functions
-  - [ ] 2.1 Write createCollectible function
+- [x] 2. Implement collectible creation and management functions
+
+
+
+
+
+
+  - [x] 2.1 Write createCollectible function
+
     - Accept all collectible parameters (category, description, value, maxSupply, startTime, endTime, eligibilityType, eligibilityData, metadataURI, rarityTier)
     - Validate issuer authorization
     - Validate input data (string lengths, numeric ranges, time validity)
@@ -22,13 +37,15 @@
     - Return templateId
     - _Requirements: 1.1, 3.1, 3.2, 6.1, 7.1, 8.1, 17.1_
 
-  - [ ] 2.2 Write pauseCollectible and resumeCollectible functions
+
+  - [x] 2.2 Write pauseCollectible and resumeCollectible functions
     - Verify caller is issuer or owner
     - Update isPaused flag in template
     - Emit CollectiblePaused/CollectibleResumed events
     - _Requirements: 11.1, 11.2, 11.4_
 
-  - [ ] 2.3 Write updateCollectibleMetadata function
+
+  - [x] 2.3 Write updateCollectibleMetadata function
     - Check that no claims have been made yet
     - Verify caller is issuer
     - Update category, description, and metadataURI
@@ -36,8 +53,15 @@
     - _Requirements: 15.1, 15.2, 15.3, 15.4_
 
 
-- [ ] 3. Implement eligibility verification system
-  - [ ] 3.1 Write isEligibleToClaim function
+- [x] 3. Implement eligibility verification system
+
+
+
+
+
+
+  - [x] 3.1 Write isEligibleToClaim function
+
     - Check collectible is active and not paused
     - Verify time window (startTime <= now <= endTime)
     - Check supply availability
@@ -49,7 +73,8 @@
     - Return boolean result
     - _Requirements: 3.1, 3.2, 5.2, 8.1, 8.2, 8.3, 8.4, 8.5_
 
-  - [ ] 3.2 Write whitelist management functions
+
+  - [x] 3.2 Write whitelist management functions
     - Implement addToWhitelist function accepting templateId and address array
     - Implement removeFromWhitelist function accepting templateId and address array
     - Verify caller is issuer or owner
@@ -57,13 +82,24 @@
     - Emit WhitelistUpdated event
     - _Requirements: 8.2_
 
-  - [ ] 3.3 Write hasClaimedCollectible view function
+
+  - [x] 3.3 Write hasClaimedCollectible view function
     - Check _collectibleClaims mapping for user and templateId
     - Return boolean result
     - _Requirements: 4.5, 5.2_
 
-- [ ] 4. Implement collectible claiming functionality
-  - [ ] 4.1 Write claimCollectible function
+- [x] 4. Implement collectible claiming functionality
+
+
+
+
+
+
+
+  - [x] 4.1 Write claimCollectible function
+
+
+
     - Verify collectible exists and is active
     - Check eligibility using isEligibleToClaim
     - Verify supply limit not reached
@@ -80,37 +116,62 @@
     - Return cardId
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
 
-  - [ ] 4.2 Add ReentrancyGuard to claimCollectible
+  - [x] 4.2 Add ReentrancyGuard to claimCollectible
+
+
     - Import OpenZeppelin ReentrancyGuard
     - Add nonReentrant modifier to claimCollectible function
     - _Requirements: 5.2, 5.3_
 
-- [ ] 5. Implement query and analytics functions
-  - [ ] 5.1 Write getCollectibleTemplate view function
+- [x] 5. Implement query and analytics functions
+
+
+
+
+
+  - [x] 5.1 Write getCollectibleTemplate view function
+
+
     - Accept templateId parameter
     - Return CollectibleTemplate struct
     - Revert if template doesn't exist
     - _Requirements: 4.3, 13.2_
 
-  - [ ] 5.2 Write getActiveCollectibles view function
+
+
+  - [x] 5.2 Write getActiveCollectibles view function
+
     - Iterate through all templates
     - Filter by isActive=true and isPaused=false
     - Check time window is valid
     - Return array of templateIds
     - _Requirements: 4.1_
 
-  - [ ] 5.3 Write getClaimStats view function
+
+
+
+  - [x] 5.3 Write getClaimStats view function
+
     - Accept templateId parameter
     - Return totalClaims (currentSupply), remainingSupply (maxSupply - currentSupply), isActive
     - Handle unlimited supply case (maxSupply=0)
     - _Requirements: 4.4, 6.4, 9.1, 9.4_
 
-  - [ ] 5.4 Write getCollectiblesByIssuer view function
+
+
+
+  - [x] 5.4 Write getCollectiblesByIssuer view function
+
     - Accept issuer address parameter
     - Return array of templateIds created by that issuer
     - _Requirements: 9.2_
 
-- [ ] 6. Implement token revocation for collectibles
+- [x] 6. Implement token revocation for collectibles
+
+
+
+
+
   - Write revokeCollectibleToken function
   - Verify caller is issuer or owner
   - Check card exists and was minted via collectible
@@ -119,19 +180,33 @@
   - Emit CardRevoked event
   - _Requirements: 19.1, 19.2, 19.3, 19.4, 19.5_
 
-- [ ] 7. Update existing issueCard function to track minting mode
+- [x] 7. Update existing issueCard function to track minting mode
+
+
+
+
+
   - Add minting mode tracking when issuing direct cards
   - Set _cardMintingMode[cardId] = MintingMode.DIRECT
   - Ensure backward compatibility with existing functionality
   - _Requirements: 2.1, 2.2, 2.3, 2.4_
 
-- [ ] 8. Add view function to get card minting mode
+- [x] 8. Add view function to get card minting mode
+
+
+
+
   - Write getCardMintingMode function accepting cardId
   - Return MintingMode enum value
   - _Requirements: 10.1, 10.2, 10.3, 10.4_
 
 
-- [ ] 9. Create TypeScript types for collectibles
+- [x] 9. Create TypeScript types for collectibles
+
+
+
+
+
   - Create types/collectible.ts file
   - Define EligibilityType enum matching Solidity
   - Define RarityTier enum matching Solidity
@@ -143,8 +218,13 @@
   - Export all types
   - _Requirements: 1.1, 3.1, 4.1, 9.1_
 
-- [ ] 10. Extend contract service with collectible functions
-  - [ ] 10.1 Add collectible creation functions
+- [x] 10. Extend contract service with collectible functions
+
+
+
+  - [x] 10.1 Add collectible creation functions
+
+
     - Write createCollectible function accepting CollectibleFormData and signer
     - Build transaction with all parameters
     - Handle eligibilityData encoding based on type
@@ -153,7 +233,9 @@
     - Return templateId and txHash
     - _Requirements: 1.1, 3.1_
 
-  - [ ] 10.2 Add collectible claiming functions
+
+
+  - [x] 10.2 Add collectible claiming functions
     - Write claimCollectible function accepting templateId and signer
     - Estimate gas before claiming
     - Send transaction and wait for confirmation
@@ -161,7 +243,7 @@
     - Return cardId and txHash
     - _Requirements: 5.1, 5.3, 5.4_
 
-  - [ ] 10.3 Add eligibility checking functions
+  - [x] 10.3 Add eligibility checking functions
     - Write checkEligibility function accepting templateId and userAddress
     - Call isEligibleToClaim on contract
     - Call hasClaimedCollectible on contract
@@ -170,14 +252,17 @@
     - Return ClaimStatus
     - _Requirements: 4.2, 4.3, 5.2_
 
-  - [ ] 10.4 Add collectible query functions
+  - [x] 10.4 Add collectible query functions
+
     - Write getActiveCollectibles function to fetch all active collectibles
     - Write getCollectibleTemplate function to fetch single template
     - Write getClaimStats function to fetch claim statistics
     - Write getCollectiblesByIssuer function to fetch issuer's collectibles
     - _Requirements: 4.1, 4.3, 9.1, 9.2_
 
-  - [ ] 10.5 Add collectible management functions
+  - [x] 10.5 Add collectible management functions
+
+
     - Write pauseCollectible function accepting templateId and signer
     - Write resumeCollectible function accepting templateId and signer
     - Write updateCollectibleMetadata function accepting templateId, metadata, and signer
@@ -185,7 +270,10 @@
     - Write removeFromWhitelist function accepting templateId, addresses array, and signer
     - _Requirements: 11.1, 11.4, 15.1_
 
-  - [ ] 10.6 Add gas estimation function
+  - [x] 10.6 Add gas estimation function
+
+
+
     - Write estimateClaimGas function accepting templateId and userAddress
     - Estimate gas for claimCollectible transaction
     - Get current gas price
@@ -195,8 +283,15 @@
     - Return gas limit, ETH cost, and USD cost
     - _Requirements: 14.1, 14.2, 14.3_
 
-- [ ] 11. Create custom hooks for collectibles
-  - [ ] 11.1 Create useCollectibles hook
+- [x] 11. Create custom hooks for collectibles
+
+
+
+
+
+  - [x] 11.1 Create useCollectibles hook
+
+
     - Fetch active collectibles on mount
     - Implement filtering by category
     - Implement filtering by eligibility status
@@ -204,7 +299,9 @@
     - Return collectibles array, loading state, error, and filter/sort functions
     - _Requirements: 4.1, 4.2, 20.1, 20.5_
 
-  - [ ] 11.2 Create useClaimStatus hook
+  - [x] 11.2 Create useClaimStatus hook
+
+
     - Accept array of templateIds and userAddress
     - Check eligibility for each template
     - Store results in Map<templateId, ClaimStatus>
@@ -212,7 +309,9 @@
     - Return claimStatus map, loading state, and refresh function
     - _Requirements: 4.2, 4.5_
 
-  - [ ] 11.3 Create useCollectibleClaim hook
+  - [x] 11.3 Create useCollectibleClaim hook
+
+
     - Implement claim function accepting templateId
     - Estimate gas before claiming
     - Handle transaction submission
@@ -221,7 +320,9 @@
     - Return claim function, claiming state, error, txHash, gasEstimate, and estimateGas function
     - _Requirements: 5.1, 5.3, 14.1, 14.4_
 
-  - [ ] 11.4 Create useIssuerCollectibles hook
+  - [x] 11.4 Create useIssuerCollectibles hook
+
+
     - Fetch collectibles created by current issuer
     - Implement createCollectible function accepting CollectibleFormData
     - Implement pauseCollectible function
@@ -232,8 +333,16 @@
     - _Requirements: 1.1, 9.1, 9.2, 9.3, 11.1, 11.4, 15.1_
 
 
-- [ ] 12. Create issuer dashboard components for collectibles
-  - [ ] 12.1 Create MintingModeSelector component
+- [x] 12. Create issuer dashboard components for collectibles
+
+
+
+
+
+
+  - [x] 12.1 Create MintingModeSelector component
+
+
     - Build radio button group for Direct vs Collectible modes
     - Add descriptive text explaining each mode
     - Add visual icons/illustrations for each mode
@@ -241,7 +350,10 @@
     - Style with Tailwind CSS
     - _Requirements: 1.1, 1.2, 1.3_
 
-  - [ ] 12.2 Create CollectibleCreationForm component
+
+
+  - [x] 12.2 Create CollectibleCreationForm component
+
     - Build form with fields for category, description, value
     - Add supply limit input (0 for unlimited)
     - Add start/end date pickers for time-based availability
@@ -253,19 +365,24 @@
     - Implement form validation
     - Handle form submission calling createCollectible
     - Show loading state during submission
+
+
     - Display success/error messages
     - _Requirements: 1.1, 3.1, 6.1, 7.1, 8.1, 17.1_
 
-  - [ ] 12.3 Create CollectiblePreview component
+  - [x] 12.3 Create CollectiblePreview component
+
     - Display collectible as it will appear to users
     - Show card image, title, description
     - Display rarity tier with styling
+
     - Show supply limit and time restrictions
     - Display eligibility requirements
     - Add "Publish" button to finalize creation
     - _Requirements: 13.1, 13.2, 13.3, 13.4_
 
-  - [ ] 12.4 Create CollectibleManagementPanel component
+  - [x] 12.4 Create CollectibleManagementPanel component
+
     - Display list of issuer's collectibles in table/grid format
     - Show key stats for each (claims, supply, status)
     - Add pause/resume toggle buttons
@@ -275,7 +392,8 @@
     - Implement filtering and sorting
     - _Requirements: 9.1, 9.2, 11.1, 11.4, 11.5, 15.1, 15.4_
 
-  - [ ] 12.5 Create CollectibleAnalytics component
+  - [x] 12.5 Create CollectibleAnalytics component
+
     - Display total claims count
     - Show claim timeline chart
     - List recent claimers with addresses and timestamps
@@ -284,7 +402,8 @@
     - Add export functionality for claim data
     - _Requirements: 9.1, 9.2, 9.3, 9.4_
 
-  - [ ] 12.6 Create WhitelistManager component
+
+  - [x] 12.6 Create WhitelistManager component
     - Display current whitelist addresses
     - Add bulk address input (textarea with one address per line)
     - Add individual address input
@@ -293,8 +412,15 @@
     - Display success/error feedback
     - _Requirements: 8.2_
 
-- [ ] 13. Create user-facing collectibles components
-  - [ ] 13.1 Create CollectiblesGalleryPage component
+- [x] 13. Create user-facing collectibles components
+
+
+
+
+
+  - [x] 13.1 Create CollectiblesGalleryPage component
+
+
     - Fetch active collectibles using useCollectibles hook
     - Display collectibles in responsive grid layout
     - Add filter sidebar for category, rarity, eligibility
@@ -304,7 +430,9 @@
     - Implement infinite scroll or pagination
     - _Requirements: 4.1, 4.2, 20.1, 20.5_
 
-  - [ ] 13.2 Create CollectibleCard component
+  - [x] 13.2 Create CollectibleCard component
+
+
     - Display collectible image with rarity-based border/background
     - Show title and short description
     - Display rarity tier badge
@@ -317,7 +445,9 @@
     - Handle click to open detail modal
     - _Requirements: 4.2, 4.3, 4.4, 4.5, 10.1, 10.2, 10.3_
 
-  - [ ] 13.3 Create CollectibleDetailModal component
+
+
+  - [x] 13.3 Create CollectibleDetailModal component
     - Display full collectible information
     - Show large image
     - Display complete description
@@ -330,7 +460,7 @@
     - Add share button
     - _Requirements: 4.3, 5.1, 14.1, 16.1_
 
-  - [ ] 13.4 Create ClaimConfirmationModal component
+  - [x] 13.4 Create ClaimConfirmationModal component
     - Display transaction summary
     - Show collectible preview
     - Display gas cost estimate in ETH and USD
@@ -343,8 +473,15 @@
     - _Requirements: 5.1, 5.3, 14.1, 14.2, 14.3, 14.4, 14.5_
 
 
-- [ ] 14. Create shared UI components
-  - [ ] 14.1 Create MintingModeBadge component
+- [x] 14. Create shared UI components
+
+
+
+
+
+  - [x] 14.1 Create MintingModeBadge component
+
+
     - Accept minting mode prop (DIRECT or COLLECTIBLE)
     - Display "Awarded" badge for direct minting
     - Display "Claimed" badge for collectible minting
@@ -352,7 +489,8 @@
     - Add tooltip explaining the difference
     - _Requirements: 10.1, 10.2, 10.3_
 
-  - [ ] 14.2 Create RarityIndicator component
+  - [x] 14.2 Create RarityIndicator component
+
     - Accept rarity tier prop (0-4)
     - Display rarity name (Common, Uncommon, Rare, Epic, Legendary)
     - Apply color-coded styling based on tier
@@ -360,7 +498,8 @@
     - Include rarity icon or badge
     - _Requirements: 17.1, 17.3, 17.4_
 
-  - [ ] 14.3 Create SupplyIndicator component
+  - [x] 14.3 Create SupplyIndicator component
+
     - Accept currentSupply and maxSupply props
     - Display progress bar showing claimed/total
     - Show percentage text
@@ -369,7 +508,8 @@
     - Add color coding (green=plenty, yellow=low, red=almost gone)
     - _Requirements: 4.4, 6.4_
 
-  - [ ] 14.4 Create EligibilityChecker component
+  - [x] 14.4 Create EligibilityChecker component
+
     - Accept eligibility requirements and user status
     - Display list of requirements with checkmarks/X marks
     - Show user's current status for each requirement
@@ -377,7 +517,8 @@
     - Add links to actions (e.g., "Create Profile" if profile required)
     - _Requirements: 4.3, 8.1, 8.2, 8.3, 8.4, 8.5_
 
-  - [ ] 14.5 Create TimeRemainingBadge component
+  - [x] 14.5 Create TimeRemainingBadge component
+
     - Accept start and end timestamps
     - Display "Starts in X" if not yet started
     - Display "Ends in X" if active
@@ -387,7 +528,8 @@
     - Add urgency styling for expiring soon
     - _Requirements: 7.4, 7.5_
 
-  - [ ] 14.6 Create CelebrationAnimation component
+  - [x] 14.6 Create CelebrationAnimation component
+
     - Create confetti or particle animation
     - Trigger on successful claim
     - Add special effects for rare/epic/legendary claims
@@ -395,15 +537,29 @@
     - Auto-dismiss after animation completes
     - _Requirements: 17.4_
 
-- [ ] 15. Enhance existing components to support collectibles
-  - [ ] 15.1 Update ReputationCardsList component
+- [x] 15. Enhance existing components to support collectibles
+
+
+
+
+
+
+
+  - [x] 15.1 Update ReputationCardsList component
+
+
     - Add minting mode badge to each card
     - Fetch minting mode from contract for each card
     - Add filter option for minting mode
     - Update card display to show collectible-specific info
     - _Requirements: 10.1, 10.5_
 
-  - [ ] 15.2 Update CardDetailModal component
+  - [x] 15.2 Update CardDetailModal component
+
+
+
+
+
     - Display minting mode badge
     - Show collectible template info if applicable
     - Display claim date for collectibles
@@ -411,36 +567,51 @@
     - Add share functionality for collectibles
     - _Requirements: 10.4, 16.1, 16.2, 16.3_
 
-  - [ ] 15.3 Update IssuerPage component
+  - [x] 15.3 Update IssuerPage component
+
+
     - Add tab or section for collectible management
     - Integrate CollectibleCreationForm
     - Integrate CollectibleManagementPanel
     - Add navigation to collectible analytics
     - _Requirements: 1.1, 9.1_
 
-  - [ ] 15.4 Update DashboardPage component
+  - [x] 15.4 Update DashboardPage component
+
+
     - Add section for new collectible notifications
     - Display eligible collectibles count badge
     - Add quick link to collectibles gallery
     - Show recently claimed collectibles
     - _Requirements: 12.2, 12.3_
 
-- [ ] 16. Implement notification system for collectibles
-  - [ ] 16.1 Create notification service
+- [x] 16. Implement notification system for collectibles
+
+
+
+
+
+  - [x] 16.1 Create notification service
+
+
     - Check for new collectibles user is eligible for
     - Store notification state in localStorage
     - Provide functions to mark notifications as read
     - Implement notification polling or event listening
     - _Requirements: 12.1, 12.2, 12.3_
 
-  - [ ] 16.2 Create NotificationBadge component
+  - [x] 16.2 Create NotificationBadge component
+
+
     - Display count of unread collectible notifications
     - Position on navigation or dashboard
     - Update count in real-time
     - Handle click to show notification list
     - _Requirements: 12.2_
 
-  - [ ] 16.3 Create CollectibleNotification component
+  - [x] 16.3 Create CollectibleNotification component
+
+
     - Display notification for new eligible collectible
     - Show collectible preview
     - Display eligibility reason
@@ -448,8 +619,14 @@
     - Add "View" and "Dismiss" buttons
     - _Requirements: 12.3, 12.4_
 
-- [ ] 17. Implement social sharing for collectibles
-  - [ ] 17.1 Create ShareModal component
+- [x] 17. Implement social sharing for collectibles
+
+
+
+
+  - [x] 17.1 Create ShareModal component
+
+
     - Display sharing options (Copy Link, QR Code, Social Media)
     - Generate shareable verification URL
     - Implement copy to clipboard functionality
@@ -458,7 +635,9 @@
     - Show success feedback on copy
     - _Requirements: 16.1, 16.2, 16.3_
 
-  - [ ] 17.2 Create public verification page
+  - [x] 17.2 Create public verification page
+
+
     - Create new route for /verify/:chainId/:contractAddress/:cardId
     - Fetch card details from blockchain (no wallet required)
     - Display card information in read-only view
@@ -468,7 +647,9 @@
     - Include Open Graph meta tags for social previews
     - _Requirements: 16.4, 16.5_
 
-  - [ ] 17.3 Generate Open Graph metadata
+  - [x] 17.3 Generate Open Graph metadata
+
+
     - Create utility to generate OG tags for collectibles
     - Include og:title, og:description, og:image
     - Add Twitter card metadata
@@ -476,8 +657,15 @@
     - _Requirements: 16.5_
 
 
-- [ ] 18. Implement trending and discovery features
-  - [ ] 18.1 Create trending calculation service
+- [x] 18. Implement trending and discovery features
+
+
+
+
+
+  - [x] 18.1 Create trending calculation service
+
+
     - Calculate claim velocity (claims per hour) for each collectible
     - Identify collectibles with high recent activity
     - Factor in scarcity (low remaining supply)
@@ -486,7 +674,9 @@
     - Update trending data periodically
     - _Requirements: 20.1, 20.2_
 
-  - [ ] 18.2 Create TrendingSection component
+  - [x] 18.2 Create TrendingSection component
+
+
     - Display top trending collectibles
     - Show trending indicators (fire icon, "Hot" badge)
     - Display claim velocity stats
@@ -495,7 +685,9 @@
     - Add "View All" link to full gallery
     - _Requirements: 20.1, 20.3, 20.4_
 
-  - [ ] 18.3 Add sorting options to gallery
+  - [x] 18.3 Add sorting options to gallery
+
+
     - Implement sort by popularity (total claims)
     - Implement sort by scarcity (remaining supply percentage)
     - Implement sort by expiration (ending soonest first)
@@ -503,15 +695,23 @@
     - Update URL params to persist sort selection
     - _Requirements: 20.5_
 
-- [ ] 19. Implement claim history tracking
-  - [ ] 19.1 Create claim history service
+- [x] 19. Implement claim history tracking
+
+
+
+
+  - [x] 19.1 Create claim history service
+
+
     - Listen for CollectibleClaimed events
     - Store claim history in IndexedDB
     - Provide query functions for user's claim history
     - Implement pagination for large histories
     - _Requirements: 18.1, 18.2_
 
-  - [ ] 19.2 Create ClaimHistory component
+  - [x] 19.2 Create ClaimHistory component
+
+
     - Display chronological list of user's claims
     - Show collectible preview for each claim
     - Display claim date and time
@@ -520,15 +720,17 @@
     - Implement sorting options
     - _Requirements: 18.1, 18.2, 18.3_
 
-  - [ ] 19.3 Add claim history to profile page
+  - [x] 19.3 Add claim history to profile page
+
+
     - Create new section in ProfilePage for claim history
     - Integrate ClaimHistory component
     - Add statistics (total claims, by category, by rarity)
     - Show claim timeline visualization
     - _Requirements: 18.1, 18.4, 18.5_
 
-- [ ] 20. Add error handling and user feedback
-  - [ ] 20.1 Create error message utilities
+- [x] 20. Add error handling and user feedback
+  - [x] 20.1 Create error message utilities
     - Map contract error codes to user-friendly messages
     - Provide specific messages for eligibility errors
     - Include helpful suggestions for resolution
@@ -536,7 +738,7 @@
     - Handle supply errors (sold out)
     - _Requirements: 14.5_
 
-  - [ ] 20.2 Implement toast notifications
+  - [x] 20.2 Implement toast notifications
     - Show toast on successful claim
     - Display error toasts with specific messages
     - Show warning toasts for high gas
@@ -544,15 +746,15 @@
     - Add retry option in error toasts
     - _Requirements: 5.4, 14.3_
 
-  - [ ] 20.3 Add loading states
+  - [x] 20.3 Add loading states
     - Show skeleton loaders in gallery while fetching
     - Display spinner during claim transaction
     - Show progress indicator during gas estimation
     - Add loading overlay for form submissions
     - _Requirements: 4.1, 5.1_
 
-- [ ] 21. Implement caching and performance optimization
-  - [ ] 21.1 Set up IndexedDB for collectibles
+- [x] 21. Implement caching and performance optimization
+  - [x] 21.1 Set up IndexedDB for collectibles
     - Create database schema for collectible cache
     - Implement cache storage for collectible templates
     - Cache claim status results
@@ -560,21 +762,21 @@
     - Set appropriate TTL for cached data
     - _Requirements: 4.1_
 
-  - [ ] 21.2 Implement batch contract calls
+  - [x] 21.2 Implement batch contract calls
     - Use multicall pattern for fetching multiple collectibles
     - Batch eligibility checks for multiple templates
     - Optimize gas estimation calls
     - Reduce RPC calls with efficient querying
     - _Requirements: 4.1, 4.2_
 
-  - [ ] 21.3 Add virtual scrolling for large lists
+  - [x] 21.3 Add virtual scrolling for large lists
     - Implement virtual scrolling in collectibles gallery
     - Optimize rendering for 1000+ collectibles
     - Lazy load images as they enter viewport
     - Implement intersection observer for visibility
     - _Requirements: 4.1_
 
-  - [ ] 21.4 Optimize image loading
+  - [x] 21.4 Optimize image loading
     - Implement lazy loading for collectible images
     - Use responsive image sizes
     - Add blur placeholder while loading
@@ -582,14 +784,14 @@
     - _Requirements: 4.1, 4.3_
 
 
-- [ ] 22. Update contract ABI and configuration
+- [x] 22. Update contract ABI and configuration
   - Export updated ReputationCard ABI with new collectible functions
   - Update contracts.ts configuration file
   - Add collectible-related contract addresses if needed
   - Update TypeChain types if using TypeChain
   - _Requirements: All contract-related requirements_
 
-- [ ] 23. Add routing for new pages
+- [x] 23. Add routing for new pages
   - Add route for /collectibles (CollectiblesGalleryPage)
   - Add route for /issuer/collectibles (issuer collectible management)
   - Add route for /verify/:chainId/:contractAddress/:cardId (public verification)
@@ -597,7 +799,7 @@
   - Add breadcrumbs for navigation
   - _Requirements: 4.1, 16.4_
 
-- [ ] 24. Implement analytics tracking
+- [x] 24. Implement analytics tracking
   - Track collectible view events
   - Track claim attempts and successes
   - Track filter and sort usage
@@ -606,15 +808,15 @@
   - Send analytics to service or store locally
   - _Requirements: 9.1, 9.3_
 
-- [ ]* 25. Write smart contract tests
-  - [ ]* 25.1 Test collectible creation
+- [ ] 25. Write smart contract tests (Optional - for production deployment)
+  - [ ] 25.1 Test collectible creation
     - Test successful creation with valid parameters
     - Test authorization checks
     - Test input validation
     - Test event emission
     - _Requirements: 1.1, 3.1_
 
-  - [ ]* 25.2 Test eligibility verification
+  - [ ] 25.2 Test eligibility verification
     - Test OPEN eligibility
     - Test WHITELIST eligibility with valid/invalid addresses
     - Test TOKEN_HOLDER eligibility with sufficient/insufficient balance
@@ -623,7 +825,7 @@
     - Test supply limit checks
     - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5_
 
-  - [ ]* 25.3 Test collectible claiming
+  - [ ] 25.3 Test collectible claiming
     - Test successful claim by eligible user
     - Test rejection of ineligible user
     - Test rejection of duplicate claim
@@ -633,14 +835,14 @@
     - Test reputation score update after claim
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
 
-  - [ ]* 25.4 Test collectible management
+  - [ ] 25.4 Test collectible management
     - Test pause/resume functionality
     - Test metadata updates before/after claims
     - Test whitelist add/remove operations
     - Test revocation functionality
     - _Requirements: 11.1, 11.2, 11.4, 15.1, 19.1_
 
-  - [ ]* 25.5 Test edge cases
+  - [ ] 25.5 Test edge cases
     - Test claiming at exact start/end time
     - Test claiming when supply is exactly 1 remaining
     - Test concurrent claims (race conditions)

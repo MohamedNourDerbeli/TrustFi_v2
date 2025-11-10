@@ -4,12 +4,17 @@ import { useProfile } from '@/contexts/ProfileContext';
 import { Shield } from 'lucide-react';
 import WalletConnectButton from '@/components/WalletConnectButton';
 import ThemeToggle from '@/components/ThemeToggle';
+import NotificationBadge from '@/components/collectibles/NotificationBadge';
+import { useCollectibleNotifications } from '@/hooks/useCollectibleNotifications';
 import { cn } from '@/lib/utils';
 
 export default function Navigation() {
   const [location] = useLocation();
   const { userProfile, address } = useWallet();
   const { offChainData } = useProfile();
+  
+  // Initialize collectible notifications
+  useCollectibleNotifications();
 
   const profileUrl = offChainData?.username 
     ? `/${offChainData.username}` 
@@ -107,6 +112,7 @@ export default function Navigation() {
 
           {/* Right Side Actions */}
           <div className="flex items-center gap-2">
+            {address && <NotificationBadge />}
             <ThemeToggle />
             <WalletConnectButton />
           </div>

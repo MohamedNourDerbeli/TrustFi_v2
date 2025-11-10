@@ -17,7 +17,8 @@ import {
   Send,
   Image as ImageIcon,
   Check,
-  X
+  X,
+  Sparkles
 } from 'lucide-react';
 
 interface ProfileEditFormProps {
@@ -422,7 +423,7 @@ export default function ProfileEditForm({ address }: ProfileEditFormProps) {
         />
 
         {/* Profile Picture */}
-        <div className="absolute -bottom-16 left-8">
+        <div className="absolute -bottom-16 left-8 flex items-end gap-3">
           <div className="relative group cursor-pointer" onClick={() => document.getElementById('avatar-upload')?.click()}>
             {editImagePreview ? (
               <img
@@ -446,6 +447,28 @@ export default function ProfileEditForm({ address }: ProfileEditFormProps) {
             onChange={handleImageChange}
             className="hidden"
           />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              if (!address) return;
+              const { generateAvatarFile } = await import('@/utils/avatarGenerator');
+              const avatarFile = generateAvatarFile(address, 500);
+              setEditImageFile(avatarFile);
+              const reader = new FileReader();
+              reader.onload = () => setEditImagePreview(reader.result as string);
+              reader.readAsDataURL(avatarFile);
+              toast({
+                title: 'Avatar Generated',
+                description: 'Unique avatar created from your wallet address',
+              });
+            }}
+            className="mb-2"
+          >
+            <Sparkles className="w-4 h-4 mr-2" />
+            Generate
+          </Button>
         </div>
       </div>
 

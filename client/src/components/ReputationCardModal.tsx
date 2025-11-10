@@ -12,10 +12,16 @@ import {
   CheckCircle2,
   XCircle,
   Copy,
-  Check
+  Check,
+  Share2
 } from 'lucide-react';
 import type { ReputationCard } from '@/types/reputationCard';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { MintingModeBadge } from '@/components/shared/MintingModeBadge';
+import { MintingMode, type CollectibleTemplate } from '@/types/collectible';
+import { collectibleContractService } from '@/services/collectibleContractService';
+import { useToast } from '@/hooks/use-toast';
+import { ShareModal } from '@/components/shared/ShareModal';
 
 interface ReputationCardModalProps {
   card: ReputationCard | null;
@@ -25,6 +31,45 @@ interface ReputationCardModalProps {
 
 export function ReputationCardModal({ card, open, onOpenChange }: ReputationCardModalProps) {
   const [copiedIssuer, setCopiedIssuer] = useState(false);
+  const [mintingMode, setMintingMode] = useState<MintingMode | null>(null);
+  const [collectibleTemplate] = useState<CollectibleTemplate | null>(null);
+  const [loadingMintingInfo, setLoadingMintingInfo] = useState(false);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
+  const { toast } = useToast();
+
+  // Fetch minting mode and collectible info when card changes
+  useEffect(() => {
+    const fetchMintingInfo = async () => {
+      if (!card?.id && !card?.cardId) return;
+
+      setLoadingMintingInfo(true);
+      try {
+        const cardId = card.id || card.cardId;
+        if (!cardId) return;
+
+        // Get minting mode
+        const mode = await collectibleContractService.getCardMintingMode(cardId);
+        setMintingMode(mode as MintingMode);
+
+        // If it's a collectible, try to get the template info
+        if (mode === MintingMode.COLLECTIBLE) {
+          // Note: We would need a way to get the templateId from the card
+          // For now, we'll just show the minting mode badge
+          // In a full implementation, the card data should include templateId
+        }
+      } catch (error) {
+        console.error('Failed to fetch minting info:', error);
+        // Default to DIRECT mode if fetch fails
+        setMintingMode(MintingMode.DIRECT);
+      } finally {
+        setLoadingMintingInfo(false);
+      }
+    };
+
+    if (open && card) {
+      fetchMintingInfo();
+    }
+  }, [card, open]);
 
   if (!card) return null;
 
@@ -68,6 +113,18 @@ export function ReputationCardModal({ card, open, onOpenChange }: ReputationCard
     navigator.clipboard.writeText(text);
     setCopiedIssuer(true);
     setTimeout(() => setCopiedIssuer(false), 2000);
+    toast({
+      title: 'Copied!',
+      description: 'Issuer address copied to clipboard',
+    });
+  };
+
+  const getVerificationUrl = () => {
+    if (!card?.id && !card?.cardId) return '';
+    const cardId = card.id || card.cardId;
+    const chainId = collectibleContractService.getCurrentChainId() || '31337';
+    const contractAddress = collectibleContractService.getContractAddress();
+    return `${window.location.origin}/verify/${chainId}/${contractAddress}/${cardId}`;
   };
 
   const imageUrl = getImageUrl(card.metadata?.image);
@@ -75,8 +132,9 @@ export function ReputationCardModal({ card, open, onOpenChange }: ReputationCard
   const description = card.metadata?.description || card.description;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto p-0">
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto p-0">
         <div className="grid md:grid-cols-2 gap-0">
           {/* Left: Image */}
           <div className="relative bg-gradient-to-br from-primary/10 to-purple-500/10">
@@ -98,9 +156,14 @@ export function ReputationCardModal({ card, open, onOpenChange }: ReputationCard
           <div className="p-6 space-y-6">
             <DialogHeader>
               <div className="flex items-start justify-between mb-2">
-                <Badge className={`${getCategoryColor(card.category)} text-white`}>
-                  {card.metadata?.category || card.category}
-                </Badge>
+                <div className="flex gap-2 flex-wrap">
+                  <Badge className={`${getCategoryColor(card.category)} text-white`}>
+                    {card.metadata?.category || card.category}
+                  </Badge>
+                  {mintingMode !== null && !loadingMintingInfo && (
+                    <MintingModeBadge mintingMode={mintingMode} size="sm" />
+                  )}
+                </div>
                 {card.isValid ? (
                   <Badge variant="outline" className="gap-1 border-green-500 text-green-600">
                     <CheckCircle2 className="w-3 h-3" />
@@ -180,11 +243,13 @@ export function ReputationCardModal({ card, open, onOpenChange }: ReputationCard
                 </div>
               </div>
 
-              {/* Issue Date */}
+              {/* Issue/Claim Date */}
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-2 text-sm">
                   <Calendar className="w-4 h-4 text-muted-foreground" />
-                  <span className="text-muted-foreground">Issued on</span>
+                  <span className="text-muted-foreground">
+                    {mintingMode === MintingMode.COLLECTIBLE ? 'Claimed on' : 'Issued on'}
+                  </span>
                 </div>
                 <p className="font-medium text-sm text-right">{formatDate(card.issuedAt)}</p>
               </div>
@@ -228,6 +293,34 @@ export function ReputationCardModal({ card, open, onOpenChange }: ReputationCard
               );
             })()}
 
+            {/* Collectible Template Info */}
+            {mintingMode === MintingMode.COLLECTIBLE && collectibleTemplate && (
+              <>
+                <Separator />
+                <div className="space-y-3">
+                  <h3 className="text-sm font-semibold text-muted-foreground">Collectible Info</h3>
+                  <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+                    {collectibleTemplate.maxSupply > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Supply</span>
+                        <span className="font-medium">
+                          {collectibleTemplate.currentSupply} / {collectibleTemplate.maxSupply}
+                        </span>
+                      </div>
+                    )}
+                    {collectibleTemplate.rarityTier !== undefined && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Rarity</span>
+                        <span className="font-medium">
+                          {['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'][collectibleTemplate.rarityTier]}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+
             {/* Links */}
             {(card.metadata?.externalUrl || card.metadata?.proofDocument) && (
               <>
@@ -268,9 +361,36 @@ export function ReputationCardModal({ card, open, onOpenChange }: ReputationCard
                 </div>
               </>
             )}
+
+            {/* Share Functionality - Only for collectibles */}
+            {mintingMode === MintingMode.COLLECTIBLE && (
+              <>
+                <Separator />
+                <div className="space-y-2">
+                  <h3 className="text-sm font-semibold text-muted-foreground mb-2">Share</h3>
+                  <Button 
+                    variant="outline" 
+                    className="w-full gap-2"
+                    onClick={() => setShareModalOpen(true)}
+                  >
+                    <Share2 className="w-4 h-4" />
+                    Share This Card
+                  </Button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </DialogContent>
     </Dialog>
+
+    <ShareModal
+      open={shareModalOpen}
+      onOpenChange={setShareModalOpen}
+      verificationUrl={getVerificationUrl()}
+      title={title}
+      description={description}
+    />
+    </>
   );
 }

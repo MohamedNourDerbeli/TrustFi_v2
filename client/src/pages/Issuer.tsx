@@ -14,12 +14,19 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Navigation from '@/components/Navigation';
-import { Shield, Send, Clock, CheckCircle2, Loader2, Upload, X, FileText, Image as ImageIcon, Award } from 'lucide-react';
+import { Shield, Send, Clock, CheckCircle2, Loader2, Upload, X, FileText, Image as ImageIcon, Award, Sparkles } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useWallet } from '@/contexts/WalletContext';
 import { contractService } from '@/services/contractService';
 import { reputationCardService } from '@/services/reputationCardService';
 import { reputationCardMetadataService } from '@/services/reputationCardMetadataService';
+import { CollectibleCreationForm } from '@/components/issuer/CollectibleCreationForm';
+import { CollectibleManagementPanel } from '@/components/issuer/CollectibleManagementPanel';
+import { WhitelistManager } from '@/components/issuer/WhitelistManager';
+import { CollectibleAnalyticsModal } from '@/components/issuer/CollectibleAnalyticsModal';
+import { CollectiblePreviewModal } from '@/components/issuer/CollectiblePreviewModal';
+import { useIssuerCollectibles } from '@/hooks/useIssuerCollectibles';
+import type { CollectibleFormData, CollectibleTemplate } from '@/types/collectible';
 
 export default function Issuer() {
   const { toast } = useToast();
@@ -49,6 +56,30 @@ export default function Issuer() {
     value: number;
   }>>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+
+  // Collectibles management
+  const {
+    collectibles,
+    createCollectible,
+    pauseCollectible,
+    resumeCollectible,
+    addToWhitelist,
+    removeFromWhitelist,
+    loading: collectiblesLoading,
+    error: collectiblesError,
+  } = useIssuerCollectibles();
+
+  // Whitelist manager state
+  const [whitelistManagerOpen, setWhitelistManagerOpen] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
+  
+  // Analytics modal state
+  const [analyticsModalOpen, setAnalyticsModalOpen] = useState(false);
+  const [selectedCollectibleForAnalytics, setSelectedCollectibleForAnalytics] = useState<CollectibleTemplate | null>(null);
+  
+  // Preview modal state
+  const [previewModalOpen, setPreviewModalOpen] = useState(false);
+  const [selectedCollectibleForPreview, setSelectedCollectibleForPreview] = useState<CollectibleTemplate | null>(null);
 
   // Load issued credentials
   useEffect(() => {
@@ -283,142 +314,278 @@ export default function Issuer() {
     }
   };
 
+  // Show authorization warning if not an issuer
+  if (userProfile && !userProfile.isIssuer) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+        <Navigation />
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <Card className="p-8 text-center border-2 border-destructive/20 bg-destructive/5">
+            <div className="max-w-md mx-auto">
+              <div className="w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Shield className="w-8 h-8 text-destructive" />
+              </div>
+              <h2 className="text-2xl font-bold mb-2">Unauthorized Access</h2>
+              <p className="text-muted-foreground mb-6">
+                You need to be an authorized issuer to access this page. Please contact an administrator to request issuer privileges.
+              </p>
+              <Button onClick={() => window.history.back()} variant="outline">
+                Go Back
+              </Button>
+            </div>
+          </Card>
+        </main>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
       <Navigation />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header Section */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">Issue Credentials</h1>
-          <p className="text-muted-foreground">
-            Create and mint verifiable credentials for recipients
-          </p>
+          <div className="flex items-center gap-3 mb-3">
+            <div className="p-3 bg-primary/10 rounded-xl">
+              <Shield className="w-8 h-8 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
+                Issuer Dashboard
+              </h1>
+              <p className="text-muted-foreground mt-1">
+                Create and manage verifiable credentials
+              </p>
+            </div>
+          </div>
+          
+          {/* Quick Stats */}
+          {userProfile?.isIssuer && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
+              <Card className="p-4 bg-gradient-to-br from-blue-500/10 to-blue-600/5 border-blue-500/20">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-500/10 rounded-lg">
+                    <Award className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold">{issuedCredentials.length}</p>
+                    <p className="text-xs text-muted-foreground">Total Issued</p>
+                  </div>
+                </div>
+              </Card>
+              <Card className="p-4 bg-gradient-to-br from-purple-500/10 to-purple-600/5 border-purple-500/20">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-purple-500/10 rounded-lg">
+                    <Sparkles className="w-5 h-5 text-purple-600" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold">{collectibles.length}</p>
+                    <p className="text-xs text-muted-foreground">Collectibles</p>
+                  </div>
+                </div>
+              </Card>
+              <Card className="p-4 bg-gradient-to-br from-green-500/10 to-green-600/5 border-green-500/20">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-green-500/10 rounded-lg">
+                    <CheckCircle2 className="w-5 h-5 text-green-600" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold">
+                      {issuedCredentials.filter(c => c.status === 'verified').length}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Active</p>
+                  </div>
+                </div>
+              </Card>
+            </div>
+          )}
         </div>
 
         <Tabs defaultValue="issue" className="space-y-6">
-          <TabsList>
-            <TabsTrigger value="issue" data-testid="tab-issue">Issue New</TabsTrigger>
-            <TabsTrigger value="history" data-testid="tab-history">Issued Credentials</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-3 lg:w-auto lg:inline-grid">
+            <TabsTrigger value="issue" data-testid="tab-issue" className="gap-2">
+              <Send className="w-4 h-4" />
+              <span className="hidden sm:inline">Issue New</span>
+              <span className="sm:hidden">Issue</span>
+            </TabsTrigger>
+            <TabsTrigger value="collectibles" data-testid="tab-collectibles" className="gap-2">
+              <Sparkles className="w-4 h-4" />
+              <span className="hidden sm:inline">Collectibles</span>
+              <span className="sm:hidden">Collect</span>
+            </TabsTrigger>
+            <TabsTrigger value="history" data-testid="tab-history" className="gap-2">
+              <Clock className="w-4 h-4" />
+              <span className="hidden sm:inline">History</span>
+              <span className="sm:hidden">History</span>
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="issue" className="space-y-6">
             <div className="grid lg:grid-cols-2 gap-8">
-              <Card className="p-6">
-                <h2 className="text-xl font-semibold mb-6">Credential Details</h2>
+              <Card className="p-6 border-2 shadow-lg">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-2 bg-primary/10 rounded-lg">
+                    <Send className="w-5 h-5 text-primary" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-semibold">Credential Details</h2>
+                    <p className="text-sm text-muted-foreground">Fill in the information below</p>
+                  </div>
+                </div>
                 <form onSubmit={handleSubmit} className="space-y-6">
                   <div className="space-y-2">
-                    <Label htmlFor="recipientAddress">Recipient Wallet Address</Label>
+                    <Label htmlFor="recipientAddress" className="text-sm font-semibold">
+                      Recipient Wallet Address *
+                    </Label>
                     <Input
                       id="recipientAddress"
-                      placeholder="0x..."
+                      placeholder="0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
                       value={formData.recipientAddress}
                       onChange={(e) => setFormData({ ...formData, recipientAddress: e.target.value })}
-                      className="font-mono text-sm"
+                      className="font-mono text-sm h-11 bg-background/50 border-2 focus:border-primary transition-colors"
                       required
                       data-testid="input-recipient-address"
                     />
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <span className="inline-block w-1 h-1 rounded-full bg-primary"></span>
                       Enter the blockchain address of the recipient
                     </p>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="title">Credential Title</Label>
+                    <Label htmlFor="title" className="text-sm font-semibold">
+                      Credential Title *
+                    </Label>
                     <Input
                       id="title"
                       placeholder="e.g., Blockchain Development Certificate"
                       value={formData.title}
                       onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                      className="h-11 bg-background/50 border-2 focus:border-primary transition-colors"
                       required
                       data-testid="input-credential-title"
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="category">Category</Label>
+                    <Label htmlFor="category" className="text-sm font-semibold">
+                      Category *
+                    </Label>
                     <Select
                       value={formData.category}
                       onValueChange={(value) => setFormData({ ...formData, category: value })}
                     >
-                      <SelectTrigger data-testid="select-category">
+                      <SelectTrigger data-testid="select-category" className="h-11 bg-background/50 border-2">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="education">Education</SelectItem>
-                        <SelectItem value="professional">Professional</SelectItem>
-                        <SelectItem value="achievement">Achievement</SelectItem>
-                        <SelectItem value="community">Community</SelectItem>
+                        <SelectItem value="education">🎓 Education</SelectItem>
+                        <SelectItem value="professional">💼 Professional</SelectItem>
+                        <SelectItem value="achievement">🏆 Achievement</SelectItem>
+                        <SelectItem value="community">🤝 Community</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="description">Description</Label>
+                    <Label htmlFor="description" className="text-sm font-semibold">
+                      Description *
+                    </Label>
                     <Textarea
                       id="description"
-                      placeholder="Describe the achievement or qualification..."
+                      placeholder="Describe the achievement or qualification in detail..."
                       value={formData.description}
                       onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                       rows={5}
+                      className="bg-background/50 border-2 focus:border-primary transition-colors resize-none"
                       required
                       data-testid="textarea-description"
                     />
-                    <p className="text-xs text-muted-foreground">
-                      {formData.description.length} characters (max 200)
-                    </p>
+                    <div className="flex items-center justify-between text-xs">
+                      <p className="text-muted-foreground flex items-center gap-1">
+                        <span className="inline-block w-1 h-1 rounded-full bg-primary"></span>
+                        Provide clear details about this credential
+                      </p>
+                      <p className={`font-medium ${formData.description.length > 180 ? 'text-destructive' : 'text-muted-foreground'}`}>
+                        {formData.description.length}/200
+                      </p>
+                    </div>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="value">Reputation Value</Label>
-                    <Input
-                      id="value"
-                      type="number"
-                      min="1"
-                      max="1000"
-                      placeholder="100"
-                      value={formData.value}
-                      onChange={(e) => setFormData({ ...formData, value: e.target.value })}
-                      required
-                      data-testid="input-reputation-value"
-                    />
-                    <p className="text-xs text-muted-foreground">
+                    <Label htmlFor="value" className="text-sm font-semibold">
+                      Reputation Value *
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        id="value"
+                        type="number"
+                        min="1"
+                        max="1000"
+                        placeholder="100"
+                        value={formData.value}
+                        onChange={(e) => setFormData({ ...formData, value: e.target.value })}
+                        className="h-11 bg-background/50 border-2 focus:border-primary transition-colors pl-10"
+                        required
+                        data-testid="input-reputation-value"
+                      />
+                      <Shield className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    </div>
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <span className="inline-block w-1 h-1 rounded-full bg-primary"></span>
                       Points to add to reputation (1-1000)
                     </p>
                   </div>
 
-                  <div className="border-t pt-6">
-                    <h3 className="font-semibold mb-4">Additional Information (Optional)</h3>
+                  <div className="border-t-2 border-dashed pt-6 mt-6">
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="h-px flex-1 bg-gradient-to-r from-transparent via-border to-transparent"></div>
+                      <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
+                        Additional Information (Optional)
+                      </h3>
+                      <div className="h-px flex-1 bg-gradient-to-r from-transparent via-border to-transparent"></div>
+                    </div>
                     
                     <div className="space-y-4">
                       <div className="space-y-2">
-                        <Label htmlFor="issuerName">Issuer Name</Label>
+                        <Label htmlFor="issuerName" className="text-sm font-semibold">
+                          Issuer Name
+                        </Label>
                         <Input
                           id="issuerName"
                           placeholder="e.g., Your Organization Name"
                           value={formData.issuerName}
                           onChange={(e) => setFormData({ ...formData, issuerName: e.target.value })}
+                          className="h-11 bg-background/50 border-2 focus:border-primary transition-colors"
                         />
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="externalUrl">External URL</Label>
+                        <Label htmlFor="externalUrl" className="text-sm font-semibold">
+                          External URL
+                        </Label>
                         <Input
                           id="externalUrl"
                           type="url"
-                          placeholder="https://..."
+                          placeholder="https://example.com/credential-info"
                           value={formData.externalUrl}
                           onChange={(e) => setFormData({ ...formData, externalUrl: e.target.value })}
+                          className="h-11 bg-background/50 border-2 focus:border-primary transition-colors"
                         />
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                          <span className="inline-block w-1 h-1 rounded-full bg-muted-foreground"></span>
                           Link to more information about this credential
                         </p>
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="badgeImage">NFT Badge Image</Label>
+                        <Label htmlFor="badgeImage" className="text-sm font-semibold">
+                          NFT Badge Image
+                        </Label>
                         {badgePreview ? (
-                          <div className="relative">
-                            <div className="aspect-square w-full max-w-xs mx-auto rounded-lg overflow-hidden border-2 border-border">
+                          <div className="relative group">
+                            <div className="aspect-square w-full max-w-xs mx-auto rounded-xl overflow-hidden border-2 border-primary/20 shadow-lg">
                               <img
                                 src={badgePreview}
                                 alt="Badge preview"
@@ -429,17 +596,18 @@ export default function Issuer() {
                               type="button"
                               variant="destructive"
                               size="sm"
-                              className="absolute top-2 right-2"
+                              className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
                               onClick={() => {
                                 setBadgeImage(null);
                                 setBadgePreview('');
                               }}
                             >
-                              <X className="w-4 h-4" />
+                              <X className="w-4 h-4 mr-1" />
+                              Remove
                             </Button>
                           </div>
                         ) : (
-                          <div className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:border-primary transition-colors cursor-pointer bg-muted/20">
+                          <div className="border-2 border-dashed border-muted-foreground/30 rounded-xl p-8 text-center hover:border-primary hover:bg-primary/5 transition-all cursor-pointer group">
                             <Input
                               id="badgeImage"
                               type="file"
@@ -447,37 +615,45 @@ export default function Issuer() {
                               onChange={handleBadgeImageChange}
                               className="hidden"
                             />
-                            <label htmlFor="badgeImage" className="cursor-pointer">
-                              <div className="aspect-square w-24 h-24 mx-auto mb-4 rounded-lg bg-muted/50 flex items-center justify-center">
-                                <ImageIcon className="w-12 h-12 text-muted-foreground" />
+                            <label htmlFor="badgeImage" className="cursor-pointer block">
+                              <div className="w-20 h-20 mx-auto mb-4 rounded-xl bg-gradient-to-br from-primary/10 to-purple-500/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                <ImageIcon className="w-10 h-10 text-primary" />
                               </div>
-                              <p className="text-sm font-medium mb-1">
+                              <p className="text-sm font-semibold mb-2">
                                 Click to upload NFT image
                               </p>
-                              <p className="text-xs text-muted-foreground">
+                              <p className="text-xs text-muted-foreground mb-1">
                                 Recommended: 1000x1000px (1:1 ratio)
                               </p>
-                              <p className="text-xs text-muted-foreground mt-1">
+                              <p className="text-xs text-muted-foreground">
                                 PNG, JPG, GIF up to 5MB
                               </p>
                             </label>
                           </div>
                         )}
-                        <p className="text-xs text-muted-foreground">
-                          💡 Tip: Square images (1:1 aspect ratio) work best for NFTs
-                        </p>
+                        <div className="flex items-start gap-2 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                          <span className="text-blue-600 text-lg">💡</span>
+                          <p className="text-xs text-blue-600 dark:text-blue-400">
+                            <strong>Tip:</strong> Square images (1:1 aspect ratio) work best for NFTs
+                          </p>
+                        </div>
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="proofDocument">Proof Document</Label>
+                        <Label htmlFor="proofDocument" className="text-sm font-semibold">
+                          Proof Document
+                        </Label>
                         {proofDocument ? (
-                          <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
-                            <FileText className="w-5 h-5 text-primary" />
-                            <span className="flex-1 text-sm truncate">{proofDocumentName}</span>
+                          <div className="flex items-center gap-3 p-4 bg-green-500/10 border border-green-500/20 rounded-lg group hover:bg-green-500/15 transition-colors">
+                            <div className="p-2 bg-green-500/10 rounded-lg">
+                              <FileText className="w-5 h-5 text-green-600" />
+                            </div>
+                            <span className="flex-1 text-sm font-medium truncate">{proofDocumentName}</span>
                             <Button
                               type="button"
                               variant="ghost"
                               size="sm"
+                              className="opacity-0 group-hover:opacity-100 transition-opacity"
                               onClick={() => {
                                 setProofDocument(null);
                                 setProofDocumentName('');
@@ -487,7 +663,7 @@ export default function Issuer() {
                             </Button>
                           </div>
                         ) : (
-                          <div className="border-2 border-dashed border-border rounded-lg p-6 text-center hover:border-primary transition-colors cursor-pointer">
+                          <div className="border-2 border-dashed border-muted-foreground/30 rounded-xl p-6 text-center hover:border-primary hover:bg-primary/5 transition-all cursor-pointer group">
                             <Input
                               id="proofDocument"
                               type="file"
@@ -495,18 +671,21 @@ export default function Issuer() {
                               onChange={handleProofDocumentChange}
                               className="hidden"
                             />
-                            <label htmlFor="proofDocument" className="cursor-pointer">
-                              <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-                              <p className="text-sm text-muted-foreground">
+                            <label htmlFor="proofDocument" className="cursor-pointer block">
+                              <div className="w-12 h-12 mx-auto mb-3 rounded-lg bg-gradient-to-br from-primary/10 to-purple-500/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                <Upload className="w-6 h-6 text-primary" />
+                              </div>
+                              <p className="text-sm font-medium mb-1">
                                 Click to upload proof document
                               </p>
-                              <p className="text-xs text-muted-foreground mt-1">
+                              <p className="text-xs text-muted-foreground">
                                 PDF or image up to 10MB
                               </p>
                             </label>
                           </div>
                         )}
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                          <span className="inline-block w-1 h-1 rounded-full bg-muted-foreground"></span>
                           Supporting documentation (certificate, transcript, etc.)
                         </p>
                       </div>
@@ -515,36 +694,35 @@ export default function Issuer() {
 
                   <Button 
                     type="submit" 
-                    className="w-full" 
-                    disabled={isSubmitting || !userProfile?.isIssuer}
+                    className="w-full h-12 text-base font-semibold shadow-lg hover:shadow-xl transition-all" 
+                    disabled={isSubmitting}
                     data-testid="button-issue-credential"
                   >
                     {isSubmitting ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        {uploadProgress || 'Issuing...'}
-                      </>
+                      <div className="flex items-center gap-3">
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        <span>{uploadProgress || 'Processing...'}</span>
+                      </div>
                     ) : (
-                      <>
-                        <Send className="w-4 h-4" />
-                        Issue Credential
-                      </>
+                      <div className="flex items-center gap-2">
+                        <Send className="w-5 h-5" />
+                        <span>Issue Credential</span>
+                      </div>
                     )}
                   </Button>
-                  
-                  {!userProfile?.isIssuer && (
-                    <p className="text-xs text-destructive text-center">
-                      You are not authorized to issue credentials
-                    </p>
-                  )}
                 </form>
               </Card>
 
-              <Card className="p-6 bg-card/50 sticky top-20">
-                <h2 className="text-xl font-semibold mb-4">NFT Preview</h2>
-                <p className="text-sm text-muted-foreground mb-6">
-                  This is how your reputation card will appear as an NFT
-                </p>
+              <Card className="p-6 bg-gradient-to-br from-card to-primary/5 border-2 shadow-lg sticky top-20">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-2 bg-primary/10 rounded-lg">
+                    <Award className="w-5 h-5 text-primary" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-semibold">Live Preview</h2>
+                    <p className="text-sm text-muted-foreground">See how it will look</p>
+                  </div>
+                </div>
                 
                 {formData.title ? (
                   <div className="space-y-4">
@@ -637,11 +815,14 @@ export default function Issuer() {
                     </div>
                   </div>
                 ) : (
-                  <div className="aspect-square w-full max-w-sm mx-auto rounded-xl border-2 border-dashed border-border flex items-center justify-center">
+                  <div className="aspect-square w-full max-w-sm mx-auto rounded-xl border-2 border-dashed border-muted-foreground/20 flex items-center justify-center bg-muted/20">
                     <div className="text-center p-8">
-                      <Shield className="w-16 h-16 mx-auto mb-4 text-muted-foreground/50" />
-                      <p className="text-muted-foreground">
-                        Fill out the form to preview your NFT
+                      <div className="w-20 h-20 bg-muted/50 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Award className="w-10 h-10 text-muted-foreground/50" />
+                      </div>
+                      <h3 className="font-semibold mb-2">Preview Your NFT</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Start filling out the form to see a live preview of your credential
                       </p>
                     </div>
                   </div>
@@ -650,23 +831,193 @@ export default function Issuer() {
             </div>
           </TabsContent>
 
-          <TabsContent value="history">
+          <TabsContent value="collectibles" className="space-y-6">
+            <div className="grid lg:grid-cols-2 gap-8">
+              {/* Creation Form */}
+              <div>
+                <Card className="p-6 mb-6 border-2 shadow-lg bg-gradient-to-br from-card to-purple-500/5">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="p-2 bg-purple-500/10 rounded-lg">
+                      <Sparkles className="w-5 h-5 text-purple-600" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-semibold">Create Collectible</h2>
+                      <p className="text-sm text-muted-foreground">
+                        Let users claim reputation cards themselves
+                      </p>
+                    </div>
+                  </div>
+                </Card>
+                <CollectibleCreationForm
+                  onSubmit={async (data: CollectibleFormData) => {
+                    try {
+                      const templateId = await createCollectible(data);
+                      toast({
+                        title: 'Collectible Created!',
+                        description: `Successfully created collectible #${templateId}`,
+                      });
+                    } catch (error: any) {
+                      toast({
+                        title: 'Creation Failed',
+                        description: error.message || 'Failed to create collectible',
+                        variant: 'destructive',
+                      });
+                      throw error;
+                    }
+                  }}
+                  isSubmitting={isSubmitting}
+                />
+              </div>
+
+              {/* Info Card */}
+              <div>
+                <Card className="p-6 bg-gradient-to-br from-purple-500/10 via-pink-500/10 to-primary/10 border-2 border-purple-500/20 shadow-lg sticky top-20">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="p-3 bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-xl">
+                      <Sparkles className="w-6 h-6 text-purple-600" />
+                    </div>
+                    <h2 className="text-xl font-semibold">About Collectibles</h2>
+                  </div>
+                  <div className="space-y-4 text-sm">
+                    <div>
+                      <h3 className="font-semibold mb-2">What are Collectibles?</h3>
+                      <p className="text-muted-foreground">
+                        Collectibles are reputation cards that users can claim themselves, rather than being directly issued. Perfect for events, achievements, and community rewards.
+                      </p>
+                    </div>
+                    <div>
+                      <h3 className="font-semibold mb-2">Key Features</h3>
+                      <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                        <li>Set supply limits for scarcity</li>
+                        <li>Time-based availability windows</li>
+                        <li>Flexible eligibility criteria</li>
+                        <li>Rarity tiers for gamification</li>
+                        <li>Real-time analytics</li>
+                      </ul>
+                    </div>
+                    <div>
+                      <h3 className="font-semibold mb-2">Best Practices</h3>
+                      <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                        <li>Use clear, descriptive titles</li>
+                        <li>Set appropriate reputation values</li>
+                        <li>Consider time limits for urgency</li>
+                        <li>Use rarity tiers strategically</li>
+                        <li>Monitor claim analytics</li>
+                      </ul>
+                    </div>
+                  </div>
+                </Card>
+              </div>
+            </div>
+
+            {/* Management Panel */}
+            <div>
+              <div className="mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-primary/10 rounded-lg">
+                    <Award className="w-6 h-6 text-primary" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-semibold">Manage Collectibles</h2>
+                    <p className="text-sm text-muted-foreground">
+                      View and manage your created collectibles
+                    </p>
+                  </div>
+                </div>
+              </div>
+              {collectiblesError && (
+                <Card className="p-4 mb-4 border-destructive">
+                  <p className="text-sm text-destructive">
+                    Error loading collectibles: {collectiblesError.message}
+                  </p>
+                </Card>
+              )}
+              <CollectibleManagementPanel
+                collectibles={collectibles}
+                loading={collectiblesLoading}
+                onPause={async (templateId) => {
+                  try {
+                    await pauseCollectible(templateId);
+                    toast({
+                      title: 'Collectible Paused',
+                      description: `Collectible #${templateId} has been paused`,
+                    });
+                  } catch (error: any) {
+                    toast({
+                      title: 'Pause Failed',
+                      description: error.message || 'Failed to pause collectible',
+                      variant: 'destructive',
+                    });
+                  }
+                }}
+                onResume={async (templateId) => {
+                  try {
+                    await resumeCollectible(templateId);
+                    toast({
+                      title: 'Collectible Resumed',
+                      description: `Collectible #${templateId} has been resumed`,
+                    });
+                  } catch (error: any) {
+                    toast({
+                      title: 'Resume Failed',
+                      description: error.message || 'Failed to resume collectible',
+                      variant: 'destructive',
+                    });
+                  }
+                }}
+                onViewAnalytics={(templateId) => {
+                  const collectible = collectibles.find(c => c.templateId === templateId);
+                  if (collectible) {
+                    setSelectedCollectibleForAnalytics(collectible);
+                    setAnalyticsModalOpen(true);
+                  }
+                }}
+                onViewPreview={(templateId) => {
+                  const collectible = collectibles.find(c => c.templateId === templateId);
+                  if (collectible) {
+                    setSelectedCollectibleForPreview(collectible);
+                    setPreviewModalOpen(true);
+                  }
+                }}
+                onManageWhitelist={(templateId) => {
+                  setSelectedTemplateId(templateId);
+                  setWhitelistManagerOpen(true);
+                }}
+              />
+            </div>
+          </TabsContent>
+
+          <TabsContent value="history" className="space-y-6">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-semibold">Issuance History</h2>
+                <p className="text-sm text-muted-foreground">
+                  Track all credentials you've issued
+                </p>
+              </div>
+            </div>
+
             {/* Summary Stats */}
             {!isLoadingHistory && issuedCredentials.length > 0 && (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-                <Card className="p-4 bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <Card className="p-5 bg-gradient-to-br from-blue-500/10 to-blue-600/5 border-blue-500/20 hover:shadow-lg transition-shadow">
                   <div className="flex items-center gap-3 mb-2">
-                    <Shield className="w-5 h-5 text-primary" />
+                    <div className="p-2 bg-blue-500/10 rounded-lg">
+                      <Shield className="w-5 h-5 text-blue-600" />
+                    </div>
                     <span className="text-sm font-medium text-muted-foreground">Total Issued</span>
                   </div>
-                  <p className="text-3xl font-bold text-primary">
+                  <p className="text-3xl font-bold text-blue-600">
                     {issuedCredentials.length}
                   </p>
                 </Card>
                 
-                <Card className="p-4 bg-gradient-to-br from-green-500/10 to-green-500/5 border-green-500/20">
+                <Card className="p-5 bg-gradient-to-br from-green-500/10 to-green-600/5 border-green-500/20 hover:shadow-lg transition-shadow">
                   <div className="flex items-center gap-3 mb-2">
-                    <CheckCircle2 className="w-5 h-5 text-green-600" />
+                    <div className="p-2 bg-green-500/10 rounded-lg">
+                      <CheckCircle2 className="w-5 h-5 text-green-600" />
+                    </div>
                     <span className="text-sm font-medium text-muted-foreground">Active</span>
                   </div>
                   <p className="text-3xl font-bold text-green-600">
@@ -674,9 +1025,11 @@ export default function Issuer() {
                   </p>
                 </Card>
                 
-                <Card className="p-4 bg-gradient-to-br from-purple-500/10 to-purple-500/5 border-purple-500/20">
+                <Card className="p-5 bg-gradient-to-br from-purple-500/10 to-purple-600/5 border-purple-500/20 hover:shadow-lg transition-shadow">
                   <div className="flex items-center gap-3 mb-2">
-                    <Award className="w-5 h-5 text-purple-600" />
+                    <div className="p-2 bg-purple-500/10 rounded-lg">
+                      <Award className="w-5 h-5 text-purple-600" />
+                    </div>
                     <span className="text-sm font-medium text-muted-foreground">Total Reputation</span>
                   </div>
                   <p className="text-3xl font-bold text-purple-600">
@@ -686,24 +1039,59 @@ export default function Issuer() {
               </div>
             )}
 
-            <Card className="p-6">
-              <h2 className="text-xl font-semibold mb-6">Recently Issued Credentials</h2>
+            <Card className="p-6 border-2 shadow-lg">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="p-2 bg-primary/10 rounded-lg">
+                  <Clock className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold">Issued Credentials</h2>
+                  <p className="text-sm text-muted-foreground">
+                    {issuedCredentials.length} credential{issuedCredentials.length !== 1 ? 's' : ''} issued
+                  </p>
+                </div>
+              </div>
               {isLoadingHistory ? (
-                <div className="text-center py-12">
-                  <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-primary" />
-                  <p className="text-muted-foreground">Loading history...</p>
+                <div className="space-y-3">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="p-4 rounded-lg border-2 animate-pulse">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 space-y-3">
+                          <div className="h-5 bg-muted rounded w-1/3"></div>
+                          <div className="h-4 bg-muted rounded w-1/2"></div>
+                          <div className="flex gap-3">
+                            <div className="h-3 bg-muted rounded w-24"></div>
+                            <div className="h-3 bg-muted rounded w-24"></div>
+                          </div>
+                        </div>
+                        <div className="h-6 bg-muted rounded w-16"></div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ) : issuedCredentials.length === 0 ? (
-                <div className="text-center py-12">
-                  <Shield className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-                  <p className="text-muted-foreground">No credentials issued yet</p>
+                <div className="text-center py-16">
+                  <div className="w-20 h-20 bg-muted/50 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Shield className="w-10 h-10 text-muted-foreground" />
+                  </div>
+                  <h3 className="text-lg font-semibold mb-2">No Credentials Yet</h3>
+                  <p className="text-muted-foreground mb-6 max-w-sm mx-auto">
+                    Start issuing credentials to build reputation for your community members
+                  </p>
+                  <Button onClick={() => {
+                    const tabs = document.querySelector('[value="issue"]') as HTMLElement;
+                    tabs?.click();
+                  }}>
+                    <Send className="w-4 h-4 mr-2" />
+                    Issue Your First Credential
+                  </Button>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
                   {issuedCredentials.map((credential) => (
                     <div
                       key={credential.id}
-                      className="flex items-start justify-between p-4 rounded-lg border hover:border-primary/50 transition-colors"
+                      className="flex items-start justify-between p-4 rounded-lg border-2 hover:border-primary/50 hover:shadow-md transition-all bg-gradient-to-r from-card to-card/50"
                       data-testid={`credential-row-${credential.id}`}
                     >
                       <div className="flex-1 min-w-0">
@@ -751,6 +1139,44 @@ export default function Issuer() {
           </TabsContent>
         </Tabs>
       </main>
+
+      {/* Whitelist Manager Modal */}
+      {selectedTemplateId !== null && (
+        <WhitelistManager
+          templateId={selectedTemplateId}
+          isOpen={whitelistManagerOpen}
+          onClose={() => {
+            setWhitelistManagerOpen(false);
+            setSelectedTemplateId(null);
+          }}
+          onAddAddresses={async (templateId, addresses) => {
+            await addToWhitelist(templateId, addresses);
+          }}
+          onRemoveAddresses={async (templateId, addresses) => {
+            await removeFromWhitelist(templateId, addresses);
+          }}
+        />
+      )}
+
+      {/* Analytics Modal */}
+      <CollectibleAnalyticsModal
+        collectible={selectedCollectibleForAnalytics}
+        isOpen={analyticsModalOpen}
+        onClose={() => {
+          setAnalyticsModalOpen(false);
+          setSelectedCollectibleForAnalytics(null);
+        }}
+      />
+
+      {/* Preview Modal */}
+      <CollectiblePreviewModal
+        collectible={selectedCollectibleForPreview}
+        isOpen={previewModalOpen}
+        onClose={() => {
+          setPreviewModalOpen(false);
+          setSelectedCollectibleForPreview(null);
+        }}
+      />
     </div>
   );
 }
