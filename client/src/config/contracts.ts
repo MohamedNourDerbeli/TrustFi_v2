@@ -7,8 +7,8 @@ export const CONTRACT_ADDRESSES = {
   },
   // Moonbase Alpha Testnet
   "1287": {
-    ProfileNFT: "0xB96f6215AF24a5488348cAF7ab708195834EE182",
-    ReputationCard: "0x0000000000000000000000000000000000000000",
+    ProfileNFT: "0xE4e866481DD94d3f79f3b45572569410204647ee",
+    ReputationCard: "0x8C4e210D2D01f8fd5108c3E576eA30659D3aC0D8",
   },
 };
 
