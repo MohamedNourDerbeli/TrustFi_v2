@@ -5,6 +5,7 @@ import HowItWorksCard from '@/components/HowItWorksCard';
 import FeatureSection from '@/components/FeatureSection';
 import TestimonialCard from '@/components/TestimonialCard';
 import StatCard from '@/components/StatCard';
+import TrendingProfiles from '@/components/TrendingProfiles';
 import { UserPlus, Award, Shield, Users, Building2, Sparkles } from 'lucide-react';
 import { useWallet } from '@/contexts/WalletContext';
 import { useProfile } from '@/contexts/ProfileContext';
@@ -232,6 +233,20 @@ export default function Home() {
               'Composable on-chain reputation',
             ]}
           />
+        </div>
+      </section>
+
+      <section className="py-20 bg-card">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-semibold mb-4">Trending Profiles</h2>
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+              Discover the most viewed profiles in the TrustFi community
+            </p>
+          </div>
+          <div className="max-w-2xl mx-auto">
+            <TrendingProfiles limit={10} showTitle={false} />
+          </div>
         </div>
       </section>
 

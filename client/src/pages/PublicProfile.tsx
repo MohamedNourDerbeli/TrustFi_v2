@@ -26,7 +26,8 @@ import {
   Send,
   Twitter,
   Linkedin,
-  Zap
+  Zap,
+  Eye
 } from 'lucide-react';
 import Navigation from '@/components/Navigation';
 import ActivateProfileDialog from '@/components/ActivateProfileDialog';
@@ -207,6 +208,12 @@ export default function PublicProfile() {
                     {showWalletAddress && resolvedAddress && (
                       <div className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-muted/50 rounded text-xs font-mono">
                         {formatAddress(resolvedAddress)}
+                      </div>
+                    )}
+                    {offChainData?.profile_views !== undefined && offChainData.profile_views > 0 && (
+                      <div className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-muted/50 rounded text-xs">
+                        <Eye className="w-3 h-3" />
+                        <span>{offChainData.profile_views.toLocaleString()} views</span>
                       </div>
                     )}
                   </>

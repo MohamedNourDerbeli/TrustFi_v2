@@ -11,6 +11,7 @@ import Dashboard from "@/pages/Dashboard";
 import PublicProfile from "@/pages/PublicProfile";
 import ProfileSettingsPage from "@/pages/ProfileSettingsPage";
 import PrivacySettingsPage from "@/pages/PrivacySettingsPage";
+import Search from "@/pages/Search";
 import Issuer from "@/pages/Issuer";
 import Admin from "@/pages/Admin";
 import NotFound from "@/pages/NotFound";
@@ -19,6 +20,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
+      <Route path="/search" component={Search} />
       <Route path="/settings/profile">
         <ProtectedRoute>
           <ProfileSettingsPage />

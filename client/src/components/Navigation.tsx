@@ -23,6 +23,11 @@ export default function Navigation() {
 
   const navLinks = [
     {
+      href: '/search',
+      label: 'Search',
+      show: true, // Always show search
+    },
+    {
       href: '/dashboard',
       label: 'Dashboard',
       show: hasOnChainProfile, // Only show if activated
