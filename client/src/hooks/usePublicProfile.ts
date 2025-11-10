@@ -160,7 +160,7 @@ export function usePublicProfile(
           const { CONTRACT_ADDRESSES } = await import('@/config/contracts');
           const { ProfileNFT_ABI } = await import('@/config/ProfileNFT.abi');
 
-          const contractAddress = CONTRACT_ADDRESSES[chainId as any]?.ProfileNFT;
+          const contractAddress = CONTRACT_ADDRESSES[chainId as keyof typeof CONTRACT_ADDRESSES]?.ProfileNFT;
           if (!contractAddress) {
             throw new Error('Contract not deployed on this network');
           }
@@ -199,7 +199,7 @@ export function usePublicProfile(
               try {
                 const { ReputationCard_ABI } = await import('@/config/ReputationCard.abi');
                 const { reputationCardMetadataService } = await import('@/services/reputationCardMetadataService');
-                const cardContractAddress = CONTRACT_ADDRESSES[chainId as any]?.ReputationCard;
+                const cardContractAddress = CONTRACT_ADDRESSES[chainId as keyof typeof CONTRACT_ADDRESSES]?.ReputationCard;
                 
                 if (cardContractAddress) {
                   const cardContract = new ethers.Contract(

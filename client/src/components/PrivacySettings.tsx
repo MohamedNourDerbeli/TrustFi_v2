@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Shield, Eye, EyeOff, Lock, Globe, Users } from 'lucide-react';
+import { Shield, Eye, Lock, Globe, Users } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface PrivacySettingsProps {

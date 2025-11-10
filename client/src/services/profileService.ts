@@ -4,7 +4,7 @@
  */
 
 import { ethers } from 'ethers';
-import { supabase, type Profile } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 
 export interface OffChainProfile {
   address: string;
@@ -148,7 +148,7 @@ export class ProfileService {
    */
   async updateProfile(
     provider: ethers.BrowserProvider,
-    address: string,
+    _address: string,
     data: {
       username?: string;
       display_name?: string;

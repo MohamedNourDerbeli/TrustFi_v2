@@ -35,7 +35,6 @@ export default function Dashboard() {
   const [credentials, setCredentials] = useState<CredentialCardData[]>([]);
   const [reputationScore, setReputationScore] = useState(0);
   const [verifiedCount, setVerifiedCount] = useState(0);
-  const [isLoading, setIsLoading] = useState(false);
   const [events, setEvents] = useState<Array<{
     id: string;
     type: 'credential' | 'achievement';
@@ -52,25 +51,37 @@ export default function Dashboard() {
       }
 
       try {
-        // Only show loading if we don't have data yet
-        if (credentials.length === 0) {
-          setIsLoading(true);
-        }
         const tokenId = Number(userProfile.tokenId);
 
-        // Load credentials
-        const cards = await reputationCardService.getProfileCards(tokenId);
+        // Load credentials - getProfileCards returns card IDs
+        const cardIds = await reputationCardService.getProfileCards(tokenId);
+        
+        // Fetch full card data for each ID
+        const cardDataPromises = cardIds.map(async (cardId) => {
+          try {
+            const card = await reputationCardService.getCard(cardId);
+            return {
+              id: cardId,
+              ...card
+            };
+          } catch (err) {
+            console.error(`Failed to load card ${cardId}:`, err);
+            return null;
+          }
+        });
+        
+        const cards = (await Promise.all(cardDataPromises)).filter(card => card !== null);
         
         // Convert to CredentialCardData format
-        const credentialData: CredentialCardData[] = cards.map((card, index) => ({
-          id: index.toString(),
-          title: card.description.substring(0, 50), // Use first part of description as title
-          issuer: card.issuer.substring(0, 10) + '...', // Truncate issuer address
-          issuerAddress: card.issuer,
-          description: card.description,
-          issuedDate: new Date(card.issuedAt * 1000).toISOString().split('T')[0],
-          category: card.category,
-          verified: card.isValid,
+        const credentialData: CredentialCardData[] = cards.map((card) => ({
+          id: card!.id.toString(),
+          title: card!.description || 'Untitled Credential',
+          issuer: card!.issuer.substring(0, 10) + '...', // Truncate issuer address
+          issuerAddress: card!.issuer,
+          description: card!.description || 'No description',
+          issuedDate: new Date(card!.issuedAt * 1000).toISOString().split('T')[0],
+          category: card!.category || 'general',
+          verified: card!.isValid,
         }));
         
         setCredentials(credentialData);
@@ -96,8 +107,6 @@ export default function Dashboard() {
           description: error.message || 'Failed to load credentials',
           variant: 'destructive',
         });
-      } finally {
-        setIsLoading(false);
       }
     }
 

@@ -1,4 +1,3 @@
-import { useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import WalletConnectButton from '@/components/WalletConnectButton';
 import ThemeToggle from '@/components/ThemeToggle';

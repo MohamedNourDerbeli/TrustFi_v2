@@ -32,10 +32,6 @@ export function ReputationCardModal({ card, open, onOpenChange }: ReputationCard
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
   };
 
-  const formatFullAddress = (addr: string) => {
-    return addr;
-  };
-
   const formatDate = (timestamp: number) => {
     return new Date(timestamp * 1000).toLocaleDateString('en-US', {
       year: 'numeric',

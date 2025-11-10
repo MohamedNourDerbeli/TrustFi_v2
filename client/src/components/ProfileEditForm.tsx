@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useLocation } from 'wouter';
 import { useWallet } from '@/contexts/WalletContext';
 import { useProfile } from '@/contexts/ProfileContext';
 import { useToast } from '@/hooks/use-toast';
@@ -26,7 +25,6 @@ interface ProfileEditFormProps {
 }
 
 export default function ProfileEditForm({ address }: ProfileEditFormProps) {
-  const [, setLocation] = useLocation();
   const { provider } = useWallet();
   const { offChainData } = useProfile();
   const { toast } = useToast();
@@ -340,8 +338,6 @@ export default function ProfileEditForm({ address }: ProfileEditFormProps) {
         description: 'Your profile has been updated!',
       });
 
-      // Update the context immediately with new data
-      const { setOffChainData } = await import('@/contexts/ProfileContext');
       // Force reload profile data from ProfileContext
       window.dispatchEvent(new CustomEvent('profile-updated', { detail: updatedProfile }));
       

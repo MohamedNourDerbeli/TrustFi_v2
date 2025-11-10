@@ -210,7 +210,7 @@ export class ContractService {
       const [tokenId, profileData, metadataURI] = await contract.getProfileByOwner(address);
 
       // Fetch metadata from URI (with fallback for invalid URIs)
-      let metadata;
+      let metadata: ProfileMetadata;
       try {
         metadata = await metadataService.fetchMetadata(metadataURI);
       } catch (metadataError) {
@@ -218,7 +218,7 @@ export class ContractService {
         // Use default metadata if fetch fails
         metadata = {
           name: `User ${address.slice(0, 6)}`,
-          description: 'TrustFi Profile',
+          bio: 'TrustFi Profile',
           image: '',
         };
       }

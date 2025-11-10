@@ -49,7 +49,6 @@ export function ReputationCardDisplay({ card, isLoading, onClick }: ReputationCa
 
   const imageUrl = getImageUrl(card.metadata?.image);
   const title = card.metadata?.title || card.description || 'Untitled Card';
-  const description = card.metadata?.description || card.description;
 
   return (
     <Card 
