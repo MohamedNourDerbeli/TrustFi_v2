@@ -1,5 +1,5 @@
 // Auto-generated ABI - Do not edit manually
-// Generated: 2025-11-11T09:27:42.261Z
+// Generated: 2025-11-11T12:01:13.212Z
 
 export const ProfileNFT_ABI = [
   {
