@@ -57,6 +57,10 @@ export class ReputationCardService {
     value: number,
     metadataURI: string
   ): Promise<number> {
+    if (!this.isInitialized()) {
+      throw new ContractError('Reputation card service not initialized. Please connect your wallet first.');
+    }
+
     try {
       const contract = this.getContract();
 
@@ -115,6 +119,10 @@ export class ReputationCardService {
    * Note: Returns minimal on-chain data. Use metadataURI to fetch full details.
    */
   async getCard(cardId: number): Promise<ReputationCard & { categoryHash: string; metadataURI: string }> {
+    if (!this.isInitialized()) {
+      throw new ContractError('Reputation card service not initialized. Please connect your wallet first.');
+    }
+
     try {
       const contract = this.getContract();
       const [card, categoryHash, metadataURI] = await contract.getCard(cardId);
@@ -145,6 +153,10 @@ export class ReputationCardService {
    * Get all cards for a profile
    */
   async getCardsByProfile(profileId: number): Promise<number[]> {
+    if (!this.isInitialized()) {
+      throw new ContractError('Reputation card service not initialized. Please connect your wallet first.');
+    }
+
     try {
       const contract = this.getContract();
       const cardIds = await contract.getCardsByProfile(profileId);
@@ -177,6 +189,10 @@ export class ReputationCardService {
    * Verify if a card is valid
    */
   async verifyCard(cardId: number): Promise<boolean> {
+    if (!this.isInitialized()) {
+      throw new ContractError('Reputation card service not initialized. Please connect your wallet first.');
+    }
+
     try {
       const contract = this.getContract();
       return await contract.verifyCard(cardId);
@@ -190,6 +206,10 @@ export class ReputationCardService {
    * Revoke a reputation card
    */
   async revokeCard(cardId: number): Promise<void> {
+    if (!this.isInitialized()) {
+      throw new ContractError('Reputation card service not initialized. Please connect your wallet first.');
+    }
+
     try {
       const contract = this.getContract();
       const tx = await contract.revokeCard(cardId);
@@ -218,6 +238,10 @@ export class ReputationCardService {
    * Calculate reputation score for a profile
    */
   async calculateReputationScore(profileId: number): Promise<number> {
+    if (!this.isInitialized()) {
+      throw new ContractError('Reputation card service not initialized. Please connect your wallet first.');
+    }
+
     try {
       const contract = this.getContract();
       const score = await contract.calculateReputationScore(profileId);
@@ -238,6 +262,10 @@ export class ReputationCardService {
    * Note: Returns category hashes. Map to category names using your metadata.
    */
   async getReputationBreakdown(profileId: number): Promise<{ categoryHashes: string[]; scores: number[] }> {
+    if (!this.isInitialized()) {
+      throw new ContractError('Reputation card service not initialized. Please connect your wallet first.');
+    }
+
     try {
       const contract = this.getContract();
       const [categoryHashes, scores] = await contract.getReputationBreakdown(profileId);
@@ -261,6 +289,10 @@ export class ReputationCardService {
    * Get card IDs by category
    */
   async getCardsByCategory(profileId: number, category: string): Promise<number[]> {
+    if (!this.isInitialized()) {
+      throw new ContractError('Reputation card service not initialized. Please connect your wallet first.');
+    }
+
     try {
       const contract = this.getContract();
       const categoryHash = ethers.keccak256(ethers.toUtf8Bytes(category.toLowerCase()));
@@ -282,6 +314,10 @@ export class ReputationCardService {
    * Get card IDs by issuer
    */
   async getCardsByIssuer(profileId: number, issuer: string): Promise<number[]> {
+    if (!this.isInitialized()) {
+      throw new ContractError('Reputation card service not initialized. Please connect your wallet first.');
+    }
+
     try {
       const contract = this.getContract();
       const cardIds = await contract.getCardsByIssuer(profileId, issuer);
@@ -302,6 +338,10 @@ export class ReputationCardService {
    * Get valid card count for a profile
    */
   async getValidCardCount(profileId: number): Promise<number> {
+    if (!this.isInitialized()) {
+      throw new ContractError('Reputation card service not initialized. Please connect your wallet first.');
+    }
+
     try {
       const contract = this.getContract();
       const count = await contract.getValidCardCount(profileId);
@@ -321,6 +361,10 @@ export class ReputationCardService {
    * Authorize an issuer
    */
   async authorizeIssuer(issuerAddress: string): Promise<void> {
+    if (!this.isInitialized()) {
+      throw new ContractError('Reputation card service not initialized. Please connect your wallet first.');
+    }
+
     try {
       const contract = this.getContract();
       const tx = await contract.authorizeIssuer(issuerAddress);
@@ -340,6 +384,10 @@ export class ReputationCardService {
    * Revoke issuer authorization
    */
   async revokeIssuer(issuerAddress: string): Promise<void> {
+    if (!this.isInitialized()) {
+      throw new ContractError('Reputation card service not initialized. Please connect your wallet first.');
+    }
+
     try {
       const contract = this.getContract();
       const tx = await contract.revokeIssuer(issuerAddress);
@@ -359,6 +407,10 @@ export class ReputationCardService {
    * Check if an address is an authorized issuer
    */
   async isAuthorizedIssuer(issuerAddress: string): Promise<boolean> {
+    if (!this.isInitialized()) {
+      throw new ContractError('Reputation card service not initialized. Please connect your wallet first.');
+    }
+
     try {
       const contract = this.getContract();
       return await contract.isAuthorizedIssuer(issuerAddress);
@@ -372,6 +424,10 @@ export class ReputationCardService {
    * Get total number of cards issued
    */
   async totalCards(): Promise<number> {
+    if (!this.isInitialized()) {
+      throw new ContractError('Reputation card service not initialized. Please connect your wallet first.');
+    }
+
     try {
       const contract = this.getContract();
       const total = await contract.totalCards();
@@ -386,6 +442,10 @@ export class ReputationCardService {
    * Get all cards issued by a specific issuer address (across all profiles)
    */
   async getAllCardsIssuedBy(issuerAddress: string): Promise<number[]> {
+    if (!this.isInitialized()) {
+      throw new ContractError('Reputation card service not initialized. Please connect your wallet first.');
+    }
+
     try {
       const contract = this.getContract();
       const cardIds = await contract.getAllCardsIssuedBy(issuerAddress);

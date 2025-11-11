@@ -96,7 +96,7 @@ export default function ActivateProfileDialog({
 
       // Create on-chain profile in background
       try {
-        const tokenId = await contractService.createProfile(metadataURI);
+        await contractService.createProfile(metadataURI);
 
         // Update status to active
         await profileService.updateActivationStatus(address, 'active');
@@ -130,7 +130,7 @@ export default function ActivateProfileDialog({
       console.error('Activation error:', error);
       
       // Update status to failed if transaction was submitted
-      if (address && !error.message?.includes('user rejected') && !error.code === 'ACTION_REJECTED') {
+      if (address && !error.message?.includes('user rejected') && error.code !== 'ACTION_REJECTED') {
         try {
           const { profileService } = await import('@/services/profileService');
           await profileService.updateActivationStatus(address, 'failed');

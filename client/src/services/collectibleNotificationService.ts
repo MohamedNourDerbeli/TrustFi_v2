@@ -234,7 +234,7 @@ export class CollectibleNotificationService {
    */
   private getEligibilityReason(
     collectible: CollectibleTemplate,
-    claimStatus: ClaimStatus
+    _claimStatus: ClaimStatus
   ): string {
     const reasons: string[] = [];
 

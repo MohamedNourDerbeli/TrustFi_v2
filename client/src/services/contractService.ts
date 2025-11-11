@@ -2,6 +2,7 @@ import { ethers } from 'ethers';
 import { CONTRACT_ADDRESSES, type SupportedChainId } from '../config/contracts';
 import { ProfileNFT_ABI } from '../config/ProfileNFT.abi';
 import { metadataService, type ProfileMetadata } from './metadataService';
+import { logError, trackOperation, type ErrorContext } from './errorTrackingService';
 
 export interface ProfileOnChain {
   reputationScore: number;
@@ -54,6 +55,30 @@ export class ContractService {
   private signer: ethers.Signer | null = null;
   private chainId: SupportedChainId | null = null;
 
+  /**
+   * Helper method to track contract operations
+   */
+  private async trackContractOperation<T>(
+    operationName: string,
+    operation: () => Promise<T>,
+    context?: Partial<ErrorContext>
+  ): Promise<T> {
+    const errorContext: ErrorContext = {
+      component: 'ContractService',
+      action: operationName,
+      network: this.chainId || undefined,
+      provider: 'ethers',
+      ...context
+    };
+
+    try {
+      return await trackOperation(operationName, operation, errorContext);
+    } catch (error) {
+      logError(error, errorContext);
+      throw error;
+    }
+  }
+
   async initialize(provider: ethers.BrowserProvider): Promise<boolean> {
     try {
       this.signer = await provider.getSigner();
@@ -89,6 +114,10 @@ export class ContractService {
    * Create a new profile with metadata URI
    */
   async createProfile(metadataURI: string): Promise<number> {
+    if (!this.isInitialized()) {
+      throw new ContractError('Contract service not initialized. Please connect your wallet first.');
+    }
+
     try {
       const contract = this.getContract();
 
@@ -138,6 +167,10 @@ export class ContractService {
    * Update profile metadata
    */
   async updateProfileMetadata(tokenId: number, newMetadataURI: string): Promise<void> {
+    if (!this.isInitialized()) {
+      throw new ContractError('Contract service not initialized. Please connect your wallet first.');
+    }
+
     try {
       const contract = this.getContract();
 
@@ -161,6 +194,10 @@ export class ContractService {
    * Get profile by token ID with metadata
    */
   async getProfile(tokenId: number): Promise<ProfileWithMetadata> {
+    if (!this.isInitialized()) {
+      throw new ContractError('Contract service not initialized. Please connect your wallet first.');
+    }
+
     try {
       const contract = this.getContract();
 
@@ -199,6 +236,10 @@ export class ContractService {
    * Get profile by owner address with metadata
    */
   async getProfileByOwner(address: string): Promise<ProfileWithMetadata> {
+    if (!this.isInitialized()) {
+      throw new ContractError('Contract service not initialized. Please connect your wallet first.');
+    }
+
     // Validate address first to prevent contract errors
     if (!address || !ethers.isAddress(address)) {
       throw new ValidationError('Invalid Ethereum address');
@@ -254,6 +295,10 @@ export class ContractService {
    * Deactivate profile
    */
   async deactivateProfile(tokenId: number): Promise<void> {
+    if (!this.isInitialized()) {
+      throw new ContractError('Contract service not initialized. Please connect your wallet first.');
+    }
+
     try {
       const contract = this.getContract();
 
@@ -277,6 +322,10 @@ export class ContractService {
    * Get the owner address of a profile by token ID
    */
   async getProfileOwner(tokenId: number): Promise<string> {
+    if (!this.isInitialized()) {
+      throw new ContractError('Contract service not initialized. Please connect your wallet first.');
+    }
+
     try {
       const contract = this.getContract();
       const owner = await contract.ownerOf(tokenId);

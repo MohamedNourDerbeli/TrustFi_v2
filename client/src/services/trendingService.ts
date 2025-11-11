@@ -41,13 +41,13 @@ class TrendingService {
   private readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes
   private readonly TRENDING_THRESHOLD = 0.6; // Score threshold for "trending"
   private readonly EXPIRING_SOON_HOURS = 24; // Hours until expiration to be "expiring soon"
-  private readonly LOW_SUPPLY_THRESHOLD = 0.2; // 20% remaining supply or less
+  // private readonly LOW_SUPPLY_THRESHOLD = 0.2; // 20% remaining supply or less
 
   /**
    * Calculate trending scores for a list of collectibles
    */
   calculateTrendingScores(collectibles: CollectibleTemplate[]): Map<number, TrendingScore> {
-    const now = Date.now();
+    // const now = Date.now();
     const scores = new Map<number, TrendingScore>();
 
     for (const collectible of collectibles) {

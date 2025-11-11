@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Navigation from '@/components/Navigation';
-import { Shield, Send, Clock, CheckCircle2, Loader2, Upload, X, FileText, Image as ImageIcon, Award, Sparkles } from 'lucide-react';
+import { Shield, Send, Clock, CheckCircle2, Loader2, Upload, X, FileText, Image as ImageIcon, Award, Sparkles, AlertCircle, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useWallet } from '@/contexts/WalletContext';
 import { contractService } from '@/services/contractService';
@@ -26,7 +26,11 @@ import { WhitelistManager } from '@/components/issuer/WhitelistManager';
 import { CollectibleAnalyticsModal } from '@/components/issuer/CollectibleAnalyticsModal';
 import { CollectiblePreviewModal } from '@/components/issuer/CollectiblePreviewModal';
 import { useIssuerCollectibles } from '@/hooks/useIssuerCollectibles';
+import { useContractData } from '@/hooks/useContractData';
+import { CardLoadingSkeleton } from '@/components/skeletons/CardLoadingSkeleton';
+import { TransactionStatus, type TransactionStatusType } from '@/components/shared/TransactionStatus';
 import type { CollectibleFormData, CollectibleTemplate } from '@/types/collectible';
+import { useLazyLoad } from '@/hooks/useLazyLoad';
 
 export default function Issuer() {
   const { toast } = useToast();
@@ -46,18 +50,89 @@ export default function Issuer() {
   const [proofDocumentName, setProofDocumentName] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<string>('');
-  const [issuedCredentials, setIssuedCredentials] = useState<Array<{
-    id: string;
-    recipient: string;
-    title: string;
-    date: string;
-    status: string;
-    category: string;
-    value: number;
-  }>>([]);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  
+  // Transaction status state
+  const [txStatus, setTxStatus] = useState<TransactionStatusType>('idle');
+  const [txHash, setTxHash] = useState<string>('');
+  const [txError, setTxError] = useState<string>('');
+  const [issuedCredentialId, setIssuedCredentialId] = useState<string>('');
 
-  // Collectibles management
+  // Fetch issued credentials using useContractData hook
+  const {
+    data: issuedCredentials,
+    loading: isLoadingHistory,
+    error: historyError,
+    refetch: refetchHistory,
+  } = useContractData(
+    async () => {
+      if (!address) return [];
+
+      // Get all card IDs issued by this address
+      const cardIds = await reputationCardService.getAllCardsIssuedBy(address);
+      
+      // Format for display
+      const formattedCards = await Promise.all(
+        cardIds.map(async (cardId) => {
+          try {
+            // Get the full card details
+            const card = await reputationCardService.getCard(cardId);
+            
+            // Get recipient address by getting the owner of the profile NFT
+            const recipientAddress = await contractService.getProfileOwner(card.profileId);
+            
+            // Fetch metadata from IPFS
+            let metadata: any = {};
+            try {
+              if (card.metadataURI) {
+                const metadataResponse = await fetch(
+                  card.metadataURI.startsWith('ipfs://') 
+                    ? `https://${import.meta.env.VITE_PINATA_GATEWAY}/ipfs/${card.metadataURI.replace('ipfs://', '')}`
+                    : card.metadataURI
+                );
+                metadata = await metadataResponse.json();
+              }
+            } catch (metadataError) {
+              console.error('Failed to fetch metadata:', metadataError);
+            }
+            
+            return {
+              id: cardId.toString(),
+              recipient: recipientAddress,
+              title: metadata.title || 'Untitled Credential',
+              date: new Date(card.issuedAt * 1000).toISOString(),
+              status: card.isValid ? 'verified' : 'revoked',
+              category: metadata.category || 'unknown',
+              value: card.value,
+            };
+          } catch (error) {
+            console.error(`Failed to process card ${cardId}:`, error);
+            return null;
+          }
+        })
+      );
+      
+      // Filter out null values and sort by date (newest first)
+      const validCards = formattedCards.filter(card => card !== null);
+      validCards.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      
+      return validCards;
+    },
+    [address],
+    {
+      enabled: !!address && !!userProfile?.isIssuer,
+      requiresAuth: true,
+      onError: (error) => {
+        console.error('Failed to load issued credentials:', error);
+        toast({
+          title: 'Failed to Load History',
+          description: error.userMessage || 'Could not load issued credentials',
+          variant: 'destructive',
+        });
+      },
+    }
+  );
+
+  // Collectibles management with useContractData wrapper
   const {
     collectibles,
     createCollectible,
@@ -67,6 +142,7 @@ export default function Issuer() {
     removeFromWhitelist,
     loading: collectiblesLoading,
     error: collectiblesError,
+    refetch: refetchCollectibles,
   } = useIssuerCollectibles();
 
   // Whitelist manager state
@@ -81,71 +157,19 @@ export default function Issuer() {
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
   const [selectedCollectibleForPreview, setSelectedCollectibleForPreview] = useState<CollectibleTemplate | null>(null);
 
-  // Load issued credentials
-  useEffect(() => {
-    async function loadIssuedCredentials() {
-      if (!userProfile?.isIssuer || !address) return;
-
-      try {
-        setIsLoadingHistory(true);
-        // Get all card IDs issued by this address
-        const cardIds = await reputationCardService.getAllCardsIssuedBy(address);
-        
-        // Format for display
-        const formattedCards = await Promise.all(
-          cardIds.map(async (cardId) => {
-            try {
-              // Get the full card details
-              const card = await reputationCardService.getCard(cardId);
-              
-              // Get recipient address by getting the owner of the profile NFT
-              const recipientAddress = await contractService.getProfileOwner(card.profileId);
-              
-              // Fetch metadata from IPFS
-              let metadata: any = {};
-              try {
-                if (card.metadataURI) {
-                  const metadataResponse = await fetch(
-                    card.metadataURI.startsWith('ipfs://') 
-                      ? `https://${import.meta.env.VITE_PINATA_GATEWAY}/ipfs/${card.metadataURI.replace('ipfs://', '')}`
-                      : card.metadataURI
-                  );
-                  metadata = await metadataResponse.json();
-                }
-              } catch (metadataError) {
-                console.error('Failed to fetch metadata:', metadataError);
-              }
-              
-              return {
-                id: cardId.toString(),
-                recipient: recipientAddress,
-                title: metadata.title || 'Untitled Credential',
-                date: new Date(card.issuedAt * 1000).toISOString(),
-                status: card.isValid ? 'verified' : 'revoked',
-                category: metadata.category || 'unknown',
-                value: card.value,
-              };
-            } catch (error) {
-              console.error(`Failed to process card ${cardId}:`, error);
-              return null;
-            }
-          })
-        );
-        
-        // Filter out null values and sort by date (newest first)
-        const validCards = formattedCards.filter(card => card !== null);
-        validCards.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        
-        setIssuedCredentials(validCards);
-      } catch (error) {
-        console.error('Failed to load issued credentials:', error);
-      } finally {
-        setIsLoadingHistory(false);
-      }
-    }
-
-    loadIssuedCredentials();
-  }, [userProfile, address]);
+  // Lazy loading for issued credentials history
+  const {
+    visibleItems: visibleCredentials,
+    hasMore: hasMoreCredentials,
+    isLoadingMore: isLoadingMoreCredentials,
+    loadMore: loadMoreCredentials,
+    containerRef: credentialsContainerRef,
+  } = useLazyLoad(issuedCredentials || [], {
+    initialCount: 10,
+    pageSize: 10,
+    autoLoad: true,
+    threshold: 200,
+  });
 
   const formatAddress = (addr: string) => {
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
@@ -222,6 +246,9 @@ export default function Issuer() {
 
     try {
       setIsSubmitting(true);
+      setTxStatus('idle');
+      setTxError('');
+      setTxHash('');
       setUploadProgress('Verifying recipient...');
 
       // Get recipient's profile
@@ -233,6 +260,7 @@ export default function Issuer() {
           description: 'Recipient does not have a TrustFi profile',
           variant: 'destructive',
         });
+        setIsSubmitting(false);
         return;
       }
 
@@ -269,11 +297,8 @@ export default function Issuer() {
       const metadataURI = await reputationCardMetadataService.uploadMetadata(metadata);
 
       // Issue credential with metadata
-      setUploadProgress('Issuing credential on blockchain...');
-      toast({
-        title: 'Confirm Transaction',
-        description: 'Please confirm the transaction in your wallet',
-      });
+      setUploadProgress('Waiting for wallet confirmation...');
+      setTxStatus('pending');
 
       const cardId = await reputationCardService.issueCard(
         Number(recipientProfile.tokenId),
@@ -282,10 +307,23 @@ export default function Issuer() {
         metadataURI
       );
 
+      // Transaction confirmed
+      setTxStatus('confirming');
+      setUploadProgress('Transaction confirmed, processing...');
+      
+      // Simulate brief delay for confirmation
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      setTxStatus('success');
+      setIssuedCredentialId(cardId.toString());
+      
       toast({
         title: 'Credential Issued!',
         description: `Successfully issued credential #${cardId} to ${formatAddress(formData.recipientAddress)}`,
       });
+
+      // Refresh issued credentials list
+      await refetchHistory();
 
       // Reset form
       setFormData({
@@ -303,16 +341,49 @@ export default function Issuer() {
       setProofDocumentName('');
 
     } catch (error: any) {
-      toast({
-        title: 'Issuance Failed',
-        description: error.message || 'Failed to issue credential',
-        variant: 'destructive',
-      });
+      setTxStatus('error');
+      
+      // Check if user rejected transaction
+      if (error.code === 4001 || error.message?.includes('user rejected')) {
+        setTxError('Transaction was rejected by user');
+        toast({
+          title: 'Transaction Rejected',
+          description: 'You rejected the transaction in your wallet',
+          variant: 'destructive',
+        });
+      } else {
+        setTxError(error.message || 'Failed to issue credential');
+        toast({
+          title: 'Issuance Failed',
+          description: error.message || 'Failed to issue credential',
+          variant: 'destructive',
+        });
+      }
     } finally {
       setIsSubmitting(false);
       setUploadProgress('');
     }
   };
+
+  // Show loading state while checking issuer status
+  if (!userProfile) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+        <Navigation />
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <Card className="p-8 text-center">
+            <div className="max-w-md mx-auto">
+              <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4 text-primary" />
+              <h2 className="text-xl font-semibold mb-2">Loading...</h2>
+              <p className="text-muted-foreground">
+                Checking your issuer status
+              </p>
+            </div>
+          </Card>
+        </main>
+      </div>
+    );
+  }
 
   // Show authorization warning if not an issuer
   if (userProfile && !userProfile.isIssuer) {
@@ -369,7 +440,7 @@ export default function Issuer() {
                     <Award className="w-5 h-5 text-blue-600" />
                   </div>
                   <div>
-                    <p className="text-2xl font-bold">{issuedCredentials.length}</p>
+                    <p className="text-2xl font-bold">{issuedCredentials?.length || 0}</p>
                     <p className="text-xs text-muted-foreground">Total Issued</p>
                   </div>
                 </div>
@@ -392,7 +463,7 @@ export default function Issuer() {
                   </div>
                   <div>
                     <p className="text-2xl font-bold">
-                      {issuedCredentials.filter(c => c.status === 'verified').length}
+                      {issuedCredentials?.filter(c => c.status === 'verified').length || 0}
                     </p>
                     <p className="text-xs text-muted-foreground">Active</p>
                   </div>
@@ -913,29 +984,60 @@ export default function Issuer() {
             {/* Management Panel */}
             <div>
               <div className="mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-primary/10 rounded-lg">
-                    <Award className="w-6 h-6 text-primary" />
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-primary/10 rounded-lg">
+                      <Award className="w-6 h-6 text-primary" />
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-semibold">Manage Collectibles</h2>
+                      <p className="text-sm text-muted-foreground">
+                        View and manage your created collectibles
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h2 className="text-2xl font-semibold">Manage Collectibles</h2>
-                    <p className="text-sm text-muted-foreground">
-                      View and manage your created collectibles
-                    </p>
-                  </div>
+                  {!collectiblesLoading && !collectiblesError && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => refetchCollectibles()}
+                      className="gap-2"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      Refresh
+                    </Button>
+                  )}
                 </div>
               </div>
               {collectiblesError && (
-                <Card className="p-4 mb-4 border-destructive">
-                  <p className="text-sm text-destructive">
-                    Error loading collectibles: {collectiblesError.message}
-                  </p>
+                <Card className="p-6 mb-4 border-2 border-destructive/20 bg-destructive/5">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-destructive mb-1">Failed to Load Collectibles</h3>
+                      <p className="text-sm text-muted-foreground mb-3">
+                        {collectiblesError.message || 'Could not load collectibles'}
+                      </p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => refetchCollectibles()}
+                        className="gap-2"
+                      >
+                        <RefreshCw className="w-4 h-4" />
+                        Try Again
+                      </Button>
+                    </div>
+                  </div>
                 </Card>
               )}
-              <CollectibleManagementPanel
-                collectibles={collectibles}
-                loading={collectiblesLoading}
-                onPause={async (templateId) => {
+              {collectiblesLoading ? (
+                <CardLoadingSkeleton count={3} layout="grid" variant="collectible" />
+              ) : (
+                <CollectibleManagementPanel
+                  collectibles={collectibles}
+                  loading={collectiblesLoading}
+                  onPause={async (templateId) => {
                   try {
                     await pauseCollectible(templateId);
                     toast({
@@ -983,7 +1085,8 @@ export default function Issuer() {
                   setSelectedTemplateId(templateId);
                   setWhitelistManagerOpen(true);
                 }}
-              />
+                />
+              )}
             </div>
           </TabsContent>
 
@@ -996,10 +1099,21 @@ export default function Issuer() {
                   Track all credentials you've issued
                 </p>
               </div>
+              {!isLoadingHistory && !historyError && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => refetchHistory()}
+                  className="gap-2"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Refresh
+                </Button>
+              )}
             </div>
 
             {/* Summary Stats */}
-            {!isLoadingHistory && issuedCredentials.length > 0 && (
+            {!isLoadingHistory && issuedCredentials && issuedCredentials.length > 0 && (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <Card className="p-5 bg-gradient-to-br from-blue-500/10 to-blue-600/5 border-blue-500/20 hover:shadow-lg transition-shadow">
                   <div className="flex items-center gap-3 mb-2">
@@ -1047,29 +1161,27 @@ export default function Issuer() {
                 <div>
                   <h2 className="text-xl font-semibold">Issued Credentials</h2>
                   <p className="text-sm text-muted-foreground">
-                    {issuedCredentials.length} credential{issuedCredentials.length !== 1 ? 's' : ''} issued
+                    {issuedCredentials?.length || 0} credential{issuedCredentials?.length !== 1 ? 's' : ''} issued
                   </p>
                 </div>
               </div>
               {isLoadingHistory ? (
-                <div className="space-y-3">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="p-4 rounded-lg border-2 animate-pulse">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1 space-y-3">
-                          <div className="h-5 bg-muted rounded w-1/3"></div>
-                          <div className="h-4 bg-muted rounded w-1/2"></div>
-                          <div className="flex gap-3">
-                            <div className="h-3 bg-muted rounded w-24"></div>
-                            <div className="h-3 bg-muted rounded w-24"></div>
-                          </div>
-                        </div>
-                        <div className="h-6 bg-muted rounded w-16"></div>
-                      </div>
-                    </div>
-                  ))}
+                <CardLoadingSkeleton count={3} layout="list" variant="credential" />
+              ) : historyError ? (
+                <div className="text-center py-12">
+                  <div className="w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <AlertCircle className="w-8 h-8 text-destructive" />
+                  </div>
+                  <h3 className="text-lg font-semibold mb-2">Failed to Load History</h3>
+                  <p className="text-muted-foreground mb-6 max-w-sm mx-auto">
+                    {historyError.userMessage || 'Could not load issued credentials'}
+                  </p>
+                  <Button onClick={() => refetchHistory()} variant="outline" className="gap-2">
+                    <RefreshCw className="w-4 h-4" />
+                    Try Again
+                  </Button>
                 </div>
-              ) : issuedCredentials.length === 0 ? (
+              ) : !issuedCredentials || issuedCredentials.length === 0 ? (
                 <div className="text-center py-16">
                   <div className="w-20 h-20 bg-muted/50 rounded-full flex items-center justify-center mx-auto mb-4">
                     <Shield className="w-10 h-10 text-muted-foreground" />
@@ -1087,8 +1199,11 @@ export default function Issuer() {
                   </Button>
                 </div>
               ) : (
-                <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
-                  {issuedCredentials.map((credential) => (
+                <div 
+                  ref={credentialsContainerRef}
+                  className="space-y-3 max-h-[600px] overflow-y-auto pr-2"
+                >
+                  {visibleCredentials.map((credential) => (
                     <div
                       key={credential.id}
                       className="flex items-start justify-between p-4 rounded-lg border-2 hover:border-primary/50 hover:shadow-md transition-all bg-gradient-to-r from-card to-card/50"
@@ -1133,6 +1248,28 @@ export default function Issuer() {
                       </div>
                     </div>
                   ))}
+                  
+                  {/* Loading indicator for lazy loading */}
+                  {isLoadingMoreCredentials && (
+                    <div className="flex items-center justify-center py-4">
+                      <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                      <span className="ml-2 text-sm text-muted-foreground">Loading more...</span>
+                    </div>
+                  )}
+                  
+                  {/* Load more button (fallback if auto-load doesn't trigger) */}
+                  {hasMoreCredentials && !isLoadingMoreCredentials && (
+                    <div className="flex items-center justify-center py-4">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={loadMoreCredentials}
+                        className="gap-2"
+                      >
+                        Load More ({issuedCredentials.length - visibleCredentials.length} remaining)
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
             </Card>
@@ -1176,6 +1313,23 @@ export default function Issuer() {
           setPreviewModalOpen(false);
           setSelectedCollectibleForPreview(null);
         }}
+      />
+
+      {/* Transaction Status Modal */}
+      <TransactionStatus
+        status={txStatus}
+        message={uploadProgress}
+        txHash={txHash}
+        error={txError}
+        open={txStatus !== 'idle'}
+        onClose={() => {
+          setTxStatus('idle');
+          setTxHash('');
+          setTxError('');
+          setIssuedCredentialId('');
+        }}
+        title="Issue Credential"
+        successMessage={`Successfully issued credential #${issuedCredentialId}`}
       />
     </div>
   );

@@ -13,11 +13,11 @@ import {
 } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Badge } from '@/components/ui/badge';
+// import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import {
   Calendar as CalendarIcon,
-  Upload,
+  // Upload,
   X,
   Loader2,
   Sparkles,
@@ -93,7 +93,7 @@ export function CollectibleCreationForm({ onSubmit, isSubmitting }: CollectibleC
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [badgeImage, setBadgeImage] = useState<File | null>(null);
   const [badgePreview, setBadgePreview] = useState<string>('');
-  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  // const [isUploadingImage, setIsUploadingImage] = useState(false);
 
   const handleBadgeImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

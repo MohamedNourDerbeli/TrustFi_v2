@@ -95,7 +95,7 @@ export default function TrendingProfiles({ limit = 5, showTitle = true }: Trendi
 
               {/* Avatar */}
               <Avatar className="w-10 h-10 border-2 border-primary/20 group-hover:border-primary/40 transition-colors">
-                <AvatarImage src={profile.avatar} alt={profile.display_name || profile.username} />
+                <AvatarImage src={profile.avatar_url} alt={profile.display_name || profile.username} />
                 <AvatarFallback>
                   <User className="w-5 h-5" />
                 </AvatarFallback>

@@ -36,13 +36,14 @@ import {
   Users,
   TrendingUp,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+// import { cn } from '@/lib/utils';
 
 interface CollectibleDetailModalProps {
   template: CollectibleTemplate;
   claimStatus?: ClaimStatus;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onClaimSuccess?: () => void;
 }
 
 export function CollectibleDetailModal({
@@ -50,6 +51,7 @@ export function CollectibleDetailModal({
   claimStatus,
   open,
   onOpenChange,
+  onClaimSuccess,
 }: CollectibleDetailModalProps) {
   const { address } = useWallet();
   const { estimateGas, gasEstimate } = useCollectibleClaim();
@@ -450,11 +452,14 @@ export function CollectibleDetailModal({
         <ClaimConfirmationModal
           template={template}
           gasEstimate={gasEstimate}
+          claimStatus={claimStatus}
           open={showClaimModal}
           onOpenChange={setShowClaimModal}
           onSuccess={() => {
             setShowClaimModal(false);
             onOpenChange(false);
+            // Trigger refresh of claim status and collectibles
+            onClaimSuccess?.();
           }}
         />
       )}

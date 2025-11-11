@@ -21,7 +21,7 @@ export function SupplyIndicator({
   size = 'md',
 }: SupplyIndicatorProps) {
   const isUnlimited = maxSupply === 0;
-  const remaining = isUnlimited ? Infinity : maxSupply - currentSupply;
+  const remaining: number = isUnlimited ? Number.POSITIVE_INFINITY : maxSupply - currentSupply;
   const percentage = isUnlimited ? 0 : (currentSupply / maxSupply) * 100;
 
   // Determine color based on remaining supply

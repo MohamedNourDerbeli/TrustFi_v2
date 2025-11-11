@@ -12,6 +12,7 @@ import {
   EligibilityType,
 } from '../types/collectible';
 import { ContractError, NetworkError, ValidationError, TransactionError } from './contractService';
+import { logError, trackOperation, type ErrorContext } from './errorTrackingService';
 
 /**
  * Service for interacting with collectible functions in the ReputationCard contract
@@ -20,6 +21,30 @@ export class CollectibleContractService {
   private signer: ethers.Signer | null = null;
   private provider: ethers.Provider | null = null;
   private chainId: SupportedChainId | null = null;
+
+  /**
+   * Helper method to track contract operations
+   */
+  private async trackContractOperation<T>(
+    operationName: string,
+    operation: () => Promise<T>,
+    context?: Partial<ErrorContext>
+  ): Promise<T> {
+    const errorContext: ErrorContext = {
+      component: 'CollectibleContractService',
+      action: operationName,
+      network: this.chainId || undefined,
+      provider: 'ethers',
+      ...context
+    };
+
+    try {
+      return await trackOperation(operationName, operation, errorContext);
+    } catch (error) {
+      logError(error, errorContext);
+      throw error;
+    }
+  }
 
   async initialize(provider: ethers.BrowserProvider): Promise<boolean> {
     try {
@@ -101,6 +126,10 @@ export class CollectibleContractService {
     collectibleData: CollectibleFormData,
     signer?: ethers.Signer
   ): Promise<CreateCollectibleResult> {
+    if (!this.isInitialized()) {
+      throw new ContractError('Collectible contract service not initialized. Please connect your wallet first.');
+    }
+
     try {
       const contractSigner = signer || this.signer;
       if (!contractSigner) {
@@ -141,7 +170,7 @@ export class CollectibleContractService {
 
       const metadataURI = collectibleData.metadataURI || '';
 
-      const tx = await contractWithSigner.createCollectible(
+      const tx = await (contractWithSigner as any).createCollectible(
         collectibleData.title,
         collectibleData.category,
         collectibleData.description,
@@ -207,6 +236,10 @@ export class CollectibleContractService {
     templateId: number,
     signer?: ethers.Signer
   ): Promise<ClaimCollectibleResult> {
+    if (!this.isInitialized()) {
+      throw new ContractError('Collectible contract service not initialized. Please connect your wallet first.');
+    }
+
     try {
       const contractSigner = signer || this.signer;
       if (!contractSigner) {
@@ -223,7 +256,7 @@ export class CollectibleContractService {
       // Note: Gas estimation is available via estimateClaimGas method
       // Users can call it separately before claiming if needed
 
-      const tx = await contractWithSigner.claimCollectible(templateId);
+      const tx = await (contractWithSigner as any).claimCollectible(templateId);
       const receipt = await tx.wait();
 
       const collectibleClaimedEvent = receipt?.logs
@@ -297,6 +330,10 @@ export class CollectibleContractService {
     templateId: number,
     userAddress: string
   ): Promise<ClaimStatus> {
+    if (!this.isInitialized()) {
+      throw new ContractError('Collectible contract service not initialized. Please connect your wallet first.');
+    }
+
     try {
       const contract = this.getContract(false);
 
@@ -383,6 +420,10 @@ export class CollectibleContractService {
    * Task 10.4: Add collectible query functions
    */
   async getActiveCollectibles(): Promise<CollectibleTemplate[]> {
+    if (!this.isInitialized()) {
+      throw new ContractError('Collectible contract service not initialized. Please connect your wallet first.');
+    }
+
     try {
       const contract = this.getContract(false);
       const templateIds = await contract.getActiveCollectibles();
@@ -409,6 +450,10 @@ export class CollectibleContractService {
    * Task 10.4: Add collectible query functions
    */
   async getCollectibleTemplate(templateId: number): Promise<CollectibleTemplate> {
+    if (!this.isInitialized()) {
+      throw new ContractError('Collectible contract service not initialized. Please connect your wallet first.');
+    }
+
     try {
       const contract = this.getContract(false);
 
@@ -452,6 +497,10 @@ export class CollectibleContractService {
    * Task 10.4: Add collectible query functions
    */
   async getClaimStats(templateId: number): Promise<ClaimStats> {
+    if (!this.isInitialized()) {
+      throw new ContractError('Collectible contract service not initialized. Please connect your wallet first.');
+    }
+
     try {
       const contract = this.getContract(false);
 
@@ -482,6 +531,10 @@ export class CollectibleContractService {
    * Task 10.4: Add collectible query functions
    */
   async getCollectiblesByIssuer(issuerAddress: string): Promise<CollectibleTemplate[]> {
+    if (!this.isInitialized()) {
+      throw new ContractError('Collectible contract service not initialized. Please connect your wallet first.');
+    }
+
     try {
       const contract = this.getContract(false);
 
@@ -516,6 +569,10 @@ export class CollectibleContractService {
     templateId: number,
     signer?: ethers.Signer
   ): Promise<string> {
+    if (!this.isInitialized()) {
+      throw new ContractError('Collectible contract service not initialized. Please connect your wallet first.');
+    }
+
     try {
       const contractSigner = signer || this.signer;
       if (!contractSigner) {
@@ -529,7 +586,7 @@ export class CollectibleContractService {
         throw new ValidationError('Invalid template ID');
       }
 
-      const tx = await contractWithSigner.pauseCollectible(templateId);
+      const tx = await (contractWithSigner as any).pauseCollectible(templateId);
       const receipt = await tx.wait();
 
       return receipt.hash;
@@ -558,6 +615,10 @@ export class CollectibleContractService {
     templateId: number,
     signer?: ethers.Signer
   ): Promise<string> {
+    if (!this.isInitialized()) {
+      throw new ContractError('Collectible contract service not initialized. Please connect your wallet first.');
+    }
+
     try {
       const contractSigner = signer || this.signer;
       if (!contractSigner) {
@@ -571,7 +632,7 @@ export class CollectibleContractService {
         throw new ValidationError('Invalid template ID');
       }
 
-      const tx = await contractWithSigner.resumeCollectible(templateId);
+      const tx = await (contractWithSigner as any).resumeCollectible(templateId);
       const receipt = await tx.wait();
 
       return receipt.hash;
@@ -605,6 +666,10 @@ export class CollectibleContractService {
     },
     signer?: ethers.Signer
   ): Promise<string> {
+    if (!this.isInitialized()) {
+      throw new ContractError('Collectible contract service not initialized. Please connect your wallet first.');
+    }
+
     try {
       const contractSigner = signer || this.signer;
       if (!contractSigner) {
@@ -624,7 +689,7 @@ export class CollectibleContractService {
       const description = metadata.description || currentTemplate.description;
       const metadataURI = metadata.metadataURI || currentTemplate.metadataURI;
 
-      const tx = await contractWithSigner.updateCollectibleMetadata(
+      const tx = await (contractWithSigner as any).updateCollectibleMetadata(
         templateId,
         category,
         description,
@@ -663,6 +728,10 @@ export class CollectibleContractService {
     addresses: string[],
     signer?: ethers.Signer
   ): Promise<string> {
+    if (!this.isInitialized()) {
+      throw new ContractError('Collectible contract service not initialized. Please connect your wallet first.');
+    }
+
     try {
       const contractSigner = signer || this.signer;
       if (!contractSigner) {
@@ -686,7 +755,7 @@ export class CollectibleContractService {
         }
       }
 
-      const tx = await contractWithSigner.addToWhitelist(templateId, addresses);
+      const tx = await (contractWithSigner as any).addToWhitelist(templateId, addresses);
       const receipt = await tx.wait();
 
       return receipt.hash;
@@ -719,6 +788,10 @@ export class CollectibleContractService {
     addresses: string[],
     signer?: ethers.Signer
   ): Promise<string> {
+    if (!this.isInitialized()) {
+      throw new ContractError('Collectible contract service not initialized. Please connect your wallet first.');
+    }
+
     try {
       const contractSigner = signer || this.signer;
       if (!contractSigner) {
@@ -742,7 +815,7 @@ export class CollectibleContractService {
         }
       }
 
-      const tx = await contractWithSigner.removeFromWhitelist(templateId, addresses);
+      const tx = await (contractWithSigner as any).removeFromWhitelist(templateId, addresses);
       const receipt = await tx.wait();
 
       return receipt.hash;
@@ -774,6 +847,10 @@ export class CollectibleContractService {
     templateId: number,
     userAddress: string
   ): Promise<GasEstimate> {
+    if (!this.isInitialized()) {
+      throw new ContractError('Collectible contract service not initialized. Please connect your wallet first.');
+    }
+
     try {
       const contract = this.getContract(false);
 
@@ -863,6 +940,10 @@ export class CollectibleContractService {
    * Returns DIRECT (0) or COLLECTIBLE (1)
    */
   async getCardMintingMode(cardId: number): Promise<number> {
+    if (!this.isInitialized()) {
+      throw new ContractError('Collectible contract service not initialized. Please connect your wallet first.');
+    }
+
     try {
       const contract = this.getContract(false);
 

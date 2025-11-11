@@ -37,10 +37,10 @@ import {
   Loader2,
   CheckCircle2,
   XCircle,
-  Clock,
+  // Clock,
   Infinity,
 } from 'lucide-react';
-import { format } from 'date-fns';
+// import { format } from 'date-fns';
 import type { CollectibleTemplate } from '@/types/collectible';
 import { EligibilityType, RarityTier } from '@/types/collectible';
 

@@ -2,8 +2,8 @@
  * CollectiblesGalleryPage - Clean, modern collectibles marketplace
  */
 
-import { useState, useEffect, useRef } from 'react';
-import { useLocation } from 'wouter';
+import { useState, useMemo } from 'react';
+// import { useLocation } from 'wouter';
 import Navigation from '@/components/Navigation';
 import { CollectibleCard } from '@/components/collectibles/CollectibleCard';
 import { CollectibleDetailModal } from '@/components/collectibles/CollectibleDetailModal';
@@ -24,14 +24,18 @@ import { Badge } from '@/components/ui/badge';
 import type { CollectibleTemplate, CollectibleSortBy, RarityTier } from '@/types/collectible';
 import { RarityTier as RarityTierEnum } from '@/types/collectible';
 import { Filter, LayoutGrid, Sparkles } from 'lucide-react';
+import { useLazyLoadWithObserver } from '@/hooks/useLazyLoad';
+
+type ClaimStatusFilter = 'all' | 'available' | 'claimed' | 'locked';
 
 export default function CollectiblesGallery() {
   const { address } = useWallet();
-  const [location] = useLocation();
+  // const [location] = useLocation();
   const [selectedCollectible, setSelectedCollectible] = useState<CollectibleTemplate | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedRarity, setSelectedRarity] = useState<RarityTier | null>(null);
-  const highlightedCardRef = useRef<HTMLDivElement>(null);
+  const [claimStatusFilter, setClaimStatusFilter] = useState<ClaimStatusFilter>('all');
+  // const highlightedCardRef = useRef<HTMLDivElement>(null);
   
   const {
     filteredCollectibles,
@@ -46,17 +50,53 @@ export default function CollectiblesGallery() {
 
   // Get claim status for all collectibles
   const templateIds = filteredCollectibles.map(c => c.templateId);
-  const { claimStatus } = useClaimStatus(templateIds, address);
+  const { claimStatus, loading: loadingEligibility, refreshAll: refreshClaimStatus } = useClaimStatus(templateIds, address);
 
-  // Get unique categories
-  const categories = Array.from(
-    new Set(filteredCollectibles.map(c => c.category))
-  ).filter(Boolean);
+  // Memoize unique categories to avoid recalculation
+  const categories = useMemo(() => {
+    return Array.from(
+      new Set(filteredCollectibles.map(c => c.category))
+    ).filter(Boolean);
+  }, [filteredCollectibles]);
 
-  // Apply rarity filter
-  const displayedCollectibles = selectedRarity !== null
-    ? filteredCollectibles.filter(c => c.rarityTier === selectedRarity)
-    : filteredCollectibles;
+  // Memoize filtered collectibles to avoid expensive recalculation
+  const displayedCollectibles = useMemo(() => {
+    return filteredCollectibles.filter(c => {
+      // Apply rarity filter
+      if (selectedRarity !== null && c.rarityTier !== selectedRarity) {
+        return false;
+      }
+
+      // Apply claim status filter (only if user is connected)
+      if (address && claimStatusFilter !== 'all') {
+        const status = claimStatus.get(c.templateId);
+        
+        if (claimStatusFilter === 'available') {
+          // Available: eligible + not claimed + can claim now
+          return status?.isEligible && !status?.hasClaimed && status?.canClaimNow;
+        } else if (claimStatusFilter === 'claimed') {
+          // Claimed: already claimed by user
+          return status?.hasClaimed;
+        } else if (claimStatusFilter === 'locked') {
+          // Locked: not eligible or cannot claim yet
+          return !status?.isEligible || (status?.isEligible && !status?.canClaimNow && !status?.hasClaimed);
+        }
+      }
+
+      return true;
+    });
+  }, [filteredCollectibles, selectedRarity, address, claimStatusFilter, claimStatus]);
+
+  // Lazy loading for collectibles
+  const {
+    visibleItems: visibleCollectibles,
+    hasMore: hasMoreCollectibles,
+    isLoadingMore: isLoadingMoreCollectibles,
+    sentinelRef,
+  } = useLazyLoadWithObserver(displayedCollectibles, {
+    initialCount: 12,
+    pageSize: 12,
+  });
 
   const handleCategoryFilter = (category: string) => {
     filterByCategory(category === 'all' ? null : category);
@@ -73,9 +113,10 @@ export default function CollectiblesGallery() {
   const clearFilters = () => {
     filterByCategory(null);
     setSelectedRarity(null);
+    setClaimStatusFilter('all');
   };
 
-  const hasActiveFilters = currentCategory !== null || selectedRarity !== null;
+  const hasActiveFilters = currentCategory !== null || selectedRarity !== null || claimStatusFilter !== 'all';
 
   // Calculate stats
   const totalItems = filteredCollectibles.length;
@@ -111,7 +152,14 @@ export default function CollectiblesGallery() {
                 <span className="font-bold text-2xl">{totalClaims}</span>
                 <span className="text-muted-foreground ml-2">total claims</span>
               </div>
-              {eligibleCount > 0 && (
+              {loadingEligibility && address && (
+                <div>
+                  <Badge variant="outline" className="animate-pulse">
+                    Checking eligibility...
+                  </Badge>
+                </div>
+              )}
+              {!loadingEligibility && eligibleCount > 0 && (
                 <div>
                   <Badge variant="default" className="bg-purple-600">
                     {eligibleCount} eligible for you
@@ -136,7 +184,7 @@ export default function CollectiblesGallery() {
                 Filters
                 {hasActiveFilters && (
                   <Badge variant="secondary" className="ml-1">
-                    {(currentCategory ? 1 : 0) + (selectedRarity !== null ? 1 : 0)}
+                    {(currentCategory ? 1 : 0) + (selectedRarity !== null ? 1 : 0) + (claimStatusFilter !== 'all' ? 1 : 0)}
                   </Badge>
                 )}
               </Button>
@@ -173,7 +221,7 @@ export default function CollectiblesGallery() {
           {/* Filter Panel */}
           {showFilters && (
             <Card className="mt-4 p-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 <div>
                   <label className="text-sm font-medium mb-2 block">Category</label>
                   <Select
@@ -213,6 +261,26 @@ export default function CollectiblesGallery() {
                     </SelectContent>
                   </Select>
                 </div>
+
+                {address && (
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">Claim Status</label>
+                    <Select
+                      value={claimStatusFilter}
+                      onValueChange={(value) => setClaimStatusFilter(value as ClaimStatusFilter)}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Status</SelectItem>
+                        <SelectItem value="available">Available</SelectItem>
+                        <SelectItem value="claimed">Claimed</SelectItem>
+                        <SelectItem value="locked">Locked</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
             </Card>
           )}
@@ -236,7 +304,10 @@ export default function CollectiblesGallery() {
         {/* Error State */}
         {error && (
           <Card className="p-8 text-center">
-            <p className="text-destructive mb-4">Failed to load collectibles</p>
+            <p className="text-destructive mb-2 font-semibold">Failed to load collectibles</p>
+            <p className="text-sm text-muted-foreground mb-4">
+              {error.userMessage || 'An error occurred while fetching collectibles'}
+            </p>
             <Button onClick={refetch} variant="outline">
               Try Again
             </Button>
@@ -261,28 +332,42 @@ export default function CollectiblesGallery() {
           </Card>
         )}
 
-        {/* Collectibles Grid */}
+        {/* Collectibles Grid with Lazy Loading */}
         {!loading && !error && displayedCollectibles.length > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-            {displayedCollectibles.map(collectible => {
-              const status = claimStatus.get(collectible.templateId);
-              return (
-                <CollectibleCard
-                  key={collectible.templateId}
-                  template={collectible}
-                  claimStatus={status}
-                  onClick={() => setSelectedCollectible(collectible)}
-                  onClaim={() => setSelectedCollectible(collectible)}
-                />
-              );
-            })}
-          </div>
+          <>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+              {visibleCollectibles.map(collectible => {
+                const status = claimStatus.get(collectible.templateId);
+                return (
+                  <CollectibleCard
+                    key={collectible.templateId}
+                    template={collectible}
+                    claimStatus={status}
+                    onClick={() => setSelectedCollectible(collectible)}
+                    onClaim={() => setSelectedCollectible(collectible)}
+                  />
+                );
+              })}
+            </div>
+            
+            {/* Lazy loading sentinel */}
+            {hasMoreCollectibles && (
+              <div ref={sentinelRef} className="flex items-center justify-center py-8">
+                {isLoadingMoreCollectibles && (
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                    <span className="text-sm text-muted-foreground">Loading more collectibles...</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
         )}
 
         {/* Results Count */}
         {!loading && !error && displayedCollectibles.length > 0 && (
           <div className="mt-8 text-center text-sm text-muted-foreground">
-            Showing {displayedCollectibles.length} collectible{displayedCollectibles.length !== 1 ? 's' : ''}
+            Showing {visibleCollectibles.length} of {displayedCollectibles.length} collectible{displayedCollectibles.length !== 1 ? 's' : ''}
           </div>
         )}
       </div>
@@ -294,6 +379,11 @@ export default function CollectiblesGallery() {
           claimStatus={claimStatus.get(selectedCollectible.templateId)}
           open={!!selectedCollectible}
           onOpenChange={(open) => !open && setSelectedCollectible(null)}
+          onClaimSuccess={() => {
+            // Refresh claim status and collectibles list after successful claim
+            refreshClaimStatus();
+            refetch();
+          }}
         />
       )}
     </div>

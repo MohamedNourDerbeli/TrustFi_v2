@@ -2,8 +2,8 @@
 export const CONTRACT_ADDRESSES = {
   // Hardhat local network
   "31337": {
-    ProfileNFT: "0x27b42C848603D3Fe63996Cc9261B0B88beFDbB36",
-    ReputationCard: "0x4D356eB5DB3de7204e5e5a466FAAAC46e953206A",
+    ProfileNFT: "0x3AbB9BE1ba1f966D609FaBC0Fc32434807D35112",
+    ReputationCard: "0x329c874100fFf1eCd895c84335D3C9fF6cFA8499",
   },
   // Moonbase Alpha Testnet
   "1287": {

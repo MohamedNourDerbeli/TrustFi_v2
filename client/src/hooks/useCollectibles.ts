@@ -3,20 +3,20 @@
  * Handles loading active collectibles with filtering and sorting capabilities
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { collectibleContractService } from '@/services/collectibleContractService';
 import type { CollectibleTemplate, CollectibleSortBy } from '@/types/collectible';
-import { useWallet } from '@/contexts/WalletContext';
+import { useContractData } from './useContractData';
 
 interface UseCollectiblesOptions {
-  autoFetch?: boolean;
+  enabled?: boolean;
 }
 
 export interface UseCollectiblesReturn {
   collectibles: CollectibleTemplate[];
   filteredCollectibles: CollectibleTemplate[];
   loading: boolean;
-  error: Error | null;
+  error: any;
   refetch: () => Promise<void>;
   filterByCategory: (category: string | null) => void;
   filterByEligibility: (eligible: boolean | null) => void;
@@ -24,48 +24,34 @@ export interface UseCollectiblesReturn {
   currentCategory: string | null;
   currentEligibilityFilter: boolean | null;
   currentSort: CollectibleSortBy;
+  initialized: boolean;
 }
 
 export function useCollectibles(options: UseCollectiblesOptions = {}): UseCollectiblesReturn {
-  const { autoFetch = true } = options;
-  const { provider } = useWallet();
-  
-  const [collectibles, setCollectibles] = useState<CollectibleTemplate[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
+  const { enabled = true } = options;
   
   // Filter and sort state
   const [currentCategory, setCurrentCategory] = useState<string | null>(null);
   const [currentEligibilityFilter, setCurrentEligibilityFilter] = useState<boolean | null>(null);
   const [currentSort, setCurrentSort] = useState<CollectibleSortBy>('newest');
 
-  // Fetch collectibles from contract
-  const fetchCollectibles = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      // Initialize service if needed
-      if (provider && !collectibleContractService.isInitialized()) {
-        await collectibleContractService.initialize(provider);
-      }
-
-      const templates = await collectibleContractService.getActiveCollectibles();
-      setCollectibles(templates);
-    } catch (err: any) {
-      console.error('Failed to fetch collectibles:', err);
-      setError(err);
-    } finally {
-      setLoading(false);
+  // Fetch collectibles using standardized hook
+  const {
+    data: collectibles,
+    loading,
+    error,
+    refetch,
+    initialized
+  } = useContractData<CollectibleTemplate[]>(
+    () => collectibleContractService.getActiveCollectibles(),
+    [],
+    {
+      enabled,
+      initialData: [],
+      cacheTime: 60000, // Cache for 1 minute
+      staleTime: 30000, // Consider stale after 30 seconds
     }
-  }, [provider]);
-
-  // Auto-fetch on mount if enabled
-  useEffect(() => {
-    if (autoFetch) {
-      fetchCollectibles();
-    }
-  }, [autoFetch, fetchCollectibles]);
+  );
 
   // Filter by category
   const filterByCategory = useCallback((category: string | null) => {
@@ -78,12 +64,14 @@ export function useCollectibles(options: UseCollectiblesOptions = {}): UseCollec
   }, []);
 
   // Sort collectibles
-  const sortBy = useCallback((field: CollectibleSortBy) => {
+  const sortByField = useCallback((field: CollectibleSortBy) => {
     setCurrentSort(field);
   }, []);
 
   // Apply filters and sorting
   const filteredCollectibles = useMemo(() => {
+    if (!collectibles) return [];
+    
     let result = [...collectibles];
 
     // Filter by category
@@ -143,16 +131,17 @@ export function useCollectibles(options: UseCollectiblesOptions = {}): UseCollec
   }, [collectibles, currentCategory, currentSort]);
 
   return {
-    collectibles,
+    collectibles: collectibles || [],
     filteredCollectibles,
     loading,
     error,
-    refetch: fetchCollectibles,
+    refetch,
     filterByCategory,
     filterByEligibility,
-    sortBy,
+    sortBy: sortByField,
     currentCategory,
     currentEligibilityFilter,
     currentSort,
+    initialized,
   };
 }

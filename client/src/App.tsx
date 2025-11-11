@@ -18,6 +18,7 @@ import Admin from "@/pages/Admin";
 import CollectiblesGallery from "@/pages/CollectiblesGallery";
 import VerifyCard from "@/pages/VerifyCard";
 import NotFound from "@/pages/NotFound";
+import { ErrorDashboard } from "@/components/ErrorDashboard";
 
 function Router() {
   return (
@@ -49,6 +50,11 @@ function Router() {
       <Route path="/admin">
         <ProtectedRoute requireAdmin>
           <Admin />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/debug/errors">
+        <ProtectedRoute requireAdmin>
+          <ErrorDashboard />
         </ProtectedRoute>
       </Route>
       <Route path="/:address" component={PublicProfile} />

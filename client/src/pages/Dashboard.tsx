@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -53,6 +53,11 @@ import { useCollectibles } from '@/hooks/useCollectibles';
 import { useClaimStatus } from '@/hooks/useClaimStatus';
 import ClaimHistory from '@/components/ClaimHistory';
 import { claimHistoryService, type ClaimHistoryStats } from '@/services/claimHistoryService';
+import { useContractData } from '@/hooks/useContractData';
+import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
+import { SectionErrorFallback } from '@/components/shared/SectionErrorFallback';
+import { PageLoadingSkeleton } from '@/components/skeletons/PageLoadingSkeleton';
+import { batchFetchMintingModes } from '@/utils/batchFetch';
 
 export default function Dashboard() {
   const { userProfile, provider, address, isLoadingProfile } = useWallet();
@@ -60,142 +65,156 @@ export default function Dashboard() {
   // React Query hooks
   const { data: offChainData, isLoading: isLoadingOffChain } = useOffChainProfile(address);
   const tokenId = userProfile?.hasProfile ? Number(userProfile.tokenId) : undefined;
-  const { data: cards = [] } = useProfileCards(tokenId, provider);
-  const { data: reputationScore = 0 } = useReputationScore(tokenId, provider);
+  const { data: cards = [], isLoading: isLoadingCards } = useProfileCards(tokenId, provider);
+  const { data: reputationScore = 0, isLoading: isLoadingScore } = useReputationScore(tokenId, provider);
   
   const [selectedCredential, setSelectedCredential] = useState<CredentialCardData | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [mintingModeFilter, setMintingModeFilter] = useState('all');
   const [showActivateDialog, setShowActivateDialog] = useState(false);
-  const [cardMintingModes, setCardMintingModes] = useState<Map<string, MintingMode>>(new Map());
-  const [claimStats, setClaimStats] = useState<ClaimHistoryStats | null>(null);
 
   // Collectibles data
   const { collectibles } = useCollectibles({ autoFetch: true });
   const collectibleTemplateIds = collectibles.map(c => c.templateId);
   const { claimStatus } = useClaimStatus(collectibleTemplateIds, address || undefined);
 
-  // Fetch minting modes for all cards
-  useEffect(() => {
-    async function fetchMintingModes() {
-      if (!provider || cards.length === 0) return;
-
-      try {
-        if (!collectibleContractService.isInitialized()) {
-          await collectibleContractService.initialize(provider);
-        }
-
-        const modes = new Map<string, MintingMode>();
-        await Promise.all(
-          cards.map(async (card: any) => {
-            try {
-              const mode = await collectibleContractService.getCardMintingMode(card.id);
-              modes.set(card.id.toString(), mode as MintingMode);
-            } catch (error) {
-              console.warn(`Failed to fetch minting mode for card ${card.id}:`, error);
-              // Default to DIRECT mode
-              modes.set(card.id.toString(), MintingMode.DIRECT);
-            }
-          })
-        );
-
-        setCardMintingModes(modes);
-      } catch (error) {
-        console.error('Failed to fetch minting modes:', error);
+  // Fetch minting modes for all cards using batch fetching for better performance
+  const {
+    data: cardMintingModes,
+    loading: loadingMintingModes,
+    error: mintingModesError,
+    refetch: refetchMintingModes
+  } = useContractData<Map<string, MintingMode>>(
+    async () => {
+      if (!provider || cards.length === 0) {
+        return new Map();
       }
-    }
 
-    fetchMintingModes();
-  }, [cards, provider]);
-
-  // Initialize claim history service and load statistics
-  useEffect(() => {
-    async function initializeClaimHistory() {
-      if (!address || !provider) return;
-
-      try {
-        // Initialize the service
-        await claimHistoryService.initialize();
-
-        // Sync claim history from blockchain
-        await claimHistoryService.syncClaimHistory(provider, address);
-
-        // Start listening for new claims
-        await claimHistoryService.startListening(provider, address);
-
-        // Load statistics
-        const stats = await claimHistoryService.getUserClaimStats(address);
-        setClaimStats(stats);
-      } catch (error) {
-        console.error('Failed to initialize claim history:', error);
+      if (!collectibleContractService.isInitialized()) {
+        await collectibleContractService.initialize(provider);
       }
+
+      // Use batch fetching to optimize performance
+      const cardIds = cards.map((card: any) => card.id);
+      const modesMap = await batchFetchMintingModes(cardIds, {
+        batchSize: 20,
+        useCache: true,
+      });
+
+      // Convert to string keys for consistency
+      const stringKeyMap = new Map<string, MintingMode>();
+      modesMap.forEach((mode, cardId) => {
+        stringKeyMap.set(cardId.toString(), mode as MintingMode);
+      });
+
+      return stringKeyMap;
+    },
+    [cards, provider],
+    {
+      enabled: cards.length > 0 && !!provider,
+      requiresAuth: true,
+      initialData: new Map(),
+      cacheTime: 2 * 60 * 1000, // Cache for 2 minutes
     }
+  );
 
-    initializeClaimHistory();
+  // Fetch claim history stats using useContractData hook
+  const {
+    data: claimStats,
+    loading: loadingClaimStats,
+    error: claimStatsError,
+    refetch: refetchClaimStats
+  } = useContractData<ClaimHistoryStats | null>(
+    async () => {
+      if (!address || !provider) {
+        return null;
+      }
 
-    // Cleanup: stop listening when component unmounts
+      await claimHistoryService.initialize();
+      await claimHistoryService.syncClaimHistory(provider, address);
+      await claimHistoryService.startListening(provider, address);
+      
+      const stats = await claimHistoryService.getUserClaimStats(address);
+      return stats;
+    },
+    [address, provider],
+    {
+      enabled: !!address && !!provider && !!userProfile?.hasProfile,
+      requiresAuth: true,
+      requiresProfile: true,
+      initialData: null
+    }
+  );
+
+  // Cleanup claim history listener on unmount
+  useEffect(() => {
     return () => {
       claimHistoryService.stopListening();
     };
-  }, [address, provider]);
+  }, []);
 
-  // Convert cards to credential format
-  const credentials: CredentialCardData[] = cards.map((card: any) => ({
-    id: card.id.toString(),
-    title: card.description || 'Untitled Credential',
-    issuer: card.issuer.substring(0, 10) + '...',
-    issuerAddress: card.issuer,
-    description: card.description || 'No description',
-    issuedDate: new Date(card.issuedAt * 1000).toISOString().split('T')[0],
-    category: card.category || 'general',
-    verified: card.isValid,
-    mintingMode: cardMintingModes.get(card.id.toString()),
-  }));
+  // Convert cards to credential format - memoized to avoid recalculation
+  const credentials: CredentialCardData[] = useMemo(() => {
+    if (!cardMintingModes) return [];
+    
+    return cards.map((card: any) => ({
+      id: card.id.toString(),
+      title: card.description || 'Untitled Credential',
+      issuer: card.issuer.substring(0, 10) + '...',
+      issuerAddress: card.issuer,
+      description: card.description || 'No description',
+      issuedDate: new Date(card.issuedAt * 1000).toISOString().split('T')[0],
+      category: card.category || 'general',
+      verified: card.isValid,
+      mintingMode: cardMintingModes.get(card.id.toString()),
+    }));
+  }, [cards, cardMintingModes]);
 
-  const verifiedCount = credentials.filter(c => c.verified).length;
+  // Memoize expensive computations to avoid recalculation on every render
+  const verifiedCount = useMemo(() => {
+    return credentials.filter(c => c.verified).length;
+  }, [credentials]);
+
   const profileViews = offChainData?.profile_views || 0;
 
-  // Calculate eligible collectibles count (after credentials are defined)
-  const eligibleCollectiblesCount = Array.from(claimStatus.values()).filter(
-    status => status.isEligible && !status.hasClaimed && status.canClaimNow
-  ).length;
+  // Memoize eligible collectibles count calculation
+  const eligibleCollectiblesCount = useMemo(() => {
+    return Array.from(claimStatus.values()).filter(
+      status => status.isEligible && !status.hasClaimed && status.canClaimNow
+    ).length;
+  }, [claimStatus]);
 
-  // Create activity events from credentials
-  const events = credentials.slice(0, 5).map((cred, idx) => ({
-    id: `event-${idx}`,
-    type: cred.mintingMode === MintingMode.COLLECTIBLE ? 'collectible' as const : 'credential' as const,
-    title: cred.mintingMode === MintingMode.COLLECTIBLE ? 'Collectible Claimed' : 'Credential Received',
-    description: cred.title,
-    timestamp: cred.issuedDate,
-    mintingMode: cred.mintingMode,
-  }));
+  // Memoize activity events creation
+  const events = useMemo(() => {
+    return credentials.slice(0, 5).map((cred, idx) => ({
+      id: `event-${idx}`,
+      type: cred.mintingMode === MintingMode.COLLECTIBLE ? 'collectible' as const : 'credential' as const,
+      title: cred.mintingMode === MintingMode.COLLECTIBLE ? 'Collectible Claimed' : 'Credential Received',
+      description: cred.title,
+      timestamp: cred.issuedDate,
+      mintingMode: cred.mintingMode,
+    }));
+  }, [credentials]);
 
-  const filteredCredentials = credentials.filter(cred => {
-    const matchesSearch = cred.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         cred.issuer.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = categoryFilter === 'all' || cred.category.toLowerCase() === categoryFilter.toLowerCase();
-    const matchesMintingMode = mintingModeFilter === 'all' || 
-      (mintingModeFilter === 'direct' && cred.mintingMode === MintingMode.DIRECT) ||
-      (mintingModeFilter === 'collectible' && cred.mintingMode === MintingMode.COLLECTIBLE);
-    return matchesSearch && matchesCategory && matchesMintingMode;
-  });
+  // Memoize filtered credentials to avoid recalculation
+  const filteredCredentials = useMemo(() => {
+    return credentials.filter(cred => {
+      const matchesSearch = cred.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                           cred.issuer.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesCategory = categoryFilter === 'all' || cred.category.toLowerCase() === categoryFilter.toLowerCase();
+      const matchesMintingMode = mintingModeFilter === 'all' || 
+        (mintingModeFilter === 'direct' && cred.mintingMode === MintingMode.DIRECT) ||
+        (mintingModeFilter === 'collectible' && cred.mintingMode === MintingMode.COLLECTIBLE);
+      return matchesSearch && matchesCategory && matchesMintingMode;
+    });
+  }, [credentials, searchQuery, categoryFilter, mintingModeFilter]);
 
   // Show loading state while profile is being loaded
   const isLoading = isLoadingProfile || isLoadingOffChain || !address;
   
   if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background">
-        <Navigation />
-        <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
-          <div className="text-center">
-            <Loader2 className="w-12 h-12 mx-auto mb-4 text-primary animate-spin" />
-            <p className="text-muted-foreground">Loading your dashboard...</p>
-          </div>
-        </div>
-      </div>
-    );
+    return <PageLoadingSkeleton variant="dashboard" />;
   }
 
   // User has off-chain profile but no on-chain profile yet - show welcome dashboard
@@ -235,78 +254,112 @@ export default function Dashboard() {
         </div>
 
         {/* Stats Grid */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Reputation Score</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{reputationScore}</div>
-              <p className="text-xs text-muted-foreground">
-                {hasOnChainProfile ? '+12% from last month' : 'Activate to start earning'}
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Credentials</CardTitle>
-              <Award className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{credentials.length}</div>
-              <p className="text-xs text-muted-foreground">
-                {verifiedCount} verified
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Profile Views</CardTitle>
-              <Eye className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{profileViews}</div>
-              <p className="text-xs text-muted-foreground">
-                Last 30 days
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Status</CardTitle>
-              <Shield className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {hasOnChainProfile ? (
-                  <Badge variant="default" className="text-sm">Active</Badge>
-                ) : offChainData?.activation_status === 'pending' ? (
-                  <Badge variant="outline" className="text-sm border-yellow-500 text-yellow-600">
-                    <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse mr-1" />
-                    Pending
-                  </Badge>
-                ) : offChainData?.activation_status === 'failed' ? (
-                  <Badge variant="destructive" className="text-sm">Failed</Badge>
+        <ErrorBoundary
+          fallback={
+            <SectionErrorFallback
+              error={{
+                type: 'UNKNOWN_ERROR',
+                message: 'Failed to load stats',
+                userMessage: 'Unable to load dashboard statistics. Please refresh the page.',
+                retryable: true
+              }}
+              onRetry={() => window.location.reload()}
+              title="Stats Error"
+            />
+          }
+          resetKeys={[address]}
+        >
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Reputation Score</CardTitle>
+                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                {isLoadingScore ? (
+                  <div className="space-y-2">
+                    <div className="h-8 w-16 bg-muted animate-pulse rounded" />
+                    <div className="h-3 w-32 bg-muted animate-pulse rounded" />
+                  </div>
                 ) : (
-                  <Badge variant="secondary" className="text-sm">Off-Chain</Badge>
+                  <>
+                    <div className="text-2xl font-bold">{reputationScore}</div>
+                    <p className="text-xs text-muted-foreground">
+                      {hasOnChainProfile ? '+12% from last month' : 'Activate to start earning'}
+                    </p>
+                  </>
                 )}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {hasOnChainProfile 
-                  ? 'On-chain verified' 
-                  : offChainData?.activation_status === 'pending'
-                  ? 'Activating on blockchain...'
-                  : offChainData?.activation_status === 'failed'
-                  ? 'Activation failed - try again'
-                  : 'Free profile'}
-              </p>
-            </CardContent>
-          </Card>
-        </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Credentials</CardTitle>
+                <Award className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                {isLoadingCards || loadingMintingModes ? (
+                  <div className="space-y-2">
+                    <div className="h-8 w-12 bg-muted animate-pulse rounded" />
+                    <div className="h-3 w-24 bg-muted animate-pulse rounded" />
+                  </div>
+                ) : (
+                  <>
+                    <div className="text-2xl font-bold">{credentials.length}</div>
+                    <p className="text-xs text-muted-foreground">
+                      {verifiedCount} verified
+                    </p>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Profile Views</CardTitle>
+                <Eye className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{profileViews}</div>
+                <p className="text-xs text-muted-foreground">
+                  Last 30 days
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Status</CardTitle>
+                <Shield className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {hasOnChainProfile ? (
+                    <Badge variant="default" className="text-sm">Active</Badge>
+                  ) : offChainData?.activation_status === 'pending' ? (
+                    <Badge variant="outline" className="text-sm border-yellow-500 text-yellow-600">
+                      <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse mr-1" />
+                      Pending
+                    </Badge>
+                  ) : offChainData?.activation_status === 'failed' ? (
+                    <Badge variant="destructive" className="text-sm">Failed</Badge>
+                  ) : (
+                    <Badge variant="secondary" className="text-sm">Off-Chain</Badge>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {hasOnChainProfile 
+                    ? 'On-chain verified' 
+                    : offChainData?.activation_status === 'pending'
+                    ? 'Activating on blockchain...'
+                    : offChainData?.activation_status === 'failed'
+                    ? 'Activation failed - try again'
+                    : 'Free profile'}
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        </ErrorBoundary>
 
         {/* Welcome Banner for New Users */}
         {hasOffChainProfile && !hasOnChainProfile && (
@@ -381,7 +434,21 @@ export default function Dashboard() {
           {/* Left Column */}
           <div className="lg:col-span-2 space-y-8">
             {/* Profile Completion */}
-            <Card>
+            <ErrorBoundary
+              fallback={
+                <SectionErrorFallback
+                  error={{
+                    type: 'UNKNOWN_ERROR',
+                    message: 'Failed to load profile completion',
+                    userMessage: 'Unable to load profile completion status.',
+                    retryable: false
+                  }}
+                  title="Profile Section Error"
+                />
+              }
+              resetKeys={[address, offChainData]}
+            >
+              <Card>
               <CardHeader>
                 <CardTitle>Complete Your Profile</CardTitle>
                 <CardDescription>
@@ -466,9 +533,24 @@ export default function Dashboard() {
                 </Link>
               </CardContent>
             </Card>
+            </ErrorBoundary>
 
             {/* Recent Activity */}
-            <Card>
+            <ErrorBoundary
+              fallback={
+                <SectionErrorFallback
+                  error={{
+                    type: 'UNKNOWN_ERROR',
+                    message: 'Failed to load recent activity',
+                    userMessage: 'Unable to load your recent activity.',
+                    retryable: false
+                  }}
+                  title="Activity Section Error"
+                />
+              }
+              resetKeys={[credentials]}
+            >
+              <Card>
               <CardHeader>
                 <CardTitle>Recent Activity</CardTitle>
                 <CardDescription>
@@ -517,6 +599,7 @@ export default function Dashboard() {
                 )}
               </CardContent>
             </Card>
+            </ErrorBoundary>
           </div>
 
           {/* Right Column */}
@@ -620,7 +703,31 @@ export default function Dashboard() {
         </div>
 
         {/* Credentials Section */}
-        <Card>
+        <ErrorBoundary
+          fallback={
+            <SectionErrorFallback
+              error={{
+                type: 'UNKNOWN_ERROR',
+                message: 'Failed to load credentials',
+                userMessage: 'Unable to load your credentials. Please try again.',
+                retryable: true
+              }}
+              onRetry={() => window.location.reload()}
+              title="Credentials Error"
+            />
+          }
+          resetKeys={[credentials]}
+        >
+          {mintingModesError && (
+            <div className="mb-4">
+              <SectionErrorFallback
+                error={mintingModesError}
+                onRetry={refetchMintingModes}
+                title="Failed to load credential types"
+              />
+            </div>
+          )}
+          <Card>
           <CardHeader>
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div>
@@ -721,12 +828,55 @@ export default function Dashboard() {
             )}
           </CardContent>
         </Card>
+        </ErrorBoundary>
 
         {/* Claim History Section */}
         {hasOnChainProfile && (
-          <div className="space-y-6">
-            {/* Claim Statistics */}
-            {claimStats && claimStats.totalClaims > 0 && (
+          <ErrorBoundary
+            fallback={
+              <SectionErrorFallback
+                error={{
+                  type: 'UNKNOWN_ERROR',
+                  message: 'Failed to load claim history',
+                  userMessage: 'Unable to load your claim history.',
+                  retryable: true
+                }}
+                onRetry={refetchClaimStats}
+                title="Claim History Error"
+              />
+            }
+            resetKeys={[address, claimStats]}
+          >
+            <div className="space-y-6">
+              {/* Show error if claim stats failed to load */}
+              {claimStatsError && (
+                <SectionErrorFallback
+                  error={claimStatsError}
+                  onRetry={refetchClaimStats}
+                  title="Failed to load claim statistics"
+                />
+              )}
+
+              {/* Show loading state for claim stats */}
+              {loadingClaimStats && (
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                  {[1, 2, 3, 4].map((i) => (
+                    <Card key={i}>
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <div className="h-4 w-32 bg-muted animate-pulse rounded" />
+                        <div className="h-4 w-4 bg-muted animate-pulse rounded" />
+                      </CardHeader>
+                      <CardContent>
+                        <div className="h-8 w-16 bg-muted animate-pulse rounded mb-2" />
+                        <div className="h-3 w-24 bg-muted animate-pulse rounded" />
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+
+              {/* Claim Statistics */}
+              {!loadingClaimStats && !claimStatsError && claimStats && claimStats.totalClaims > 0 && (
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -805,9 +955,10 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* Claim History Timeline */}
-            <ClaimHistory userAddress={address} limit={10} showFilters={true} showTitle={true} />
-          </div>
+              {/* Claim History Timeline */}
+              <ClaimHistory userAddress={address} limit={10} showFilters={true} showTitle={true} />
+            </div>
+          </ErrorBoundary>
         )}
       </main>
 

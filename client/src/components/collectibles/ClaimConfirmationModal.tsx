@@ -38,6 +38,7 @@ interface ClaimConfirmationModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
+  claimStatus?: any; // ClaimStatus from useClaimStatus
 }
 
 export function ClaimConfirmationModal({
@@ -46,6 +47,7 @@ export function ClaimConfirmationModal({
   open,
   onOpenChange,
   onSuccess,
+  claimStatus,
 }: ClaimConfirmationModalProps) {
   const { claim, claimingState, txHash, cardId, error } = useCollectibleClaim();
   const [showCelebration, setShowCelebration] = useState(false);
@@ -55,6 +57,11 @@ export function ClaimConfirmationModal({
   const isHighGas = gasEstimate && parseFloat(gasEstimate.gasCostEth) > 0.01;
 
   const handleConfirm = async () => {
+    // Check eligibility before claiming
+    if (claimStatus && !claimStatus.canClaimNow) {
+      return;
+    }
+
     const result = await claim(template.templateId);
     
     if (result) {
@@ -181,13 +188,37 @@ export function ClaimConfirmationModal({
   const renderConfirmationState = () => (
     <>
       <DialogHeader>
-        <DialogTitle>Confirm Claim</DialogTitle>
+        <DialogTitle>
+          {claimingState === 'claiming' ? 'Claiming Collectible' : 'Confirm Claim'}
+        </DialogTitle>
         <DialogDescription>
-          Review the details before claiming this collectible
+          {claimingState === 'claiming' 
+            ? 'Please confirm the transaction in your wallet'
+            : 'Review the details before claiming this collectible'}
         </DialogDescription>
       </DialogHeader>
 
       <div className="space-y-4">
+        {/* Show transaction status during claiming */}
+        {claimingState === 'claiming' && (
+          <Alert>
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <AlertDescription>
+              Waiting for wallet confirmation... Please check your wallet to approve the transaction.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Show eligibility warning if not eligible */}
+        {claimStatus && !claimStatus.canClaimNow && claimingState !== 'claiming' && (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              {claimStatus.reason || 'You are not eligible to claim this collectible'}
+            </AlertDescription>
+          </Alert>
+        )}
+
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
@@ -257,7 +288,7 @@ export function ClaimConfirmationModal({
         </Button>
         <Button
           onClick={handleConfirm}
-          disabled={claimingState === 'claiming'}
+          disabled={claimingState === 'claiming' || (claimStatus && !claimStatus.canClaimNow)}
         >
           {claimingState === 'claiming' ? (
             <>
