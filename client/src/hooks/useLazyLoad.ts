@@ -5,7 +5,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 
-export interface LazyLoadOptions<T> {
+export interface LazyLoadOptions {
   // Initial number of items to load
   initialCount?: number;
   
@@ -45,7 +45,7 @@ export interface LazyLoadReturn<T> {
   reset: () => void;
   
   // Ref to attach to scrollable container (for auto-load)
-  containerRef: React.RefObject<HTMLDivElement>;
+  containerRef: React.RefObject<HTMLDivElement | null>;
 }
 
 /**
@@ -57,7 +57,7 @@ export interface LazyLoadReturn<T> {
  */
 export function useLazyLoad<T>(
   allItems: T[],
-  options: LazyLoadOptions<T> = {}
+  options: LazyLoadOptions = {}
 ): LazyLoadReturn<T> {
   const {
     initialCount = 10,
@@ -69,8 +69,7 @@ export function useLazyLoad<T>(
 
   const [currentPage, setCurrentPage] = useState(1);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const observerRef = useRef<IntersectionObserver | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   // Calculate visible items based on current page
   const itemsToShow = currentPage === 1 ? initialCount : initialCount + (currentPage - 1) * pageSize;
@@ -145,8 +144,8 @@ export function useLazyLoad<T>(
  */
 export function useLazyLoadWithObserver<T>(
   allItems: T[],
-  options: Omit<LazyLoadOptions<T>, 'autoLoad' | 'threshold'> = {}
-): LazyLoadReturn<T> & { sentinelRef: React.RefObject<HTMLDivElement> } {
+  options: Omit<LazyLoadOptions, 'autoLoad' | 'threshold'> = {}
+): LazyLoadReturn<T> & { sentinelRef: React.RefObject<HTMLDivElement | null> } {
   const {
     initialCount = 10,
     pageSize = 10,
@@ -155,8 +154,8 @@ export function useLazyLoadWithObserver<T>(
 
   const [currentPage, setCurrentPage] = useState(1);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const sentinelRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   // Calculate visible items based on current page
   const itemsToShow = currentPage === 1 ? initialCount : initialCount + (currentPage - 1) * pageSize;

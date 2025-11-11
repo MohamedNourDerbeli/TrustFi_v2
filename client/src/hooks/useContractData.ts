@@ -5,7 +5,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { fetchWithRetry, type RetryOptions } from '@/utils/fetchWithRetry';
-import { classifyError, type ClassifiedError, logClassifiedError } from '@/utils/errorClassification';
+import { classifyError, type ClassifiedError } from '@/utils/errorClassification';
 import { useWallet } from '@/contexts/WalletContext';
 import { logError, logPerformance, type ErrorContext } from '@/services/errorTrackingService';
 

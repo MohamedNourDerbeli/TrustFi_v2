@@ -12,7 +12,6 @@ import {
   RefreshCw,
   TrendingUp,
   Clock,
-  AlertTriangle,
   CheckCircle2,
   XCircle
 } from 'lucide-react';
@@ -23,7 +22,6 @@ import Navigation from '@/components/Navigation';
 import {
   errorTrackingService,
   type ErrorLog,
-  type PerformanceMetric,
   type ErrorStats,
   type PerformanceStats
 } from '@/services/errorTrackingService';
@@ -33,7 +31,6 @@ export function ErrorDashboard() {
   const [errorStats, setErrorStats] = useState<ErrorStats | null>(null);
   const [performanceStats, setPerformanceStats] = useState<PerformanceStats | null>(null);
   const [errorLogs, setErrorLogs] = useState<ErrorLog[]>([]);
-  const [performanceMetrics, setPerformanceMetrics] = useState<PerformanceMetric[]>([]);
   const [activeTab, setActiveTab] = useState<'errors' | 'performance'>('errors');
   const [timeRange, setTimeRange] = useState<'1h' | '24h' | '7d' | 'all'>('24h');
 
@@ -65,7 +62,6 @@ export function ErrorDashboard() {
     
     // Load logs
     setErrorLogs(errorTrackingService.getErrorLogs(50));
-    setPerformanceMetrics(errorTrackingService.getPerformanceMetrics(50));
   };
 
   useEffect(() => {

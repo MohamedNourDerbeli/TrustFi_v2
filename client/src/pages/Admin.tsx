@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -30,9 +30,7 @@ import { useWallet } from '@/contexts/WalletContext';
 import { reputationCardService } from '@/services/reputationCardService';
 import { useContractData } from '@/hooks/useContractData';
 import { PageLoadingSkeleton } from '@/components/skeletons/PageLoadingSkeleton';
-import { CardLoadingSkeleton } from '@/components/skeletons/CardLoadingSkeleton';
 import { TransactionStatus, type TransactionStatusType } from '@/components/shared/TransactionStatus';
-import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
 
 export default function Admin() {
   const { toast } = useToast();
@@ -48,7 +46,7 @@ export default function Admin() {
   }>>([]);
   const [txStatus, setTxStatus] = useState<TransactionStatusType>('idle');
   const [txMessage, setTxMessage] = useState<string>('');
-  const [txHash, setTxHash] = useState<string>('');
+  const [txHash] = useState<string>('');
   const [revokeIssuerDialog, setRevokeIssuerDialog] = useState<{ open: boolean; issuer: { id: string; name: string; address: string } | null }>({
     open: false,
     issuer: null
@@ -148,7 +146,7 @@ export default function Admin() {
       setTxStatus('pending');
       setTxMessage('Please confirm the transaction in your wallet');
       
-      const tx = await reputationCardService.authorizeIssuer(newIssuer.address);
+      await reputationCardService.authorizeIssuer(newIssuer.address);
       
       // Transaction submitted
       setTxStatus('confirming');

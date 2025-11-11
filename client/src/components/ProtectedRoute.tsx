@@ -7,13 +7,15 @@ import { Button } from '@/components/ui/button';
 import WalletConnectButton from '@/components/WalletConnectButton';
 
 /**
- * Enum representing the reason for authorization failure
+ * Type representing the reason for authorization failure
  */
-export enum AuthFailureReason {
-  NO_WALLET = 'no-wallet',
-  NO_PROFILE = 'no-profile',
-  INSUFFICIENT_ROLE = 'insufficient-role',
-}
+export const AuthFailureReason = {
+  NO_WALLET: 'no-wallet',
+  NO_PROFILE: 'no-profile',
+  INSUFFICIENT_ROLE: 'insufficient-role',
+} as const;
+
+export type AuthFailureReason = typeof AuthFailureReason[keyof typeof AuthFailureReason];
 
 /**
  * Result of role checking operation
@@ -157,7 +159,7 @@ function renderUnauthorizedUI(
   roleCheck: RoleCheckResult,
   customMessage: string | undefined,
   setLocation: (path: string) => void
-): JSX.Element {
+): React.ReactElement {
   const message = customMessage || roleCheck.message || 'Access denied';
   const redirectPath = roleCheck.redirectPath || '/';
 

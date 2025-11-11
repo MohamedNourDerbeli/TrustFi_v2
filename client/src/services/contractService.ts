@@ -57,8 +57,10 @@ export class ContractService {
 
   /**
    * Helper method to track contract operations
+   * @internal Reserved for future use
    */
-  private async trackContractOperation<T>(
+  // @ts-expect-error - Reserved for future use
+  private async _trackContractOperation<T>(
     operationName: string,
     operation: () => Promise<T>,
     context?: Partial<ErrorContext>

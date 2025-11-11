@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,7 +23,6 @@ import {
   Share2, 
   User, 
   Plus, 
-  Loader2,
   Award,
   Eye,
   TrendingUp,
@@ -75,7 +74,7 @@ export default function Dashboard() {
   const [showActivateDialog, setShowActivateDialog] = useState(false);
 
   // Collectibles data
-  const { collectibles } = useCollectibles({ autoFetch: true });
+  const { collectibles } = useCollectibles();
   const collectibleTemplateIds = collectibles.map(c => c.templateId);
   const { claimStatus } = useClaimStatus(collectibleTemplateIds, address || undefined);
 
