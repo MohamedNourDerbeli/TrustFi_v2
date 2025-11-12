@@ -1,0 +1,460 @@
+# Implementation Plan
+
+- [ ] 1. Project Setup and Dependencies
+  - Install Zustand for state management: `npm install zustand`
+  - Install Zod for validation: `npm install zod`
+  - Install react-hot-toast for notifications: `npm install react-hot-toast`
+  - Update Supabase client configuration in `client/src/lib/supabaseClient.ts`
+  - Create environment variable template with all required keys
+  - _Requirements: All requirements depend on proper setup_
+
+- [ ] 2. Supabase Database Setup
+  - [ ] 2.1 Create database schema
+    - Write SQL migration for `profiles` table with all columns (id, wallet_address, profile_nft_id, username, display_name, bio, avatar_url, cover_image_url, privacy_level, reputation_score, is_issuer, is_admin, created_at, updated_at)
+    - Write SQL migration for `notifications` table with all columns (id, user_id, type, title, message, link_url, is_read, created_at)
+    - Create indexes for performance (wallet_address, username, profile_nft_id, user_id)
+    - _Requirements: 11, 12, 13, 15_
+  - [ ] 2.2 Implement Row Level Security policies
+    - Enable RLS on both tables
+    - Create policy for users to update own profile
+    - Create policy for public profile viewing
+    - Create policy for users to view own profile regardless of privacy
+    - Create policy for users to view own notifications
+    - Create policy for users to update own notification read status
+    - _Requirements: 11, 12, 13, 15_
+
+- [ ] 3. State Management with Zustand
+  - [ ] 3.1 Create wallet store
+    - Implement `useWalletStore` with state: address, chainId, isConnected, provider, signer
+    - Add actions: connect, disconnect, switchChain
+    - Persist wallet connection state to localStorage
+    - _Requirements: 2, 6_
+  - [ ] 3.2 Create profile store
+    - Implement `useProfileStore` with state: profile, isLoading, error
+    - Add actions: fetchProfile, updateProfile, setPrivacy
+    - Integrate with Supabase client
+    - _Requirements: 5, 11_
+  - [ ] 3.3 Create notification store
+    - Implement `useNotificationStore` with state: notifications, unreadCount
+    - Add actions: fetchNotifications, markAsRead, addNotification
+    - Set up Realtime subscription for new notifications
+    - _Requirements: 11, 13_
+
+- [ ] 4. Authentication System
+  - [ ] 4.1 Implement Sign in with Ethereum (SIWE)
+    - Create `useAuth` hook with signIn, signOut, and session state
+    - Implement message signing flow with ethers.js
+    - Integrate with Supabase Auth
+    - Handle authentication errors
+    - _Requirements: 6_
+  - [ ] 4.2 Create authentication pages
+    - Build ConnectWallet page with wallet provider buttons (Metamask, WalletConnect, Coinbase, Talisman, Polkadot.js, SubWallet)
+    - Build SignUp page with registration form
+    - Add space-themed background images
+    - Implement form validation with Zod
+    - _Requirements: 6_
+  - [ ] 4.3 Implement protected routes
+    - Create ProtectedRoute component that checks authentication
+    - Add role-based access control (requireIssuer, requireAdmin)
+    - Redirect unauthenticated users to connect wallet page
+    - _Requirements: 6_
+
+- [ ] 5. Core Layout Components
+  - [ ] 5.1 Update Navigation component
+    - Add TrustFi logo with link to home
+    - Implement navigation links (Marketplace, Rankings, Connect Wallet)
+    - Add notification bell with unread count badge
+    - Add user avatar dropdown menu when authenticated
+    - Implement mobile hamburger menu for screens < 768px
+    - Style with dark theme and purple accents
+    - _Requirements: 2, 8_
+  - [ ] 5.2 Create Footer component
+    - Add TrustFi logo and description
+    - Create Explore section with links
+    - Build newsletter subscription form
+    - Add social media icons (Discord, Twitter, GitHub)
+    - Add copyright notice
+    - _Requirements: 10_
+  - [ ] 5.3 Update Layout component
+    - Integrate Navigation and Footer
+    - Add toast notification container
+    - Initialize Realtime subscription for notifications
+    - Add loading states
+    - _Requirements: 2, 10, 11_
+
+- [ ] 6. Homepage Redesign
+  - [ ] 6.1 Create Hero section
+    - Build hero layout with heading, subheading, and CTA button
+    - Add space-themed background gradient
+    - Implement featured collectible display with countdown timer
+    - Make responsive for mobile
+    - _Requirements: 1, 8, 9_
+  - [ ] 6.2 Build Trending Collection section
+    - Create horizontal scrollable grid of collectible cards
+    - Fetch trending collectibles from contract
+    - Implement "View All" link
+    - Add loading skeleton
+    - _Requirements: 1_
+  - [ ] 6.3 Build Top Creators section
+    - Create grid layout (3-4 columns)
+    - Fetch top creators/issuers data
+    - Display avatar, name, and credential count
+    - Add hover effects
+    - _Requirements: 1_
+  - [ ] 6.4 Build Browse Categories section
+    - Create 4-column grid of category cards
+    - Add icons for each category
+    - Implement click navigation to filtered gallery
+    - _Requirements: 1_
+  - [ ] 6.5 Build Notable Drops section
+    - Display upcoming credential releases
+    - Add countdown timers for each drop
+    - Implement "Notify Me" buttons
+    - _Requirements: 1_
+
+- [ ] 7. Dashboard Page
+  - [ ] 7.1 Create Reputation Score card
+    - Display current reputation score prominently
+    - Add "Recalculate Score" button
+    - Implement score recalculation transaction flow (call recalculateMyScore() on ProfileNFT contract)
+    - Show score trend indicator
+    - Display last updated timestamp
+    - _Requirements: 11_
+  - [ ] 7.2 Build Living Profile preview
+    - Fetch dynamic SVG art from ProfileNFT tokenURI
+    - Display SVG with proper rendering
+    - Add "View Full Profile" link
+    - Include explanation text about generative art
+    - _Requirements: 11_
+  - [ ] 7.3 Create Recent Credentials feed
+    - Fetch recent ReputationCards using getCardsByProfile()
+    - Display list with image, title, issuer, date, tier
+    - Add "View All" link to profile
+    - Implement loading states
+    - _Requirements: 11, 12_
+  - [ ] 7.4 Add Quick Actions section
+    - Create "Discover Collectibles" button
+    - Create "View My Profile" button
+    - Create "Settings" button
+    - Style with consistent button patterns
+    - _Requirements: 11_
+
+- [ ] 8. Profile Page Redesign
+  - [ ] 8.1 Build profile header
+    - Create hero banner with cover image
+    - Display large centered avatar
+    - Show username, display name, and bio
+    - Display statistics (reputation score, credentials count, followers)
+    - Add action buttons (Activate Profile, Follow, Share)
+    - _Requirements: 5, 12_
+  - [ ] 8.2 Implement profile tabs
+    - Create tab navigation (Created, Owned, Collections)
+    - Implement tab switching logic
+    - Show appropriate content for each tab
+    - _Requirements: 5_
+  - [ ] 8.3 Build credentials grid
+    - Fetch credentials using getCardsByProfile(profileId)
+    - Display in responsive grid (4 cols desktop, 2 tablet, 1 mobile)
+    - Add filter buttons (All, Credentials, Collectibles)
+    - Implement filtering logic
+    - Show tier badges on each card
+    - _Requirements: 5, 12_
+  - [ ] 8.4 Handle privacy settings
+    - Check privacy_level from Supabase
+    - Show "This profile is private" message when appropriate
+    - Allow profile owner to view regardless of privacy
+    - _Requirements: 5_
+
+- [ ] 9. Collectibles Gallery Page
+  - [ ] 9.1 Create search and filter bar
+    - Build search input with debouncing
+    - Create category filter dropdown
+    - Create sort dropdown (Recent, Popular, Ending Soon)
+    - Implement filtering logic
+    - _Requirements: 4, 13_
+  - [ ] 9.2 Implement tabs
+    - Create NFTs and Collections tabs
+    - Implement tab switching
+    - _Requirements: 4_
+  - [ ] 9.3 Build collectibles grid
+    - Fetch all active CollectibleTemplates from contract
+    - Display in responsive grid layout
+    - Check eligibility for each collectible using isEligibleToClaim()
+    - Show eligibility status badges
+    - Implement "Claim Now" button with proper state (active/disabled/claimed)
+    - _Requirements: 4, 13_
+  - [ ] 9.4 Feature Civic Duty collectible
+    - Give prominent placement to "Civic Duty: Active Polkadot Voter" badge
+    - Display eligibility check clearly
+    - Add special styling
+    - _Requirements: 13_
+  - [ ] 9.5 Implement infinite scroll
+    - Add intersection observer for scroll detection
+    - Load more collectibles when reaching bottom
+    - Show loading indicator
+    - _Requirements: 4_
+
+- [ ] 10. Collectible Detail Page
+  - [ ] 10.1 Create detail layout
+    - Build split layout (image left, details right)
+    - Display large collectible image
+    - Show title, issuer info, description
+    - Display achievement tier badge with score
+    - Add countdown timer if applicable
+    - Show eligibility status
+    - Display statistics (total claimed, max supply)
+    - _Requirements: 3, 12, 13_
+  - [ ] 10.2 Implement claim functionality
+    - Create "Claim Now" button
+    - Implement claiming transaction flow
+    - Handle success and error states
+    - Show transaction confirmation
+    - Update UI after successful claim
+    - _Requirements: 3, 13_
+  - [ ] 10.3 Build "More From This Issuer" section
+    - Fetch related collectibles from same issuer
+    - Display in grid layout
+    - Link to each collectible detail page
+    - _Requirements: 3_
+
+- [ ] 11. Rankings Page
+  - [ ] 11.1 Create rankings header
+    - Display "Top Creators" heading
+    - Build time period tabs (Today, This Week, This Month, All Time)
+    - Implement tab switching
+    - _Requirements: 7_
+  - [ ] 11.2 Build rankings table
+    - Create table with columns: Rank, User, Change %, Credentials, Reputation Score
+    - Fetch rankings data from Supabase or contract
+    - Display avatar, username, and stats for each user
+    - Show change percentage with color coding (green for positive, red for negative)
+    - Add hover effects
+    - Implement click to view profile
+    - _Requirements: 7_
+
+- [ ] 12. Settings Pages
+  - [ ] 12.1 Build Profile Settings page
+    - Create tab navigation (Profile, Application, Security, Activity, Payment Method, API)
+    - Build profile form with avatar upload, display name, bio, email, password fields
+    - Implement avatar upload to Supabase Storage
+    - Add form validation
+    - Implement save functionality with Supabase update
+    - Show success/error messages
+    - _Requirements: 5_
+  - [ ] 12.2 Build Privacy Settings page
+    - Create privacy level toggle (Public/Private)
+    - Add explanation text
+    - Implement save functionality
+    - Update Supabase profiles table
+    - _Requirements: 5_
+  - [ ] 12.3 Build Integrations Settings page
+    - Create Litentry section with description and "Link Litentry Account" button (placeholder)
+    - Create Kilt section with description about credential portability
+    - Add status indicators
+    - Style consistently with other settings pages
+    - _Requirements: 15_
+
+- [ ] 13. Issuer Portal Updates
+  - [ ] 13.1 Update Issue Credential page
+    - Remove value input field
+    - Add achievement tier dropdown with 5 options
+    - Display tier names and associated scores in dropdown
+    - Update form validation
+    - Modify contract call to use tier instead of value
+    - _Requirements: 14_
+  - [ ] 13.2 Update Manage Collectibles page
+    - Update collectibles table to show achievement tier column
+    - Remove value column
+    - Update Create Collectible form with tier dropdown
+    - Modify contract calls to use tier
+    - _Requirements: 14_
+
+- [ ] 14. Shared Components
+  - [ ] 14.1 Create CollectibleCard component
+    - Build card with image, title, issuer info
+    - Add tier badge display
+    - Implement claim status indicator
+    - Add hover effects (scale + shadow)
+    - Make responsive
+    - _Requirements: 1, 4, 5, 12_
+  - [ ] 14.2 Create TierBadge component
+    - Implement tier-to-color mapping
+    - Display tier name and score
+    - Add proper styling for each tier
+    - _Requirements: 12, 14_
+  - [ ] 14.3 Create CountdownTimer component
+    - Implement countdown logic with setInterval
+    - Display in DD:HH:MM:SS format
+    - Handle expiration callback
+    - Use monospace font
+    - _Requirements: 1, 3_
+  - [ ] 14.4 Create NotificationBell component
+    - Build bell icon with badge
+    - Implement dropdown menu
+    - Display recent notifications list
+    - Add "View All" link
+    - Implement mark as read on click
+    - _Requirements: 11_
+  - [ ] 14.5 Update WalletButton component
+    - Handle different connection states
+    - Show shortened address when connected
+    - Add dropdown menu (View Profile, Settings, Disconnect)
+    - Implement disconnect functionality
+    - _Requirements: 2, 6_
+
+- [ ] 15. Contract Integration Hooks
+  - [ ] 15.1 Create useProfileNFT hook
+    - Implement getProfile() function
+    - Implement recalculateMyScore() function
+    - Implement getTokenURI() for living profile art
+    - Handle contract errors
+    - Add loading states
+    - _Requirements: 11, 12_
+  - [ ] 15.2 Create useReputationCard hook
+    - Implement getCardsByProfile(profileId) function
+    - Implement getCollectibleTemplates() function
+    - Implement isEligibleToClaim(templateId, userAddress) function
+    - Implement claimCollectible(templateId) function
+    - Implement getTierScore(tier) function
+    - Handle contract errors
+    - _Requirements: 12, 13_
+  - [ ] 15.3 Create useIssuer hook
+    - Implement issueCredential() function with tier parameter
+    - Implement createCollectible() function with tier parameter
+    - Implement getIssuerCollectibles() function
+    - Handle contract errors
+    - _Requirements: 14_
+
+- [ ] 16. Notification System
+  - [ ] 16.1 Set up Realtime subscription
+    - Initialize Supabase Realtime client in Layout component
+    - Subscribe to INSERT events on notifications table
+    - Filter by current user ID
+    - Handle new notification events
+    - _Requirements: 11_
+  - [ ] 16.2 Implement notification UI
+    - Show toast notification on new notification
+    - Update unread count in NotificationBell
+    - Create Notifications page (/notifications)
+    - Display list of all notifications
+    - Implement mark as read functionality
+    - Add notification type icons
+    - _Requirements: 11_
+
+- [ ] 17. Responsive Design Implementation
+  - [ ] 17.1 Mobile navigation
+    - Implement hamburger menu for screens < 768px
+    - Create mobile menu drawer
+    - Add smooth animations
+    - _Requirements: 2, 9_
+  - [ ] 17.2 Responsive grids
+    - Adjust collectible grids (4 cols → 2 cols → 1 col)
+    - Adjust creator grids
+    - Test on various screen sizes
+    - _Requirements: 1, 4, 5, 9_
+  - [ ] 17.3 Mobile forms
+    - Stack form fields vertically on mobile
+    - Adjust input sizes for touch
+    - Ensure buttons are at least 44x44px
+    - _Requirements: 6, 9_
+  - [ ] 17.4 Typography scaling
+    - Adjust font sizes for mobile readability
+    - Test heading hierarchy
+    - Ensure proper line heights
+    - _Requirements: 8, 9_
+
+- [ ] 18. Dark Theme Refinement
+  - [ ] 18.1 Update CSS variables
+    - Set background colors (#0D1421, #1A202C, #2D3748)
+    - Set primary color (#6F4FF2)
+    - Set text colors (white, light gray, muted gray)
+    - Set border colors
+    - _Requirements: 8_
+  - [ ] 18.2 Apply theme to all components
+    - Update all page components
+    - Update all shared components
+    - Ensure consistent styling
+    - _Requirements: 8_
+  - [ ] 18.3 Verify contrast ratios
+    - Test all text against backgrounds
+    - Ensure WCAG AA compliance
+    - Adjust colors if needed
+    - _Requirements: 8_
+
+- [ ] 19. Error Handling and Loading States
+  - [ ] 19.1 Implement error boundaries
+    - Create ErrorBoundary component
+    - Wrap main app in error boundary
+    - Display user-friendly error messages
+    - _Requirements: All_
+  - [ ] 19.2 Add loading skeletons
+    - Create skeleton components for cards, lists, profiles
+    - Add to all data-fetching components
+    - Implement smooth transitions
+    - _Requirements: All_
+  - [ ] 19.3 Handle contract errors
+    - Catch and display wallet errors
+    - Catch and display contract errors
+    - Show transaction status
+    - Implement retry logic
+    - _Requirements: 11, 12, 13, 14_
+
+- [ ] 20. Performance Optimization
+  - [ ] 20.1 Implement code splitting
+    - Add lazy loading for page components
+    - Wrap in Suspense with fallback
+    - Test bundle sizes
+    - _Requirements: All_
+  - [ ] 20.2 Optimize images
+    - Implement lazy loading for images
+    - Use appropriate image sizes
+    - Add loading placeholders
+    - _Requirements: 1, 3, 4, 5_
+  - [ ] 20.3 Configure React Query caching
+    - Set appropriate stale times
+    - Configure cache times
+    - Implement query invalidation
+    - _Requirements: All_
+
+- [ ]* 21. Testing
+  - [ ]* 21.1 Write unit tests for hooks
+    - Test useWallet hook
+    - Test useProfile hook
+    - Test useNotification hook
+    - Test contract hooks
+    - _Requirements: All_
+  - [ ]* 21.2 Write component tests
+    - Test CollectibleCard component
+    - Test TierBadge component
+    - Test NotificationBell component
+    - Test form components
+    - _Requirements: All_
+  - [ ]* 21.3 Manual testing checklist
+    - Test wallet connection flow
+    - Test profile creation and editing
+    - Test collectible claiming
+    - Test score recalculation
+    - Test notification system
+    - Test responsive design
+    - Test accessibility
+    - _Requirements: All_
+
+- [ ] 22. Documentation and Deployment
+  - [ ] 22.1 Update README
+    - Document setup instructions
+    - List environment variables
+    - Add development commands
+    - Include deployment instructions
+    - _Requirements: All_
+  - [ ] 22.2 Create deployment configuration
+    - Set up Vercel/Netlify project
+    - Configure environment variables
+    - Set up custom domain
+    - Configure redirects
+    - _Requirements: All_
+  - [ ] 22.3 Deploy to production
+    - Run final build
+    - Deploy to hosting platform
+    - Verify all functionality
+    - Monitor for errors
+    - _Requirements: All_
