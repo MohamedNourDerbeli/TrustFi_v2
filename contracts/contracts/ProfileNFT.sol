@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 
 // Interface for the ReputationCard contract to call it
@@ -9,7 +10,7 @@ interface IReputationCard {
     function calculateScoreForProfile(uint256 profileId) external view returns (uint256);
 }
 
-contract ProfileNFT is ERC721, AccessControl {
+contract ProfileNFT is ERC721, AccessControl, IERC721Receiver {
     // --- ROLES ---
     bytes32 public constant SCORE_PROVIDER_ROLE = keccak256("SCORE_PROVIDER_ROLE");
 
@@ -54,6 +55,18 @@ contract ProfileNFT is ERC721, AccessControl {
         emit ScoreUpdated(profileId, newScore);
     }
 
+    /**
+     * @dev Updates the metadata URI for a profile. Only the owner of the token can call this.
+     */
+    function updateProfileMetadata(string memory _newMetadataURI) public {
+        uint256 tokenId = addressToProfileId[msg.sender];
+        require(tokenId != 0, "No profile found for this address");
+        require(_ownerOf(tokenId) == msg.sender, "Caller is not owner of this token");
+        
+        _setTokenURI(tokenId, _newMetadataURI);
+        // We don't need a dedicated event, the front-end can just refetch.
+    }
+
     // --- ADMIN & CONFIG ---
     function setScoreProvider(address providerAddress) public onlyRole(DEFAULT_ADMIN_ROLE) {
         if (scoreProviderAddress != address(0)) {
@@ -84,6 +97,19 @@ contract ProfileNFT is ERC721, AccessControl {
     }
 
     function supportsInterface(bytes4 interfaceId) public view override(ERC721, AccessControl) returns (bool) {
-        return super.supportsInterface(interfaceId);
+        return interfaceId == type(IERC721Receiver).interfaceId || super.supportsInterface(interfaceId);
+    }
+
+    // --- IERC721Receiver IMPLEMENTATION ---
+    /**
+     * @dev Allows this contract to receive ERC721 tokens (ReputationCards)
+     */
+    function onERC721Received(
+        address,
+        address,
+        uint256,
+        bytes calldata
+    ) external pure override returns (bytes4) {
+        return IERC721Receiver.onERC721Received.selector;
     }
 }

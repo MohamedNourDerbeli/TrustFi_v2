@@ -87,9 +87,12 @@ export default function CreateProfilePage() {
 
   // This useEffect hook listens for the transaction to be confirmed and saves the profile
   useEffect(() => {
+    console.log('useEffect triggered - isConfirmed:', isConfirmed, 'receipt:', !!receipt, 'user:', !!user);
+    
     const saveProfile = async () => {
       if (isConfirmed && receipt && user) {
         console.log('Transaction confirmed! Hash:', receipt.transactionHash);
+        console.log('Receipt logs:', receipt.logs);
         setStatus('saving');
         try {
           // --- PARSE THE TOKEN ID FROM THE LOGS (ROBUST VERSION) ---
@@ -189,6 +192,21 @@ export default function CreateProfilePage() {
             {isLoading ? (<><div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />{statusText}</>) : (statusText)}
           </button>
         </form>
+
+        {hash && isConfirming && (
+          <div className="mt-6 p-4 bg-blue-900/50 border border-blue-700 rounded-lg">
+            <p className="font-semibold text-center mb-2">Transaction Submitted</p>
+            <p className="text-sm text-gray-300 text-center mb-2">Waiting for confirmation on Moonbase Alpha testnet...</p>
+            <a 
+              href={`https://moonbase.moonscan.io/tx/${hash}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-blue-400 hover:text-blue-300 underline block text-center"
+            >
+              View on Block Explorer
+            </a>
+          </div>
+        )}
 
         {status === 'error' && (
           <div className="mt-6 p-4 bg-red-900/50 border border-red-700 rounded-lg text-center">

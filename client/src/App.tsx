@@ -3,7 +3,7 @@ import { useAuth } from "./hooks/useAuth";
 
 // --- WAGMI IMPORTS ---
 import { WagmiProvider, createConfig, http } from 'wagmi';
-import { localhost } from 'wagmi/chains';
+import { moonbaseAlpha } from 'wagmi/chains';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // --- PAGE IMPORTS ---
@@ -13,13 +13,14 @@ import DashboardPage from "./pages/DashboardPage";
 import CreateProfilePage from "./pages/CreateProfilePage";
 import MyProfilePage from "./pages/MyProfilePage";
 import CollectiblesPage from "./pages/CollectiblesPage";
+import SettingsPage from "./pages/SettingsPage";
 
-// Wagmi config for localhost Hardhat network
+// Wagmi config for Moonbase Alpha testnet
 const config = createConfig({
-  chains: [localhost],
+  chains: [moonbaseAlpha],
   multiInjectedProviderDiscovery: true,
   transports: {
-    [localhost.id]: http('http://127.0.0.1:8545'),
+    [moonbaseAlpha.id]: http('https://rpc.api.moonbase.moonbeam.network'),
   },
 });
 const queryClient = new QueryClient();
@@ -71,6 +72,12 @@ export default function App() {
           <Route path="/collectibles">
             <PrivateRoute>
               <CollectiblesPage />
+            </PrivateRoute>
+          </Route>
+
+          <Route path="/settings">
+            <PrivateRoute>
+              <SettingsPage />
             </PrivateRoute>
           </Route>
           

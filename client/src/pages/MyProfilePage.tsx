@@ -27,7 +27,10 @@ export default function MyProfilePage( ) {
 
       setIsLoadingCards(true);
       try {
-        // 1. Fetch 'CardIssued' events from the blockchain where the profileId matches the user's
+        // 1. Get current block number and fetch recent events (last 1000 blocks to stay under limit)
+        const currentBlock = await publicClient.getBlockNumber();
+        const fromBlock = currentBlock > 1000n ? currentBlock - 1000n : 0n;
+        
         const logs = await publicClient.getLogs({
           address: REPUTATION_CARD_CONTRACT_ADDRESS,
           event: {
@@ -43,7 +46,7 @@ export default function MyProfilePage( ) {
           args: {
             profileId: BigInt(profile.profile_nft_id || 0),
           },
-          fromBlock: 'earliest', // In production, you'd use a more recent block
+          fromBlock,
           toBlock: 'latest',
         });
 
@@ -61,13 +64,26 @@ export default function MyProfilePage( ) {
 
         const fetchedCards = await Promise.all(cardPromises);
 
-        // 3. For each card, fetch its metadata from IPFS
+        // 3. For each card, fetch its metadata from IPFS with error handling
         const metadataPromises = fetchedCards.map(async (card) => {
           if (card.uri) {
-            const metadataUrl = card.uri.replace('ipfs://', 'https://gateway.pinata.cloud/ipfs/' );
-            const response = await fetch(metadataUrl);
-            const metadata = await response.json();
-            return { ...card, metadata };
+            try {
+              const metadataUrl = card.uri.replace('ipfs://', 'https://gateway.pinata.cloud/ipfs/');
+              const response = await fetch(metadataUrl, {
+                signal: AbortSignal.timeout(5000), // 5 second timeout
+              });
+              
+              if (!response.ok) {
+                console.warn(`Failed to fetch metadata for card ${card.id}: ${response.status}`);
+                return card; // Return card without metadata
+              }
+              
+              const metadata = await response.json();
+              return { ...card, metadata };
+            } catch (error) {
+              console.warn(`Error fetching metadata for card ${card.id}:`, error);
+              return card; // Return card without metadata on error
+            }
           }
           return card;
         });
@@ -107,8 +123,26 @@ export default function MyProfilePage( ) {
           </Link>
         </div>
 
-        {/* Main Profile NFT Section (unchanged) */}
-        <div className="bg-[#1A202C] border border-[#374151] rounded-lg p-6 flex flex-col md:flex-row gap-6"> ... </div>
+        {/* Main Profile NFT Section */}
+        <div className="bg-[#1A202C] border border-[#374151] rounded-lg p-6">
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <h2 className="text-2xl font-bold">{profile.username}</h2>
+              {profile.bio && <p className="text-gray-400 mt-2">{profile.bio}</p>}
+            </div>
+            <Link href="/settings" className="text-sm font-semibold text-indigo-400 hover:text-indigo-300">
+              Edit Profile
+            </Link>
+          </div>
+          <div className="mt-4 space-y-2">
+            <p className="text-sm text-gray-400">
+              <span className="font-semibold">Profile NFT ID:</span> {profile.profile_nft_id || 'N/A'}
+            </p>
+            <p className="text-sm text-gray-400">
+              <span className="font-semibold">Member since:</span> {new Date(profile.created_at).toLocaleDateString()}
+            </p>
+          </div>
+        </div>
 
         {/* --- THIS IS THE UPDATED SECTION --- */}
         <div className="mt-12">
@@ -119,9 +153,28 @@ export default function MyProfilePage( ) {
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {cards.map((card) => (
                 <div key={card.id.toString()} className="bg-[#1A202C] border border-[#374151] rounded-lg overflow-hidden">
-                  <img src={card.metadata?.image || 'https://via.placeholder.com/300'} alt={card.metadata?.name} className="w-full h-32 object-cover" />
+                  {card.metadata?.image ? (
+                    <img 
+                      src={card.metadata.image.replace('ipfs://', 'https://gateway.pinata.cloud/ipfs/')} 
+                      alt={card.metadata?.name || `Card #${card.id}`}
+                      className="w-full h-32 object-cover"
+                      onError={(e) => {
+                        // Fallback to placeholder on image load error
+                        (e.target as HTMLImageElement).src = 'https://via.placeholder.com/300?text=Card+' + card.id;
+                      }}
+                    />
+                  ) : (
+                    <div className="w-full h-32 bg-gray-700 flex items-center justify-center">
+                      <span className="text-gray-500">Card #{card.id.toString()}</span>
+                    </div>
+                  )}
                   <div className="p-3">
-                    <h4 className="font-bold text-md truncate">{card.metadata?.name}</h4>
+                    <h4 className="font-bold text-md truncate">
+                      {card.metadata?.name || `Reputation Card #${card.id}`}
+                    </h4>
+                    {card.metadata?.description && (
+                      <p className="text-xs text-gray-400 mt-1 line-clamp-2">{card.metadata.description}</p>
+                    )}
                   </div>
                 </div>
                ))}

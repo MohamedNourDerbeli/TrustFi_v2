@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useUser } from '@/hooks/useUser';
+import { useAuth } from '@/hooks/useAuth';
+import { useWriteContract, useWaitForTransactionReceipt, useAccount } from 'wagmi';
+import { REPUTATION_CARD_CONTRACT_ADDRESS } from '@/lib/contracts';
+import ReputationCardAbi from '@/lib/ReputationCard.abi.json';
 
 // Define the type for our template data
 interface CollectibleTemplate {
@@ -10,6 +14,7 @@ interface CollectibleTemplate {
   description: string;
   image_url: string;
   tier: number;
+  template_id: number; // The on-chain template ID
 }
 
 export default function CollectiblesPage() {
@@ -64,21 +69,57 @@ export default function CollectiblesPage() {
 
 // A sub-component for each collectible card
 function CollectibleCard({ template, profileId }: { template: CollectibleTemplate, profileId: number | undefined }) {
-  const [isLoading, setIsLoading] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(false);
+  const { user } = useAuth();
+  const { address } = useAccount(); // Get wallet address from wagmi
   const [claimError, setClaimError] = useState<string | null>(null);
 
+  // --- WAGMI HOOKS FOR THE CONTRACT CALL ---
+  const { data: hash, writeContract, isPending } = useWriteContract();
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
   const handleClaim = async () => {
-    if (!profileId) {
-      setClaimError("You must have a TrustFi profile to claim collectibles.");
+    if (!profileId || !user || !address) {
+      setClaimError("You must be logged in, have a profile, and connect your wallet to claim collectibles.");
       return;
     }
     
-    setIsLoading(true);
     setClaimError(null);
 
     try {
-      // 1. Create metadata for this collectible
+      // 1. Get signature from backend
+      const templateId = template.template_id || 1; // Default to 1 if not set
+      console.log("Requesting signature for template:", templateId);
+      console.log("Wallet address:", address);
+      console.log("Full template object:", JSON.stringify(template, null, 2));
+      
+      const requestBody = {
+        userAddress: address, // Use wallet address from wagmi
+        templateId: templateId,
+      };
+      console.log("Request body:", JSON.stringify(requestBody, null, 2));
+      
+      const { data: signatureData, error: signatureError } = await supabase.functions.invoke('generate-signature', {
+        body: requestBody,
+      });
+
+      console.log("Signature response:", { signatureData, signatureError });
+
+      if (signatureError) {
+        throw new Error(`Signature error: ${signatureError.message}`);
+      }
+      
+      if (signatureData?.error) {
+        throw new Error(`Backend error: ${signatureData.error}`);
+      }
+
+      if (!signatureData?.nonce || !signatureData?.signature) {
+        throw new Error("Invalid signature response - missing nonce or signature");
+      }
+
+      const { nonce, signature } = signatureData;
+      console.log("Received signature:", signatureData);
+
+      // 2. Create metadata for this collectible
       const metadataPayload = {
         name: template.title,
         description: template.description,
@@ -89,42 +130,52 @@ function CollectibleCard({ template, profileId }: { template: CollectibleTemplat
         ]
       };
 
-      // 2. Upload metadata to IPFS
+      // 3. Upload metadata to IPFS
       const { data: pinResponse, error: pinError } = await supabase.functions.invoke('pin-metadata', {
         body: { metadata: metadataPayload },
       });
 
       if (pinError || pinResponse?.error) {
-        throw new Error(pinError?.message || pinResponse.error);
+        throw new Error(pinError?.message || pinResponse?.error);
       }
       const metadataURI = `ipfs://${pinResponse.IpfsHash}`;
 
-      // 3. Call our secure backend function to issue the card
-      const { data: issueResponse, error: issueError } = await supabase.functions.invoke('issue-card', {
-        body: {
-          profileId: profileId,
-          tier: template.tier,
-          tokenURI: metadataURI,
-        },
+      // 4. --- THIS IS THE FINAL STEP ---
+      // Call claimWithSignature on the smart contract
+      console.log("Claiming on-chain with signature...");
+      console.log("Contract call parameters:");
+      console.log("  address:", REPUTATION_CARD_CONTRACT_ADDRESS);
+      console.log("  _user:", address);
+      console.log("  _profileOwner:", address);
+      console.log("  _templateId:", templateId);
+      console.log("  _nonce:", nonce);
+      console.log("  _tokenURI:", metadataURI);
+      console.log("  _signature:", signature);
+      
+      writeContract({
+        address: REPUTATION_CARD_CONTRACT_ADDRESS,
+        abi: ReputationCardAbi,
+        functionName: 'claimWithSignature',
+        args: [
+          address,                    // _user (wallet address from wagmi)
+          address,                    // _profileOwner (the same wallet address)
+          templateId,                 // _templateId
+          nonce,                      // _nonce
+          metadataURI,                // _tokenURI
+          signature,                  // _signature
+        ],
       });
-
-      if (issueError || issueResponse?.error) {
-        throw new Error(issueError?.message || issueResponse.error);
-      }
-
-      console.log("Successfully issued card:", issueResponse);
-      setIsSuccess(true);
 
     } catch (error: any) {
       console.error("Claim failed:", error);
       setClaimError(error.message || "Failed to claim collectible.");
-    } finally {
-      setIsLoading(false);
     }
   };
 
+  const isLoading = isPending || isConfirming;
   let buttonText = "Claim";
-  if (isLoading) buttonText = "Claiming...";
+  if (isPending) buttonText = "Awaiting Wallet...";
+  if (isConfirming) buttonText = "Confirming...";
   if (isSuccess) buttonText = "Claimed!";
 
   return (
