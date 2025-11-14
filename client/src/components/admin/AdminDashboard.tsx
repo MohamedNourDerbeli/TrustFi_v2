@@ -1,10 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../lib/supabase';
-import { useContractRead } from 'wagmi';
-import { type Address } from 'viem';
-import { REPUTATION_CARD_CONTRACT_ADDRESS } from '../../lib/contracts';
-import ReputationCardAbi from '../../lib/ReputationCard.abi.json';
 import { Link } from 'react-router-dom';
 
 interface DashboardStats {

@@ -175,7 +175,7 @@ export function ProfileEdit() {
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           <p className="mt-1 text-sm text-gray-500">
-            {formData.displayName.length}/50 characters
+            {formData.displayName?.length || 0}/50 characters
           </p>
         </div>
 
@@ -195,7 +195,7 @@ export function ProfileEdit() {
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           <p className="mt-1 text-sm text-gray-500">
-            {formData.bio.length}/500 characters
+            {formData.bio?.length || 0}/500 characters
           </p>
         </div>
 

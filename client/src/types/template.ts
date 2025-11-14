@@ -12,6 +12,7 @@ export interface Template {
   startTime: bigint;
   endTime: bigint;
   isPaused: boolean;
+  hasClaimed?: boolean; // Optional field for user-specific claim status
 }
 
 export interface CreateTemplateParams {

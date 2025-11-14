@@ -1,7 +1,6 @@
 // components/user/CreateProfile.tsx
 import { useState, useEffect, useCallback } from 'react';
 import { useAccount, useContractWrite, useWaitForTransaction, usePublicClient } from 'wagmi';
-import { parseAbiItem } from 'viem';
 import { PROFILE_NFT_CONTRACT_ADDRESS } from '../../lib/contracts';
 import ProfileNFTABI from '../../lib/ProfileNFT.abi.json';
 import { supabase } from '../../lib/supabase';

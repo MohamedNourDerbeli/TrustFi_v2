@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS profiles (
   profile_id BIGINT UNIQUE NOT NULL,
   token_uri TEXT NOT NULL,
   display_name VARCHAR(255),
+  username VARCHAR(20) UNIQUE,
   bio TEXT,
   avatar_url TEXT,
   banner_url TEXT,
@@ -24,6 +25,7 @@ CREATE TABLE IF NOT EXISTS profiles (
 -- Create indexes for profiles table
 CREATE INDEX IF NOT EXISTS idx_profiles_wallet ON profiles(wallet);
 CREATE INDEX IF NOT EXISTS idx_profiles_profile_id ON profiles(profile_id);
+CREATE INDEX IF NOT EXISTS idx_profiles_username ON profiles(username);
 
 -- Templates cache table (for faster queries)
 CREATE TABLE IF NOT EXISTS templates_cache (
