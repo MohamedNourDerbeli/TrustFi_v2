@@ -5,33 +5,44 @@ import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 
-// Interface for the ReputationCard contract to call it
-interface IReputationCard {
+/// @dev Minimal interface used for calling calculateScoreForProfile
+interface IReputationCalculator {
     function calculateScoreForProfile(uint256 profileId) external view returns (uint256);
 }
 
+/// @title ProfileNFT (Soulbound profile holding ReputationCards)
 contract ProfileNFT is ERC721, AccessControl, IERC721Receiver {
-    // --- ROLES ---
-    bytes32 public constant SCORE_PROVIDER_ROLE = keccak256("SCORE_PROVIDER_ROLE");
+    bytes32 public constant DEFAULT_ADMIN = DEFAULT_ADMIN_ROLE;
 
-    // --- STATE ---
-    uint256 private _nextTokenId = 1; // Start at 1 to avoid collision with default mapping value
-    address public scoreProviderAddress;
+    uint256 private _nextTokenId = 1; // start at 1 to avoid tokenId == 0
+    address public reputationContract; // ReputationCard contract
+
     mapping(address => uint256) public addressToProfileId;
     mapping(uint256 => uint256) public profileIdToScore;
     mapping(uint256 => string) private _tokenURIs;
 
-    // --- EVENTS ---
+    // profileId => attached cardIds
+    mapping(uint256 => uint256[]) private profileToCards;
+    // cardId => profileId
+    mapping(uint256 => uint256) public cardToProfile;
+
     event ProfileCreated(uint256 indexed tokenId, address indexed owner, string tokenURI);
     event ScoreUpdated(uint256 indexed tokenId, uint256 newScore);
+    event ReputationContractSet(address indexed previous, address indexed current);
+    event CardAttached(uint256 indexed profileId, uint256 indexed cardId);
 
-    constructor(address admin) ERC721("TrustFi Profile", "TFP") {
-        _grantRole(DEFAULT_ADMIN_ROLE, admin);
+    modifier onlyReputationContract() {
+        require(msg.sender == reputationContract, "Only reputation contract");
+        _;
     }
 
-    // --- CORE FUNCTIONS ---
-    function createProfile(string memory _tokenURI) public returns (uint256) {
-        require(addressToProfileId[msg.sender] == 0, "Profile already exists for this address");
+    constructor(address admin) ERC721("TrustFi Profile", "TFP") {
+        _grantRole(DEFAULT_ADMIN, admin);
+    }
+
+    /// @notice Create a soulbound profile for msg.sender
+    function createProfile(string calldata _tokenURI) external returns (uint256) {
+        require(addressToProfileId[msg.sender] == 0, "Profile exists");
 
         uint256 tokenId = _nextTokenId++;
         _mint(msg.sender, tokenId);
@@ -43,73 +54,71 @@ contract ProfileNFT is ERC721, AccessControl, IERC721Receiver {
         return tokenId;
     }
 
-    function recalculateMyScore() public {
+    /// @notice Recalculate score using external ReputationCard
+    function recalculateMyScore() external {
         uint256 profileId = addressToProfileId[msg.sender];
-        require(profileId != 0, "No profile found for this address");
+        require(profileId != 0, "No profile found");
+        require(reputationContract != address(0), "Reputation contract not set");
 
-        require(scoreProviderAddress != address(0), "Score provider not set");
-
-        uint256 newScore = IReputationCard(scoreProviderAddress).calculateScoreForProfile(profileId);
+        uint256 newScore = IReputationCalculator(reputationContract).calculateScoreForProfile(profileId);
         profileIdToScore[profileId] = newScore;
 
         emit ScoreUpdated(profileId, newScore);
     }
 
-    /**
-     * @dev Updates the metadata URI for a profile. Only the owner of the token can call this.
-     */
-    function updateProfileMetadata(string memory _newMetadataURI) public {
+    /// @notice Update profile metadata
+    function updateProfileMetadata(string calldata _newMetadataURI) external {
         uint256 tokenId = addressToProfileId[msg.sender];
-        require(tokenId != 0, "No profile found for this address");
-        require(_ownerOf(tokenId) == msg.sender, "Caller is not owner of this token");
-        
+        require(tokenId != 0, "No profile found");
+        require(ownerOf(tokenId) == msg.sender, "Not owner");
         _setTokenURI(tokenId, _newMetadataURI);
-        // We don't need a dedicated event, the front-end can just refetch.
     }
 
-    // --- ADMIN & CONFIG ---
-    function setScoreProvider(address providerAddress) public onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (scoreProviderAddress != address(0)) {
-            revokeRole(SCORE_PROVIDER_ROLE, scoreProviderAddress);
-        }
-        scoreProviderAddress = providerAddress;
-        grantRole(SCORE_PROVIDER_ROLE, providerAddress);
+    /// @notice Admin sets the reputation contract address
+    function setReputationContract(address _reputationContract) external onlyRole(DEFAULT_ADMIN) {
+        address prev = reputationContract;
+        reputationContract = _reputationContract;
+        emit ReputationContractSet(prev, _reputationContract);
     }
 
-    // --- SOULBOUND LOGIC (OZ v5 style) ---
-    function _update(address to, uint256 tokenId, address auth) internal override returns (address) {
-        if (_ownerOf(tokenId) != address(0)) {
-            require(_ownerOf(tokenId) == to, "ProfileNFTs are non-transferable");
-        }
-        return super._update(to, tokenId, auth);
+    /// @notice Called by ReputationCard when a new card is minted
+    function notifyNewCard(uint256 profileId, uint256 cardId) external onlyReputationContract {
+        require(_ownerOf(profileId) != address(0), "Profile does not exist");
+        profileToCards[profileId].push(cardId);
+        cardToProfile[cardId] = profileId;
+        emit CardAttached(profileId, cardId);
     }
 
-    // --- URI STORAGE (OZ v5 style) ---
-    function _setTokenURI(uint256 tokenId, string memory _tokenURIValue) internal virtual {
+    /// @notice Get list of card IDs attached to a profile
+    function getCardsForProfile(uint256 profileId) external view returns (uint256[] memory) {
+        return profileToCards[profileId];
+    }
+
+    /// @dev Internal tokenURI storage
+    function _setTokenURI(uint256 tokenId, string memory _tokenURIValue) internal {
         _tokenURIs[tokenId] = _tokenURIValue;
     }
 
     function tokenURI(uint256 tokenId) public view override returns (string memory) {
-        _requireOwned(tokenId);
+        require(_ownerOf(tokenId) != address(0), "Nonexistent token");
         string memory _tokenURIValue = _tokenURIs[tokenId];
-        require(bytes(_tokenURIValue).length > 0, "ERC721: URI query for nonexistent token");
+        require(bytes(_tokenURIValue).length > 0, "Empty tokenURI");
         return _tokenURIValue;
     }
 
-    function supportsInterface(bytes4 interfaceId) public view override(ERC721, AccessControl) returns (bool) {
-        return interfaceId == type(IERC721Receiver).interfaceId || super.supportsInterface(interfaceId);
+    /// @dev Soulbound: blocks transfers after mint (except burn)
+    function _update(address to, uint256 tokenId, address auth) internal override returns (address) {
+        address from = _ownerOf(tokenId);
+        if (from != address(0) && to != address(0)) revert("Non-transferable");
+        return super._update(to, tokenId, auth);
     }
 
-    // --- IERC721Receiver IMPLEMENTATION ---
-    /**
-     * @dev Allows this contract to receive ERC721 tokens (ReputationCards)
-     */
-    function onERC721Received(
-        address,
-        address,
-        uint256,
-        bytes calldata
-    ) external pure override returns (bytes4) {
+    /// @notice Accept ERC721s (ReputationCards)
+    function onERC721Received(address, address, uint256, bytes calldata) external pure override returns (bytes4) {
         return IERC721Receiver.onERC721Received.selector;
+    }
+
+    function supportsInterface(bytes4 interfaceId) public view override(ERC721, AccessControl) returns (bool) {
+        return super.supportsInterface(interfaceId);
     }
 }

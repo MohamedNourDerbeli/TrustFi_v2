@@ -265,31 +265,6 @@
   },
   {
     "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "profileId",
-        "type": "uint256"
-      },
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "cardId",
-        "type": "uint256"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "recipient",
-        "type": "address"
-      }
-    ],
-    "name": "DirectIssue",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
     "inputs": [],
     "name": "EIP712DomainChanged",
     "type": "event"
@@ -458,6 +433,19 @@
   },
   {
     "inputs": [],
+    "name": "DEFAULT_ADMIN",
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "DEFAULT_ADMIN_ROLE",
     "outputs": [
       {
@@ -523,15 +511,15 @@
     "inputs": [
       {
         "internalType": "uint256",
-        "name": "",
+        "name": "profileId",
         "type": "uint256"
       }
     ],
-    "name": "cardToProfileId",
+    "name": "calculateScoreForProfile",
     "outputs": [
       {
         "internalType": "uint256",
-        "name": "",
+        "name": "total",
         "type": "uint256"
       }
     ],
@@ -542,32 +530,32 @@
     "inputs": [
       {
         "internalType": "address",
-        "name": "_user",
+        "name": "user",
         "type": "address"
       },
       {
         "internalType": "address",
-        "name": "_profileOwner",
+        "name": "profileOwner",
         "type": "address"
       },
       {
         "internalType": "uint256",
-        "name": "_templateId",
+        "name": "templateId",
         "type": "uint256"
       },
       {
         "internalType": "uint256",
-        "name": "_nonce",
+        "name": "nonce",
         "type": "uint256"
       },
       {
         "internalType": "string",
-        "name": "_tokenURI",
+        "name": "tokenURI_",
         "type": "string"
       },
       {
         "internalType": "bytes",
-        "name": "_signature",
+        "name": "signature",
         "type": "bytes"
       }
     ],
@@ -586,32 +574,32 @@
     "inputs": [
       {
         "internalType": "uint256",
-        "name": "_templateId",
+        "name": "templateId",
         "type": "uint256"
       },
       {
         "internalType": "address",
-        "name": "_issuer",
+        "name": "issuer",
         "type": "address"
       },
       {
         "internalType": "uint256",
-        "name": "_maxSupply",
+        "name": "maxSupply",
         "type": "uint256"
       },
       {
         "internalType": "uint8",
-        "name": "_tier",
+        "name": "tier",
         "type": "uint8"
       },
       {
         "internalType": "uint256",
-        "name": "_startTime",
+        "name": "startTime",
         "type": "uint256"
       },
       {
         "internalType": "uint256",
-        "name": "_endTime",
+        "name": "endTime",
         "type": "uint256"
       }
     ],
@@ -727,12 +715,12 @@
         "type": "uint256"
       },
       {
-        "internalType": "address",
+        "internalType": "uint256",
         "name": "",
-        "type": "address"
+        "type": "uint256"
       }
     ],
-    "name": "hasClaimed",
+    "name": "hasProfileClaimed",
     "outputs": [
       {
         "internalType": "bool",
@@ -795,17 +783,17 @@
     "inputs": [
       {
         "internalType": "address",
-        "name": "_recipient",
+        "name": "recipient",
         "type": "address"
       },
       {
         "internalType": "uint256",
-        "name": "_templateId",
+        "name": "templateId",
         "type": "uint256"
       },
       {
         "internalType": "string",
-        "name": "_tokenURI",
+        "name": "tokenURI_",
         "type": "string"
       }
     ],
@@ -974,12 +962,12 @@
     "inputs": [
       {
         "internalType": "uint256",
-        "name": "_templateId",
+        "name": "templateId",
         "type": "uint256"
       },
       {
         "internalType": "bool",
-        "name": "_isPaused",
+        "name": "isPaused",
         "type": "bool"
       }
     ],
@@ -1146,6 +1134,35 @@
     "name": "transferFrom",
     "outputs": [],
     "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "name": "usedNonceForTemplate",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
     "type": "function"
   }
 ]
