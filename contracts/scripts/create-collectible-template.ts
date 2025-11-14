@@ -1,7 +1,7 @@
 import { ethers } from "hardhat";
 
 // --- CONFIGURATION ---
-const REPUTATION_CARD_ADDRESS = "0x4BfAe884ED15192caE5CA84A46E568Ff0C2fba1D"; // ReputationCard on Moonbase Alpha
+const REPUTATION_CARD_ADDRESS = "0xC03c6513c7434784Ae78C9D4C9c205260fF6c3A5"; // ReputationCard on Moonbase Alpha
 const ISSUER_WALLET_ADDRESS = "0xdda82d845696f6fbf6fe6d4e8084a520ccc27ceb"; // The Issuer wallet address
 
 // --- TEMPLATE DETAILS ---
