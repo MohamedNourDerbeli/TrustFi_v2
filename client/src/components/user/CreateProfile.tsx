@@ -49,7 +49,7 @@ export function CreateProfile() {
     // Generate and upload metadata to IPFS (or fallback to data URI)
     const tokenURI = await generateAndUploadMetadata({
       displayName: formData.displayName,
-      bio: `@${formData.username}`,
+      bio: '', // Bio is empty on creation, can be added later
       avatarUrl: formData.avatarUrl,
       bannerUrl: formData.bannerUrl,
       websiteUrl: '',
@@ -197,7 +197,8 @@ export function CreateProfile() {
         profile_id: profileId.toString(),
         token_uri: generatedTokenURI || '',
         display_name: formData.displayName,
-        bio: `@${formData.username}`,
+        username: formData.username,
+        bio: null, // Bio can be added later when editing profile
         avatar_url: formData.avatarUrl || null,
         banner_url: formData.bannerUrl || null,
         twitter_handle: null,

@@ -36,17 +36,38 @@ export function useTemplates(profileId?: bigint | null): UseTemplatesReturn {
       setLoading(true);
       setError(null);
 
-      // TEMPORARY FIX: Return empty templates to avoid rate limiting
-      // TODO: Implement proper solution (Subgraph, Supabase cache, or private RPC)
-      console.warn('Template fetching disabled due to RPC rate limits. Please implement Supabase cache or use private RPC.');
+      // Get current block number
+      const latestBlock = await publicClient.getBlockNumber();
       
-      const templateCreatedEvents: any[] = [];
+      // Fetch events in smaller chunks to avoid rate limits
+      const CHUNK_SIZE = 1000n;
+      const allEvents: any[] = [];
       
-      // If you have templates, you can manually add them here for testing:
-      // const templateCreatedEvents = [
-      //   { args: { templateId: 1n } },
-      //   { args: { templateId: 2n } },
-      // ];
+      // Only fetch last 10k blocks to reduce RPC calls
+      const startBlock = latestBlock > 10000n ? latestBlock - 10000n : 0n;
+      
+      console.log(`Fetching templates from block ${startBlock} to ${latestBlock}`);
+      
+      for (let fromBlock = startBlock; fromBlock <= latestBlock; fromBlock += CHUNK_SIZE) {
+        const toBlock = fromBlock + CHUNK_SIZE > latestBlock ? latestBlock : fromBlock + CHUNK_SIZE;
+        
+        try {
+          const events = await publicClient.getLogs({
+            address: REPUTATION_CARD_CONTRACT_ADDRESS as Address,
+            event: parseAbiItem('event TemplateCreated(uint256 indexed templateId, address indexed issuer, uint256 maxSupply, uint8 tier, uint256 startTime, uint256 endTime)'),
+            fromBlock,
+            toBlock,
+          });
+          
+          allEvents.push(...events);
+          console.log(`Fetched ${events.length} events from blocks ${fromBlock}-${toBlock}`);
+        } catch (chunkError) {
+          console.warn(`Error fetching events from block ${fromBlock} to ${toBlock}:`, chunkError);
+          // Continue with next chunk even if one fails
+        }
+      }
+      
+      const templateCreatedEvents = allEvents;
 
       // Extract unique template IDs
       const templateIds = Array.from(
