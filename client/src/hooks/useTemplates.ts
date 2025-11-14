@@ -36,13 +36,17 @@ export function useTemplates(profileId?: bigint | null): UseTemplatesReturn {
       setLoading(true);
       setError(null);
 
-      // Get all TemplateCreated events to find template IDs
-      const templateCreatedEvents = await publicClient.getLogs({
-        address: REPUTATION_CARD_CONTRACT_ADDRESS as Address,
-        event: parseAbiItem('event TemplateCreated(uint256 indexed templateId, address indexed issuer, uint256 maxSupply, uint8 tier, uint256 startTime, uint256 endTime)'),
-        fromBlock: 0n,
-        toBlock: 'latest',
-      });
+      // TEMPORARY FIX: Return empty templates to avoid rate limiting
+      // TODO: Implement proper solution (Subgraph, Supabase cache, or private RPC)
+      console.warn('Template fetching disabled due to RPC rate limits. Please implement Supabase cache or use private RPC.');
+      
+      const templateCreatedEvents: any[] = [];
+      
+      // If you have templates, you can manually add them here for testing:
+      // const templateCreatedEvents = [
+      //   { args: { templateId: 1n } },
+      //   { args: { templateId: 2n } },
+      // ];
 
       // Extract unique template IDs
       const templateIds = Array.from(

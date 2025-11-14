@@ -9,13 +9,17 @@ import { queryKeys } from '../lib/queryClient';
 
 // Fetch all templates from contract
 async function fetchTemplates(publicClient: any, profileId?: bigint | null): Promise<Template[]> {
-  // Get all TemplateCreated events
-  const templateCreatedEvents = await publicClient.getLogs({
-    address: REPUTATION_CARD_CONTRACT_ADDRESS as Address,
-    event: parseAbiItem('event TemplateCreated(uint256 indexed templateId, address indexed issuer, uint256 maxSupply, uint8 tier, uint256 startTime, uint256 endTime)'),
-    fromBlock: 0n,
-    toBlock: 'latest',
-  });
+  // TEMPORARY FIX: Return empty templates to avoid rate limiting
+  // TODO: Implement proper solution (Subgraph, Supabase cache, or private RPC)
+  console.warn('Template fetching disabled due to RPC rate limits. Please implement Supabase cache or use private RPC.');
+  
+  const templateCreatedEvents: any[] = [];
+  
+  // If you have templates, you can manually add them here for testing:
+  // const templateCreatedEvents = [
+  //   { args: { templateId: 1n } },
+  //   { args: { templateId: 2n } },
+  // ];
 
   const templateIds = Array.from(
     new Set(templateCreatedEvents.map(event => event.args.templateId as bigint))

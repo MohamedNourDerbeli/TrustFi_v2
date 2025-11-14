@@ -8,12 +8,15 @@ import { jsonRpcProvider } from 'wagmi/providers/jsonRpc';
 // WalletConnect project ID - should be set in .env
 const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || '';
 
+// Use private RPC if available, fallback to public
+const rpcUrl = import.meta.env.VITE_RPC_URL || moonbaseAlpha.rpcUrls.default.http[0];
+
 const { chains, publicClient, webSocketPublicClient } = configureChains(
   [moonbaseAlpha],
   [
     jsonRpcProvider({
       rpc: (chain) => ({
-        http: chain.rpcUrls.default.http[0],
+        http: rpcUrl,
       }),
     }),
   ]
