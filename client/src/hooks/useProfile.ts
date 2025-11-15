@@ -140,6 +140,7 @@ export function useProfile(walletAddress?: Address): UseProfileReturn {
           profileId: profileIdResult,
           tokenUri: profileRow.token_uri,
           displayName: profileRow.display_name || undefined,
+          username: profileRow.username || undefined,
           bio: profileRow.bio || undefined,
           avatarUrl: profileRow.avatar_url || undefined,
           bannerUrl: profileRow.banner_url || undefined,

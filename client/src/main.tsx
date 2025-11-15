@@ -7,13 +7,16 @@ import App from "./App";
 import "./index.css"; // Tailwind CSS
 import { config } from './lib/wagmi';
 import { queryClient } from './lib/queryClient';
+import { AuthProvider } from './contexts/AuthContext';
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
       <WagmiConfig config={config}>
-        <App />
-        <ReactQueryDevtools initialIsOpen={false} />
+        <AuthProvider>
+          <App />
+          <ReactQueryDevtools initialIsOpen={false} />
+        </AuthProvider>
       </WagmiConfig>
     </QueryClientProvider>
   </React.StrictMode>

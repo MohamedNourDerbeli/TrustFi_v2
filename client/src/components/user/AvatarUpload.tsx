@@ -94,72 +94,46 @@ export function AvatarUpload({ currentAvatarUrl, onUploadComplete, onError }: Av
   };
 
   return (
-    <div className="space-y-4">
-      <label className="block text-sm font-medium text-gray-700">
-        Profile Avatar
-      </label>
-
-      <div
-        className={`relative w-32 h-32 mx-auto rounded-full border-4 overflow-hidden cursor-pointer transition-all ${
-          isDragging
-            ? 'border-blue-500 bg-blue-50'
-            : 'border-gray-300 hover:border-gray-400'
-        }`}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
+    <>
+      <button
+        type="button"
         onClick={handleClick}
+        disabled={isUploading}
+        className="p-2 bg-blue-600 rounded-full cursor-pointer hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+        title="Upload avatar"
       >
-        {preview ? (
-          <img
-            src={preview}
-            alt="Avatar preview"
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center bg-gray-100">
-            <svg
-              className="w-12 h-12 text-gray-400"
-              fill="none"
+        {isUploading ? (
+          <svg className="animate-spin h-4 w-4 text-white" viewBox="0 0 24 24">
+            <circle
+              className="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
               stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-              />
-            </svg>
-          </div>
-        )}
-
-        {isUploading && (
-          <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-            <CircularProgress 
-              progress={uploadProgress} 
-              size={64} 
-              strokeWidth={6}
-              color="#ffffff"
-              showPercentage={true}
+              strokeWidth="4"
+              fill="none"
             />
-          </div>
+            <path
+              className="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+            />
+          </svg>
+        ) : (
+          <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+          </svg>
         )}
+      </button>
 
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          onChange={handleFileInputChange}
-          className="hidden"
-        />
-      </div>
-
-      <p className="text-xs text-gray-500 text-center">
-        Click or drag & drop to upload
-        <br />
-        Max size: 5MB
-      </p>
-    </div>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleFileInputChange}
+        className="hidden"
+        disabled={isUploading}
+      />
+    </>
   );
 }

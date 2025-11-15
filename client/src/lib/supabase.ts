@@ -42,6 +42,7 @@ export interface ProfileRow {
   profile_id: string;
   token_uri: string;
   display_name: string | null;
+  username: string | null;
   bio: string | null;
   avatar_url: string | null;
   banner_url: string | null;

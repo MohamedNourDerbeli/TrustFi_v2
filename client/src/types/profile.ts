@@ -8,6 +8,7 @@ export interface Profile {
   profileId: bigint;
   tokenUri: string;
   displayName?: string;
+  username?: string;
   bio?: string;
   avatarUrl?: string;
   bannerUrl?: string;
@@ -21,6 +22,7 @@ export interface Profile {
 
 export interface ProfileMetadata {
   displayName?: string;
+  username?: string;
   bio?: string;
   avatarUrl?: string;
   bannerUrl?: string;

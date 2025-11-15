@@ -1,6 +1,8 @@
 // components/user/CreateProfile.tsx
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAccount, useContractWrite, useWaitForTransaction, usePublicClient } from 'wagmi';
+import { useAuth } from '../../hooks/useAuth';
 import { PROFILE_NFT_CONTRACT_ADDRESS } from '../../lib/contracts';
 import ProfileNFTABI from '../../lib/ProfileNFT.abi.json';
 import { supabase } from '../../lib/supabase';
@@ -17,6 +19,8 @@ interface ProfileFormData {
 
 export function CreateProfile() {
   const { address } = useAccount();
+  const { refreshProfile } = useAuth();
+  const navigate = useNavigate();
   const publicClient = usePublicClient();
   const [formData, setFormData] = useState<ProfileFormData>({
     displayName: '',
@@ -28,6 +32,9 @@ export function CreateProfile() {
   const [success, setSuccess] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [generatedTokenURI, setGeneratedTokenURI] = useState<string | null>(null);
+  const [checkingExistingProfile, setCheckingExistingProfile] = useState(true);
+  const [isCheckingUsername, setIsCheckingUsername] = useState(false);
+  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
 
   const { write: writeContract, data: txData, isLoading: isPending } = useContractWrite({
     address: PROFILE_NFT_CONTRACT_ADDRESS as `0x${string}`,
@@ -38,6 +45,104 @@ export function CreateProfile() {
   const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransaction({
     hash: txData?.hash,
   });
+
+  // Check if profile already exists on-chain and sync to Supabase if needed
+  useEffect(() => {
+    const checkAndSyncProfile = async () => {
+      if (!address || !publicClient) {
+        setCheckingExistingProfile(false);
+        return;
+      }
+
+      try {
+        console.log('[CreateProfile] Checking for existing on-chain profile...');
+        const profileId = await publicClient.readContract({
+          address: PROFILE_NFT_CONTRACT_ADDRESS as `0x${string}`,
+          abi: ProfileNFTABI,
+          functionName: 'addressToProfileId',
+          args: [address],
+        }) as bigint;
+
+        console.log('[CreateProfile] Profile ID from contract:', profileId.toString());
+
+        if (profileId && profileId > 0n) {
+          // Profile exists on-chain, check if it's in Supabase
+          console.log('[CreateProfile] Profile exists on-chain, checking Supabase...');
+          
+          const { data: existingProfile } = await supabase
+            .from('profiles')
+            .select('id')
+            .ilike('wallet', address.toLowerCase())
+            .maybeSingle();
+
+          if (existingProfile) {
+            // Already in Supabase, redirect to dashboard
+            console.log('[CreateProfile] Profile already in Supabase, redirecting...');
+            showErrorNotification('Profile Already Exists', 'Redirecting to dashboard...');
+            setTimeout(() => {
+              navigate('/dashboard', { replace: true });
+            }, 1500);
+          } else {
+            // Exists on-chain but not in Supabase, need to sync
+            console.log('[CreateProfile] Profile exists on-chain but not in Supabase. Please fill in your details to complete setup.');
+            setCheckingExistingProfile(false);
+            // Show a message that they need to complete their profile setup
+            setError('Profile found on-chain! Please fill in your details to complete your profile setup.');
+          }
+        } else {
+          // No profile on-chain, proceed with normal creation
+          setCheckingExistingProfile(false);
+        }
+      } catch (err) {
+        console.error('[CreateProfile] Error checking existing profile:', err);
+        setCheckingExistingProfile(false);
+      }
+    };
+
+    checkAndSyncProfile();
+  }, [address, publicClient]);
+
+  // Check username availability
+  const checkUsernameAvailability = useCallback(async (username: string) => {
+    if (!username || username.length < 3) {
+      setUsernameAvailable(null);
+      return;
+    }
+
+    setIsCheckingUsername(true);
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('username')
+        .ilike('username', username)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error checking username:', error);
+        setUsernameAvailable(null);
+      } else {
+        setUsernameAvailable(!data); // Available if no data found
+      }
+    } catch (err) {
+      console.error('Exception checking username:', err);
+      setUsernameAvailable(null);
+    } finally {
+      setIsCheckingUsername(false);
+    }
+  }, []);
+
+  // Debounce username check
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (formData.username) {
+        checkUsernameAvailability(formData.username);
+      } else {
+        setUsernameAvailable(null);
+      }
+    }, 500); // Wait 500ms after user stops typing
+
+    return () => clearTimeout(timer);
+  }, [formData.username, checkUsernameAvailability]);
 
   // Generate metadata and upload to IPFS
   const generateMetadata = async (): Promise<string> => {
@@ -75,9 +180,22 @@ export function CreateProfile() {
       return 'Username must be between 3-20 characters';
     }
 
+    // Check for spaces
+    if (formData.username.includes(' ')) {
+      return 'Username cannot contain spaces';
+    }
+
     // Validate username format (lowercase, letters, numbers, underscores only)
     if (!/^[a-z0-9_]+$/.test(formData.username)) {
       return 'Username can only contain lowercase letters, numbers, and underscores';
+    }
+
+    if (usernameAvailable === false) {
+      return 'Username is already taken';
+    }
+
+    if (isCheckingUsername) {
+      return 'Checking username availability...';
     }
 
     return null;
@@ -102,21 +220,86 @@ export function CreateProfile() {
     try {
       setIsProcessing(true);
       
-      // Generate metadata
-      const tokenURI = await generateMetadata();
-      setGeneratedTokenURI(tokenURI);
-      
-      console.log('Creating profile with generated metadata');
-      
-      // Call createProfile on the contract
-      writeContract({
-        args: [tokenURI],
-      });
+      // First check if profile exists on-chain
+      const profileId = await publicClient.readContract({
+        address: PROFILE_NFT_CONTRACT_ADDRESS as `0x${string}`,
+        abi: ProfileNFTABI,
+        functionName: 'addressToProfileId',
+        args: [address],
+      }) as bigint;
+
+      if (profileId && profileId > 0n) {
+        // Profile exists on-chain, sync to Supabase instead of creating new one
+        console.log('[CreateProfile] Syncing existing on-chain profile to Supabase...');
+        
+        // Get token URI from contract
+        const tokenURI = await publicClient.readContract({
+          address: PROFILE_NFT_CONTRACT_ADDRESS as `0x${string}`,
+          abi: ProfileNFTABI,
+          functionName: 'tokenURI',
+          args: [profileId],
+        }) as string;
+
+        // Insert into Supabase
+        const insertData = {
+          wallet: address.toLowerCase(),
+          profile_id: profileId.toString(),
+          token_uri: tokenURI,
+          display_name: formData.displayName,
+          username: formData.username,
+          bio: null,
+          avatar_url: formData.avatarUrl || null,
+          banner_url: formData.bannerUrl || null,
+          twitter_handle: null,
+          discord_handle: null,
+          website_url: null,
+        };
+
+        const { error: dbError } = await supabase
+          .from('profiles')
+          .insert(insertData);
+
+        if (dbError) {
+          console.error('[CreateProfile] Supabase error:', dbError);
+          throw new Error(`Database error: ${dbError.message}`);
+        }
+
+        setSuccess('Profile synced successfully! Redirecting to dashboard...');
+        showProfileCreatedNotification(profileId, '0x0'); // No tx hash for sync
+        
+        // Refresh the auth context to update hasProfile
+        await refreshProfile();
+        
+        setTimeout(() => {
+          navigate('/dashboard', { replace: true });
+        }, 1500);
+      } else {
+        // No profile on-chain, create new one
+        const tokenURI = await generateMetadata();
+        setGeneratedTokenURI(tokenURI);
+        
+        console.log('[CreateProfile] Creating new profile on-chain...');
+        
+        // Call createProfile on the contract
+        writeContract({
+          args: [tokenURI],
+        });
+      }
     } catch (err) {
-      console.error('Error creating profile:', err);
+      console.error('Error creating/syncing profile:', err);
       const parsedError = parseContractError(err);
-      setError(parsedError.message);
-      showErrorNotification('Profile Creation Failed', parsedError.message);
+      
+      // Check if profile already exists
+      if (parsedError.message.includes('Profile exists')) {
+        showErrorNotification('Profile Already Exists', 'You already have a profile. Redirecting to dashboard...');
+        // Redirect to dashboard after 1.5 seconds
+        setTimeout(() => {
+          navigate('/dashboard', { replace: true });
+        }, 1500);
+      } else {
+        setError(parsedError.message);
+        showErrorNotification('Profile Creation Failed', parsedError.message);
+      }
       setIsProcessing(false);
     }
   };
@@ -230,18 +413,17 @@ export function CreateProfile() {
         }
       } else {
         console.log('Profile stored in database successfully:', insertedData);
-        setSuccess(`Profile created successfully! Profile ID: ${profileId.toString()}`);
+        setSuccess(`Profile created successfully! Redirecting to dashboard...`);
         showProfileCreatedNotification(profileId, txData.hash);
+        
+        // Refresh the auth context to update hasProfile
+        await refreshProfile();
+        
+        // Redirect to dashboard after showing success message
+        setTimeout(() => {
+          navigate('/dashboard', { replace: true });
+        }, 2000);
       }
-
-      // Reset form
-      setFormData({
-        displayName: '',
-        username: '',
-        avatarUrl: '',
-        bannerUrl: '',
-      });
-      setGeneratedTokenURI(null);
     } catch (err) {
       console.error('Error processing transaction:', err);
       const errorMsg = err instanceof Error ? err.message : 'Profile created on-chain but failed to store in database. Please refresh the page.';
@@ -303,13 +485,25 @@ export function CreateProfile() {
     }
   };
 
+  // Show loading while checking for existing profile
+  if (checkingExistingProfile) {
+    return (
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-gray-400">Checking profile status...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
+    <div className="min-h-screen bg-white">
       <div className="max-w-4xl mx-auto px-4 py-12">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">Create Profile</h1>
-          <p className="text-gray-400">
+          <h1 className="text-3xl font-bold mb-2 text-gray-900">Create Profile</h1>
+          <p className="text-gray-600">
             Set up your TrustFi profile to start building your on-chain reputation
           </p>
         </div>
@@ -390,7 +584,7 @@ export function CreateProfile() {
           <div className="pt-20 space-y-6">
             {/* Display Name */}
             <div>
-              <label htmlFor="displayName" className="block text-sm font-medium text-gray-300 mb-2">
+              <label htmlFor="displayName" className="block text-sm font-medium text-gray-700 mb-2">
                 Display Name <span className="text-red-500">*</span>
               </label>
               <input
@@ -400,7 +594,7 @@ export function CreateProfile() {
                 onChange={(e) => setFormData({ ...formData, displayName: e.target.value })}
                 placeholder="e.g., Akira"
                 maxLength={50}
-                className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-500"
+                className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 placeholder-gray-400"
                 disabled={isLoading}
                 required
               />
@@ -411,44 +605,75 @@ export function CreateProfile() {
 
             {/* Username */}
             <div>
-              <label htmlFor="username" className="block text-sm font-medium text-gray-300 mb-2">
+              <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">
                 Username <span className="text-red-500">*</span>
               </label>
-              <div className="flex">
-                <span className="inline-flex items-center px-4 rounded-l-lg border border-r-0 border-gray-700 bg-gray-800 text-gray-400">
+              <div className="flex relative">
+                <span className="inline-flex items-center px-4 rounded-l-lg border border-r-0 border-gray-300 bg-gray-50 text-gray-600">
                   @
                 </span>
-                <input
-                  id="username"
-                  type="text"
-                  value={formData.username}
-                  onChange={(e) => setFormData({ ...formData, username: e.target.value.toLowerCase() })}
-                  placeholder="your_username"
-                  minLength={3}
-                  maxLength={20}
-                  pattern="[a-z0-9_]+"
-                  className="flex-1 px-4 py-3 bg-gray-900 border border-gray-700 rounded-r-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-500"
-                  disabled={isLoading}
-                  required
-                />
+                <div className="flex-1 relative">
+                  <input
+                    id="username"
+                    type="text"
+                    value={formData.username}
+                    onChange={(e) => setFormData({ ...formData, username: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') })}
+                    placeholder="your_username"
+                    minLength={3}
+                    maxLength={20}
+                    pattern="[a-z0-9_]+"
+                    className="w-full px-4 py-3 bg-white border border-gray-300 rounded-r-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 placeholder-gray-400 pr-10"
+                    disabled={isLoading}
+                    required
+                  />
+                  {/* Username availability indicator */}
+                  {formData.username.length >= 3 && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                      {isCheckingUsername ? (
+                        <svg className="animate-spin h-5 w-5 text-gray-400" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                      ) : usernameAvailable === true ? (
+                        <svg className="h-5 w-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      ) : usernameAvailable === false ? (
+                        <svg className="h-5 w-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
               </div>
-              <p className="mt-1 text-xs text-gray-500">
-                3-20 characters, lowercase, letters, numbers, and underscores only
-              </p>
+                <p className="mt-1 text-xs text-gray-500">
+                  3-20 characters, lowercase, letters, numbers, and underscores only
+                </p>
+                {formData.username.length >= 3 && usernameAvailable === false && (
+                  <p className="mt-1 text-xs text-red-600">
+                    This username is already taken
+                  </p>
+                )}
+                {formData.username.length >= 3 && usernameAvailable === true && (
+                  <p className="mt-1 text-xs text-green-600">
+                    Username is available!
+                  </p>
+                )}
+              </div>
             </div>
-          </div>
 
           {/* Error Message */}
           {error && (
-            <div className="p-4 bg-red-900/20 border border-red-500/50 rounded-lg">
-              <p className="text-sm text-red-400">{error}</p>
+            <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-sm text-red-600">{error}</p>
             </div>
           )}
 
           {/* Success Message */}
           {success && (
-            <div className="p-4 bg-green-900/20 border border-green-500/50 rounded-lg">
-              <p className="text-sm text-green-400">{success}</p>
+            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+              <p className="text-sm text-green-600">{success}</p>
             </div>
           )}
 

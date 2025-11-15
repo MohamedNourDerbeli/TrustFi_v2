@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import React, { useEffect, useState, useRef } from "react";
+import { Link, useLocation } from "react-router-dom";
+import toast from "react-hot-toast";
 import { useAuth } from "../hooks/useAuth";
 import { supabase } from "../lib/supabase";
 import { LoadingSpinner } from "../components/shared/LoadingSpinner";
@@ -14,9 +15,33 @@ interface RecentActivity {
 }
 
 export const HomePage: React.FC = () => {
-  const { isConnected, hasProfile, isAdmin, isIssuer } = useAuth();
+  const { isConnected, hasProfile, isAdmin, isIssuer, isLoading } = useAuth();
+  const location = useLocation();
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [loadingActivity, setLoadingActivity] = useState(true);
+  const lastLoggedStateRef = useRef<string>('');
+
+  // Only log when state actually changes
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      const currentState = `${isConnected}-${hasProfile}-${isLoading}`;
+      
+      if (lastLoggedStateRef.current !== currentState) {
+        console.log('[HomePage] Auth state:', { isConnected, hasProfile, isLoading });
+        lastLoggedStateRef.current = currentState;
+      }
+    }
+  }, [isConnected, hasProfile, isLoading]);
+
+  // Show message if redirected from protected route
+  useEffect(() => {
+    const state = location.state as { message?: string };
+    if (state?.message) {
+      toast.error(state.message);
+      // Clear the state
+      window.history.replaceState({}, document.title);
+    }
+  }, [location]);
 
   // Fetch recent platform activity
   useEffect(() => {
@@ -63,9 +88,13 @@ export const HomePage: React.FC = () => {
               Use the "Connect Wallet" button in the navigation bar above
             </p>
           </div>
+        ) : isLoading ? (
+          <div className="flex justify-center">
+            <LoadingSpinner size="large" />
+          </div>
         ) : !hasProfile ? (
           <Link
-            to="/dashboard"
+            to="/create-profile"
             className="inline-block px-8 py-4 bg-blue-600 text-white text-lg font-semibold rounded-lg hover:bg-blue-700 transition-colors shadow-lg"
           >
             Create My Profile

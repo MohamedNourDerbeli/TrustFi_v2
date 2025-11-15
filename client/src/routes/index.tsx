@@ -6,10 +6,12 @@ import {
   DiscoverPage,
   ProfilePage,
   ProfileEditPage,
+  CreateProfilePage,
   PublicClaimPage,
   NotFoundPage,
 } from "../pages";
 import { LoadingSpinner } from "../components/shared";
+import { ProtectedRoute } from "../components/auth";
 
 // Lazy load admin components
 const AdminDashboard = lazy(() => import("../components/admin/AdminDashboard").then(m => ({ default: m.AdminDashboard })));
@@ -36,78 +38,123 @@ export const AppRoutes: React.FC = () => {
       {/* Public Routes */}
       <Route path="/" element={<HomePage />} />
       <Route path="/claim" element={<PublicClaimPage />} />
+      <Route 
+        path="/create-profile" 
+        element={
+          <ProtectedRoute requireNoProfile>
+            <CreateProfilePage />
+          </ProtectedRoute>
+        } 
+      />
 
-      {/* User Routes */}
-      <Route path="/dashboard" element={<UserDashboard />} />
-      <Route path="/discover" element={<DiscoverPage />} />
+      {/* User Routes - Require Wallet Connection */}
+      <Route 
+        path="/dashboard" 
+        element={
+          <ProtectedRoute requireProfile>
+            <UserDashboard />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/discover" 
+        element={
+          <ProtectedRoute>
+            <DiscoverPage />
+          </ProtectedRoute>
+        } 
+      />
       <Route path="/profile/:address" element={<ProfilePage />} />
-      <Route path="/profile/edit" element={<ProfileEditPage />} />
+      <Route 
+        path="/profile/edit" 
+        element={
+          <ProtectedRoute requireProfile>
+            <ProfileEditPage />
+          </ProtectedRoute>
+        } 
+      />
 
-      {/* Admin Routes - Lazy Loaded */}
+      {/* Admin Routes - Require Admin Role */}
       <Route 
         path="/admin" 
         element={
-          <Suspense fallback={<RouteLoadingFallback />}>
-            <AdminDashboard />
-          </Suspense>
+          <ProtectedRoute requireAdmin>
+            <Suspense fallback={<RouteLoadingFallback />}>
+              <AdminDashboard />
+            </Suspense>
+          </ProtectedRoute>
         } 
       />
       <Route 
         path="/admin/templates" 
         element={
-          <Suspense fallback={<RouteLoadingFallback />}>
-            <TemplateManagement />
-          </Suspense>
+          <ProtectedRoute requireAdmin>
+            <Suspense fallback={<RouteLoadingFallback />}>
+              <TemplateManagement />
+            </Suspense>
+          </ProtectedRoute>
         } 
       />
       <Route 
         path="/admin/templates/create" 
         element={
-          <Suspense fallback={<RouteLoadingFallback />}>
-            <CreateTemplate />
-          </Suspense>
+          <ProtectedRoute requireAdmin>
+            <Suspense fallback={<RouteLoadingFallback />}>
+              <CreateTemplate />
+            </Suspense>
+          </ProtectedRoute>
         } 
       />
       <Route 
         path="/admin/issuers" 
         element={
-          <Suspense fallback={<RouteLoadingFallback />}>
-            <IssuerManagement />
-          </Suspense>
+          <ProtectedRoute requireAdmin>
+            <Suspense fallback={<RouteLoadingFallback />}>
+              <IssuerManagement />
+            </Suspense>
+          </ProtectedRoute>
         } 
       />
 
-      {/* Issuer Routes - Lazy Loaded */}
+      {/* Issuer Routes - Require Issuer Role */}
       <Route 
         path="/issuer" 
         element={
-          <Suspense fallback={<RouteLoadingFallback />}>
-            <IssuerDashboard />
-          </Suspense>
+          <ProtectedRoute requireIssuer>
+            <Suspense fallback={<RouteLoadingFallback />}>
+              <IssuerDashboard />
+            </Suspense>
+          </ProtectedRoute>
         } 
       />
       <Route 
         path="/issuer/templates" 
         element={
-          <Suspense fallback={<RouteLoadingFallback />}>
-            <TemplateList />
-          </Suspense>
+          <ProtectedRoute requireIssuer>
+            <Suspense fallback={<RouteLoadingFallback />}>
+              <TemplateList />
+            </Suspense>
+          </ProtectedRoute>
         } 
       />
       <Route 
         path="/issuer/issue" 
         element={
-          <Suspense fallback={<RouteLoadingFallback />}>
-            <IssueCardForm />
-          </Suspense>
+          <ProtectedRoute requireIssuer>
+            <Suspense fallback={<RouteLoadingFallback />}>
+              <IssueCardForm />
+            </Suspense>
+          </ProtectedRoute>
         } 
       />
       <Route 
         path="/issuer/claim-links" 
         element={
-          <Suspense fallback={<RouteLoadingFallback />}>
-            <ClaimLinkGenerator />
-          </Suspense>
+          <ProtectedRoute requireIssuer>
+            <Suspense fallback={<RouteLoadingFallback />}>
+              <ClaimLinkGenerator />
+            </Suspense>
+          </ProtectedRoute>
         } 
       />
 
