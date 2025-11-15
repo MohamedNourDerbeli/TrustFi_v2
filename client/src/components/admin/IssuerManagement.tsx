@@ -57,8 +57,17 @@ export const IssuerManagement: React.FC = () => {
     listener(logs) {
       const log = logs[0];
       if (log && log.args && log.args.role === TEMPLATE_MANAGER_ROLE) {
-        setSuccessMessage(`Issuer role granted successfully to ${log.args.account}`);
+        const grantedAddress = log.args.account as Address;
+        setSuccessMessage(`Issuer role granted successfully to ${grantedAddress}`);
         setRefreshTrigger((prev) => prev + 1);
+        
+        // Add to issuers list if not already present
+        setIssuers((prev) => {
+          if (!prev.includes(grantedAddress)) {
+            return [...prev, grantedAddress];
+          }
+          return prev;
+        });
       }
     },
   });
@@ -71,8 +80,12 @@ export const IssuerManagement: React.FC = () => {
     listener(logs) {
       const log = logs[0];
       if (log && log.args && log.args.role === TEMPLATE_MANAGER_ROLE) {
-        setSuccessMessage(`Issuer role revoked successfully from ${log.args.account}`);
+        const revokedAddress = log.args.account as Address;
+        setSuccessMessage(`Issuer role revoked successfully from ${revokedAddress}`);
         setRefreshTrigger((prev) => prev + 1);
+        
+        // Remove from issuers list
+        setIssuers((prev) => prev.filter((addr) => addr !== revokedAddress));
       }
     },
   });
@@ -84,12 +97,32 @@ export const IssuerManagement: React.FC = () => {
   // 3. Query them from there
   // For now, we'll maintain a local state that updates on role changes
 
+  // Handle successful grant transaction
   useEffect(() => {
-    if (isGrantSuccess || isRevokeSuccess) {
+    if (isGrantSuccess && newIssuerAddress) {
+      const addr = newIssuerAddress as Address;
+      setSuccessMessage(`Issuer role granted successfully to ${addr}`);
+      
+      // Add to issuers list if not already present
+      setIssuers((prev) => {
+        if (!prev.includes(addr)) {
+          return [...prev, addr];
+        }
+        return prev;
+      });
+      
       setNewIssuerAddress('');
       setAddressError('');
     }
-  }, [isGrantSuccess, isRevokeSuccess]);
+  }, [isGrantSuccess, newIssuerAddress]);
+
+  // Handle successful revoke transaction
+  useEffect(() => {
+    if (isRevokeSuccess) {
+      setNewIssuerAddress('');
+      setAddressError('');
+    }
+  }, [isRevokeSuccess]);
 
   const validateAddress = (address: string): boolean => {
     if (!address || address.trim() === '') {
@@ -112,9 +145,17 @@ export const IssuerManagement: React.FC = () => {
       return;
     }
 
+    const addr = newIssuerAddress as Address;
+    
+    // Check if address already in the list
+    if (issuers.includes(addr)) {
+      setAddressError('This address already has the issuer role');
+      return;
+    }
+
     try {
       grantRole({
-        args: [TEMPLATE_MANAGER_ROLE, newIssuerAddress as Address],
+        args: [TEMPLATE_MANAGER_ROLE, addr],
       });
     } catch (err) {
       console.error('Error granting role:', err);
@@ -131,15 +172,6 @@ export const IssuerManagement: React.FC = () => {
         });
       } catch (err) {
         console.error('Error revoking role:', err);
-      }
-    }
-  };
-
-  const handleAddIssuerToList = () => {
-    if (validateAddress(newIssuerAddress)) {
-      const addr = newIssuerAddress as Address;
-      if (!issuers.includes(addr)) {
-        setIssuers((prev) => [...prev, addr]);
       }
     }
   };
@@ -301,29 +333,6 @@ export const IssuerManagement: React.FC = () => {
             ))}
           </div>
         )}
-
-        {/* Helper to manually add addresses to the list for testing */}
-        <div className="mt-6 pt-6 border-t border-gray-200">
-          <p className="text-sm text-gray-600 mb-2">
-            For testing: Add an address to the list manually (this doesn't grant on-chain role)
-          </p>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={newIssuerAddress}
-              onChange={(e) => setNewIssuerAddress(e.target.value)}
-              className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="0x... address"
-            />
-            <button
-              type="button"
-              onClick={handleAddIssuerToList}
-              className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium"
-            >
-              Add to List
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   );

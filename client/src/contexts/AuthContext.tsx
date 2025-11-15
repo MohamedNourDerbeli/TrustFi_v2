@@ -1,11 +1,15 @@
 // contexts/AuthContext.tsx
 import React, { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
 import { useAccount, useConnect, useDisconnect, useContractRead } from 'wagmi';
-import { type Address } from 'viem';
+import { type Address, keccak256, toHex } from 'viem';
 import { supabase } from '../lib/supabase';
 import { PROFILE_NFT_CONTRACT_ADDRESS, REPUTATION_CARD_CONTRACT_ADDRESS } from '../lib/contracts';
 import ProfileNFTAbi from '../lib/ProfileNFT.abi.json';
 import ReputationCardAbi from '../lib/ReputationCard.abi.json';
+
+// Role hashes
+const DEFAULT_ADMIN_ROLE = '0x0000000000000000000000000000000000000000000000000000000000000000';
+const TEMPLATE_MANAGER_ROLE = keccak256(toHex('TEMPLATE_MANAGER_ROLE'));
 
 export interface AuthContextValue {
   address: Address | undefined;
@@ -36,7 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     abi: ProfileNFTAbi,
     functionName: 'hasRole',
     args: [
-      '0x0000000000000000000000000000000000000000000000000000000000000000', // DEFAULT_ADMIN_ROLE
+      DEFAULT_ADMIN_ROLE,
       address || '0x0000000000000000000000000000000000000000',
     ],
     enabled: !!address && isConnected,
@@ -48,7 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     abi: ReputationCardAbi,
     functionName: 'hasRole',
     args: [
-      '0x0000000000000000000000000000000000000000000000000000000000000000', // DEFAULT_ADMIN_ROLE
+      DEFAULT_ADMIN_ROLE,
       address || '0x0000000000000000000000000000000000000000',
     ],
     enabled: !!address && isConnected,
@@ -60,7 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     abi: ReputationCardAbi,
     functionName: 'hasRole',
     args: [
-      '0x0b3c7d39e6b5e3b6e3c3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3', // TEMPLATE_MANAGER_ROLE
+      TEMPLATE_MANAGER_ROLE,
       address || '0x0000000000000000000000000000000000000000',
     ],
     enabled: !!address && isConnected,

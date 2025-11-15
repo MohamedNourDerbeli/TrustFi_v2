@@ -70,6 +70,20 @@ export const HomePage: React.FC = () => {
 
   return (
     <div className="max-w-6xl mx-auto">
+      {/* Debug Info - Remove in production */}
+      {process.env.NODE_ENV === 'development' && isConnected && (
+        <div className="mb-4 p-4 bg-gray-100 rounded-lg border border-gray-300">
+          <h3 className="font-semibold text-gray-900 mb-2">Debug Info:</h3>
+          <div className="text-sm space-y-1">
+            <p><span className="font-medium">Connected:</span> {isConnected ? 'Yes' : 'No'}</p>
+            <p><span className="font-medium">Has Profile:</span> {hasProfile ? 'Yes' : 'No'}</p>
+            <p><span className="font-medium">Is Admin:</span> {isAdmin ? 'Yes' : 'No'}</p>
+            <p><span className="font-medium">Is Issuer:</span> {isIssuer ? 'Yes' : 'No'}</p>
+            <p><span className="font-medium">Loading:</span> {isLoading ? 'Yes' : 'No'}</p>
+          </div>
+        </div>
+      )}
+      
       {/* Hero Section */}
       <div className="text-center py-16 px-4">
         <h1 className="text-5xl font-bold text-gray-900 mb-6">
