@@ -191,7 +191,7 @@ export const IssuerDashboard: React.FC = () => {
         </div>
 
         {/* Navigation Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <Link
             to="/issuer/templates"
             className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
@@ -200,6 +200,21 @@ export const IssuerDashboard: React.FC = () => {
               <div>
                 <h3 className="text-lg font-semibold text-gray-900">My Templates</h3>
                 <p className="text-gray-600 mt-1">View and manage your templates</p>
+              </div>
+              <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+          </Link>
+
+          <Link
+            to="/issuer/collectibles"
+            className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Collectibles</h3>
+                <p className="text-gray-600 mt-1">Create user-facing collectibles</p>
               </div>
               <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />

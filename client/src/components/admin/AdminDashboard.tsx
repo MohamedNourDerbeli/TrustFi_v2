@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
+import { useTemplates } from '../../hooks/useTemplates';
 import { supabase } from '../../lib/supabase';
 import { Link } from 'react-router-dom';
 
@@ -20,6 +21,7 @@ interface RecentActivity {
 
 export const AdminDashboard: React.FC = () => {
   const { isAdmin, isLoading: authLoading } = useAuth();
+  const { templates, loading: templatesLoading } = useTemplates();
   const [stats, setStats] = useState<DashboardStats>({
     totalProfiles: 0,
     totalTemplates: 0,
@@ -79,23 +81,12 @@ export const AdminDashboard: React.FC = () => {
     }
   }, [isAdmin, authLoading]);
 
-  // Get template count from contract - we need to query multiple template IDs
-  // Since there's no direct way to get count, we'll try reading templates until we hit a zero address
-  const [templateCount, setTemplateCount] = useState(0);
-  
+  // Update template count from useTemplates hook
   useEffect(() => {
-    const fetchTemplateCount = async () => {
-      // This is a simplified approach - in production you'd want a better method
-      // For now, we'll try to read templates 0-100 and count non-zero issuers
-      let count = 0;
-      // We'll update this when we have a better way to query all templates
-      setStats((prev) => ({ ...prev, totalTemplates: count }));
-    };
-
-    if (isAdmin && !authLoading) {
-      fetchTemplateCount();
+    if (!templatesLoading) {
+      setStats((prev) => ({ ...prev, totalTemplates: templates.length }));
     }
-  }, [isAdmin, authLoading]);
+  }, [templates, templatesLoading]);
 
   if (authLoading || loading) {
     return (

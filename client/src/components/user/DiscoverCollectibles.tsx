@@ -1,54 +1,47 @@
 // components/user/DiscoverCollectibles.tsx
-import { useTemplates } from '../../hooks/useTemplates';
+import { useCollectibles } from '../../hooks/useCollectibles';
 import { useProfile } from '../../hooks/useProfile';
 import { useAuth } from '../../hooks/useAuth';
-import type { Template } from '../../types/template';
+import type { Collectible } from '../../types/collectible';
 
-interface TemplateCardProps {
-  template: Template & { hasClaimed?: boolean };
+interface CollectibleCardProps {
+  collectible: Collectible & { isClaimable?: boolean };
   onClaim: (templateId: bigint) => void;
-  isEligible: boolean;
   hasProfile: boolean;
 }
 
-function TemplateCard({ template, onClaim, isEligible, hasProfile }: TemplateCardProps) {
-  const now = BigInt(Math.floor(Date.now() / 1000));
-  
+function CollectibleCard({ collectible, onClaim, hasProfile }: CollectibleCardProps) {
   // Determine eligibility status
   let eligibilityStatus = '';
   let canClaim = false;
 
   if (!hasProfile) {
     eligibilityStatus = 'Create profile to claim';
-  } else if (template.hasClaimed) {
+  } else if (collectible.hasClaimed) {
     eligibilityStatus = 'Already Claimed';
-  } else if (template.isPaused) {
-    eligibilityStatus = 'Paused';
-  } else if (template.startTime > 0n && now < template.startTime) {
-    eligibilityStatus = 'Not Started';
-  } else if (template.endTime > 0n && now > template.endTime) {
-    eligibilityStatus = 'Ended';
-  } else if (template.maxSupply > 0n && template.currentSupply >= template.maxSupply) {
-    eligibilityStatus = 'Max Supply Reached';
-  } else {
+  } else if (collectible.isClaimable) {
     eligibilityStatus = 'Claimable';
     canClaim = true;
+  } else if (collectible.maxSupply && collectible.currentSupply && collectible.currentSupply >= collectible.maxSupply) {
+    eligibilityStatus = 'Max Supply Reached';
+  } else {
+    eligibilityStatus = 'Not Available';
   }
 
-  const getTierColor = (tier: number) => {
+  const getTierColor = (tier?: number) => {
     switch (tier) {
       case 1:
-        return 'bg-bronze-500 text-bronze-900';
+        return 'bg-amber-600 text-white';
       case 2:
-        return 'bg-silver-500 text-silver-900';
+        return 'bg-gray-400 text-gray-900';
       case 3:
-        return 'bg-gold-500 text-gold-900';
+        return 'bg-yellow-500 text-yellow-900';
       default:
-        return 'bg-gray-500 text-gray-900';
+        return 'bg-gray-500 text-white';
     }
   };
 
-  const getTierName = (tier: number) => {
+  const getTierName = (tier?: number) => {
     switch (tier) {
       case 1:
         return 'Bronze';
@@ -62,79 +55,97 @@ function TemplateCard({ template, onClaim, isEligible, hasProfile }: TemplateCar
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200 hover:shadow-lg transition-shadow">
-      <div className="flex justify-between items-start mb-4">
-        <h3 className="text-xl font-semibold text-gray-900">{template.name}</h3>
-        <span className={`px-3 py-1 rounded-full text-sm font-medium ${getTierColor(template.tier)}`}>
-          {getTierName(template.tier)}
-        </span>
+    <div className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-200 hover:shadow-xl transition-shadow">
+      {/* Banner Image */}
+      {collectible.bannerUrl && (
+        <div className="w-full h-32 bg-gradient-to-r from-blue-500 to-purple-600">
+          <img 
+            src={collectible.bannerUrl} 
+            alt={collectible.title}
+            className="w-full h-full object-cover"
+          />
+        </div>
+      )}
+      
+      {/* Card Image */}
+      <div className="flex justify-center -mt-12 px-6">
+        <div className="w-24 h-24 rounded-full border-4 border-white bg-white shadow-lg overflow-hidden">
+          <img 
+            src={collectible.imageUrl} 
+            alt={collectible.title}
+            className="w-full h-full object-cover"
+          />
+        </div>
       </div>
-      
-      <p className="text-gray-600 mb-4">{template.description}</p>
-      
-      <div className="space-y-2 mb-4">
-        <div className="flex justify-between text-sm">
-          <span className="text-gray-500">Issuer:</span>
-          <span className="text-gray-900 font-mono text-xs">
-            {template.issuer.slice(0, 6)}...{template.issuer.slice(-4)}
+
+      <div className="p-6 pt-4">
+        <div className="flex justify-between items-start mb-3">
+          <h3 className="text-xl font-semibold text-gray-900">{collectible.title}</h3>
+          {collectible.tier && (
+            <span className={`px-3 py-1 rounded-full text-xs font-bold ${getTierColor(collectible.tier)}`}>
+              {getTierName(collectible.tier)}
+            </span>
+          )}
+        </div>
+        
+        <p className="text-gray-600 mb-4 text-sm line-clamp-3">{collectible.description}</p>
+        
+        {/* Requirements */}
+        {collectible.requirements && Object.keys(collectible.requirements).length > 0 && (
+          <div className="mb-4 p-3 bg-blue-50 rounded-md">
+            <p className="text-xs font-semibold text-blue-900 mb-1">Requirements:</p>
+            <ul className="text-xs text-blue-800 space-y-1">
+              {Object.entries(collectible.requirements).map(([key, value]) => (
+                <li key={key}>• {key}: {String(value)}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        
+        {/* Supply Info */}
+        {collectible.maxSupply && collectible.maxSupply > 0n && (
+          <div className="flex justify-between text-sm mb-4">
+            <span className="text-gray-500">Supply:</span>
+            <span className="text-gray-900 font-medium">
+              {collectible.currentSupply?.toString() || '0'} / {collectible.maxSupply.toString()}
+            </span>
+          </div>
+        )}
+        
+        {/* Claim Type Badge */}
+        <div className="mb-4">
+          <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${
+            collectible.claimType === 'signature' 
+              ? 'bg-purple-100 text-purple-800' 
+              : 'bg-green-100 text-green-800'
+          }`}>
+            {collectible.claimType === 'signature' ? '🔗 Claim Link' : '⚡ Direct Issue'}
           </span>
         </div>
         
-        {template.maxSupply > 0n && (
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-500">Supply:</span>
-            <span className="text-gray-900">
-              {template.currentSupply.toString()} / {template.maxSupply.toString()}
-            </span>
-          </div>
-        )}
-        
-        {template.startTime > 0n && (
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-500">Start:</span>
-            <span className="text-gray-900">
-              {new Date(Number(template.startTime) * 1000).toLocaleDateString()}
-            </span>
-          </div>
-        )}
-        
-        {template.endTime > 0n && (
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-500">End:</span>
-            <span className="text-gray-900">
-              {new Date(Number(template.endTime) * 1000).toLocaleDateString()}
-            </span>
-          </div>
-        )}
-      </div>
-      
-      <div className="flex items-center justify-between">
-        <span className={`text-sm font-medium ${
-          canClaim ? 'text-green-600' : 
-          template.hasClaimed ? 'text-blue-600' : 
-          'text-gray-500'
-        }`}>
-          {eligibilityStatus}
-        </span>
-        
-        <button
-          onClick={() => onClaim(template.templateId)}
-          disabled={!canClaim}
-          className={`px-4 py-2 rounded-md font-medium transition-colors ${
-            canClaim
-              ? 'bg-blue-600 text-white hover:bg-blue-700'
-              : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-          }`}
-        >
-          Claim
-        </button>
-      </div>
-      
-      {template.isPaused && (
-        <div className="mt-3 px-3 py-2 bg-yellow-50 border border-yellow-200 rounded-md">
-          <span className="text-sm text-yellow-800 font-medium">⚠️ Paused</span>
+        {/* Action Button */}
+        <div className="flex items-center justify-between">
+          <span className={`text-sm font-medium ${
+            canClaim ? 'text-green-600' : 
+            collectible.hasClaimed ? 'text-blue-600' : 
+            'text-gray-500'
+          }`}>
+            {eligibilityStatus}
+          </span>
+          
+          <button
+            onClick={() => onClaim(collectible.templateId)}
+            disabled={!canClaim}
+            className={`px-4 py-2 rounded-md font-medium transition-colors ${
+              canClaim
+                ? 'bg-blue-600 text-white hover:bg-blue-700'
+                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+            }`}
+          >
+            {collectible.hasClaimed ? 'Claimed' : 'Claim'}
+          </button>
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -142,12 +153,12 @@ function TemplateCard({ template, onClaim, isEligible, hasProfile }: TemplateCar
 export function DiscoverCollectibles() {
   const { hasProfile } = useAuth();
   const { profileId } = useProfile();
-  const { templates, loading, error, refreshTemplates } = useTemplates(profileId);
+  const { collectibles, loading, error, refreshCollectibles } = useCollectibles(profileId);
 
   const handleClaim = (templateId: bigint) => {
     // This will be implemented in ClaimCard component
     // For now, just log
-    console.log('Claim template:', templateId);
+    console.log('Claim collectible with template:', templateId);
     // TODO: Navigate to claim page or open claim modal
   };
 
@@ -163,10 +174,10 @@ export function DiscoverCollectibles() {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <h3 className="text-red-800 font-semibold mb-2">Error Loading Templates</h3>
+          <h3 className="text-red-800 font-semibold mb-2">Error Loading Collectibles</h3>
           <p className="text-red-600">{error.message}</p>
           <button
-            onClick={refreshTemplates}
+            onClick={refreshCollectibles}
             className="mt-3 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
           >
             Retry
@@ -193,18 +204,19 @@ export function DiscoverCollectibles() {
         </div>
       )}
 
-      {templates.length === 0 ? (
+      {collectibles.length === 0 ? (
         <div className="text-center py-12">
-          <p className="text-gray-500 text-lg">No collectibles available at this time.</p>
+          <div className="text-6xl mb-4">🎁</div>
+          <p className="text-gray-500 text-lg mb-2">No collectibles available yet</p>
+          <p className="text-gray-400 text-sm">Check back soon for new reputation cards!</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {templates.map((template) => (
-            <TemplateCard
-              key={template.templateId.toString()}
-              template={template}
+          {collectibles.map((collectible) => (
+            <CollectibleCard
+              key={collectible.id}
+              collectible={collectible}
               onClaim={handleClaim}
-              isEligible={!template.hasClaimed && !template.isPaused}
               hasProfile={hasProfile}
             />
           ))}

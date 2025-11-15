@@ -6,3 +6,4 @@ export { ProfileEditPage } from './ProfileEditPage';
 export { CreateProfilePage } from './CreateProfilePage';
 export { PublicClaimPage } from './PublicClaimPage';
 export { NotFoundPage } from './NotFoundPage';
+export { ManageCollectiblesPage } from './ManageCollectiblesPage';

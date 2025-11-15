@@ -1,11 +1,11 @@
 // hooks/useReputationCards.ts
 import { useState, useCallback } from 'react';
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
-import { type Address, type Hex } from 'viem';
+import { type Address, type Hex, parseAbiItem } from 'viem';
 import { REPUTATION_CARD_CONTRACT_ADDRESS, PROFILE_NFT_CONTRACT_ADDRESS } from '../lib/contracts';
 import ReputationCardABI from '../lib/ReputationCard.abi.json';
 import ProfileNFTABI from '../lib/ProfileNFT.abi.json';
-import { parseContractError, isUserRejection } from '../lib/errors';
+import { parseContractError, retryWithBackoff, isUserRejection } from '../lib/errors';
 import { executeTransactionFlow } from '../lib/transactionHelpers';
 import { supabase } from '../lib/supabase';
 
@@ -48,17 +48,15 @@ export function useReputationCards(): UseReputationCardsReturn {
   const [retryCount, setRetryCount] = useState(0);
 
   // Helper function to log claim to Supabase
-  const logClaim = useCallback(async (
+  const logClaim = async (
     recipientAddress: Address,
     templateId: bigint,
     cardId: bigint,
     claimType: 'direct' | 'signature'
   ) => {
     try {
-      if (!publicClient) return;
-
       // Get profile ID for recipient
-      const profileId = await publicClient.readContract({
+      const profileId = await publicClient!.readContract({
         address: PROFILE_NFT_CONTRACT_ADDRESS as Address,
         abi: ProfileNFTABI,
         functionName: 'addressToProfileId',
@@ -82,13 +80,11 @@ export function useReputationCards(): UseReputationCardsReturn {
 
       if (error) {
         console.error('[useReputationCards] Error logging claim:', error);
-      } else {
-        console.log('[useReputationCards] Claim logged successfully');
       }
     } catch (err) {
       console.error('[useReputationCards] Error logging claim:', err);
     }
-  }, [publicClient]);
+  };
 
   // Issue card directly (issuer only)
   const issueDirect = useCallback(async (params: IssueDirectParams): Promise<CardIssuanceResult> => {
@@ -146,17 +142,11 @@ export function useReputationCards(): UseReputationCardsReturn {
         });
         
         const cardId = decoded.args.cardId as bigint;
-        
-        // Log claim to Supabase (don't await to avoid blocking)
-        logClaim(params.recipient, params.templateId, cardId, 'direct').catch(console.error);
-        
         setRetryCount(0);
         return { cardId, txHash: hash };
       }
 
-      console.warn('[useReputationCards] CardIssued event not found, but transaction succeeded');
-      setRetryCount(0);
-      return { cardId: 0n, txHash: hash };
+      console.warn('[useReputationCards] CardIssued event not found, but transaction succeeded'); setRetryCount(0); return { cardId: 0n, txHash: hash };
     } catch (err: any) {
       // Don't set error state for user rejections
       if (!isUserRejection(err)) {
@@ -169,7 +159,7 @@ export function useReputationCards(): UseReputationCardsReturn {
     } finally {
       setIsProcessing(false);
     }
-  }, [walletClient, address, publicClient, logClaim]);
+  }, [walletClient, address, publicClient]);
 
   // Claim card with signature
   const claimWithSignature = useCallback(async (params: ClaimWithSignatureParams): Promise<CardIssuanceResult> => {
@@ -234,17 +224,11 @@ export function useReputationCards(): UseReputationCardsReturn {
         });
         
         const cardId = decoded.args.cardId as bigint;
-        
-        // Log claim to Supabase (don't await to avoid blocking)
-        logClaim(params.profileOwner, params.templateId, cardId, 'signature').catch(console.error);
-        
         setRetryCount(0);
         return { cardId, txHash: hash };
       }
 
-      console.warn('[useReputationCards] CardIssued event not found, but transaction succeeded');
-      setRetryCount(0);
-      return { cardId: 0n, txHash: hash };
+      console.warn('[useReputationCards] CardIssued event not found, but transaction succeeded'); setRetryCount(0); return { cardId: 0n, txHash: hash };
     } catch (err: any) {
       // Don't set error state for user rejections
       if (!isUserRejection(err)) {
@@ -257,7 +241,7 @@ export function useReputationCards(): UseReputationCardsReturn {
     } finally {
       setIsProcessing(false);
     }
-  }, [walletClient, address, publicClient, logClaim]);
+  }, [walletClient, address, publicClient]);
 
   const clearError = useCallback(() => {
     setError(null);

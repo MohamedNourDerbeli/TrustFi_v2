@@ -24,6 +24,7 @@ const IssuerDashboard = lazy(() => import("../components/issuer/IssuerDashboard"
 const TemplateList = lazy(() => import("../components/issuer/TemplateList").then(m => ({ default: m.TemplateList })));
 const IssueCardForm = lazy(() => import("../components/issuer/IssueCardForm").then(m => ({ default: m.IssueCardForm })));
 const ClaimLinkGenerator = lazy(() => import("../components/issuer/ClaimLinkGenerator").then(m => ({ default: m.ClaimLinkGenerator })));
+const ManageCollectiblesPage = lazy(() => import("../pages/ManageCollectiblesPage").then(m => ({ default: m.ManageCollectiblesPage })));
 
 // Loading fallback component
 const RouteLoadingFallback = () => (
@@ -153,6 +154,16 @@ export const AppRoutes: React.FC = () => {
           <ProtectedRoute requireIssuer>
             <Suspense fallback={<RouteLoadingFallback />}>
               <ClaimLinkGenerator />
+            </Suspense>
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/issuer/collectibles" 
+        element={
+          <ProtectedRoute requireIssuer>
+            <Suspense fallback={<RouteLoadingFallback />}>
+              <ManageCollectiblesPage />
             </Suspense>
           </ProtectedRoute>
         } 

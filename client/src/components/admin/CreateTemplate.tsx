@@ -1,13 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useContractWrite, useWaitForTransaction, useContractEvent } from 'wagmi';
 import { type Address, isAddress } from 'viem';
 import { REPUTATION_CARD_CONTRACT_ADDRESS } from '../../lib/contracts';
 import ReputationCardAbi from '../../lib/ReputationCard.abi.json';
 import { showSuccessNotification, showErrorNotification } from '../../lib/notifications';
+import { supabase } from '../../lib/supabase';
 
 interface CreateTemplateFormData {
   templateId: string;
+  title: string;
   issuer: string;
   maxSupply: string;
   tier: string;
@@ -18,6 +20,7 @@ interface CreateTemplateFormData {
 export const CreateTemplate: React.FC = () => {
   const [formData, setFormData] = useState<CreateTemplateFormData>({
     templateId: '',
+    title: '',
     issuer: '',
     maxSupply: '',
     tier: '1',
@@ -27,11 +30,41 @@ export const CreateTemplate: React.FC = () => {
   const [errors, setErrors] = useState<Partial<CreateTemplateFormData>>({});
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [createdTemplateId, setCreatedTemplateId] = useState<string | null>(null);
+  const [isLoadingTemplateId, setIsLoadingTemplateId] = useState(false);
+
+  // Fetch next template ID on mount
+  useEffect(() => {
+    const fetchNextTemplateId = async () => {
+      setIsLoadingTemplateId(true);
+      try {
+        const { data, error } = await supabase
+          .from('template_counter')
+          .select('next_template_id')
+          .eq('id', 1)
+          .single();
+
+        if (error) {
+          console.error('Error fetching next template ID:', error);
+          // Fallback to empty string if counter doesn't exist
+          setFormData(prev => ({ ...prev, templateId: '' }));
+        } else if (data) {
+          setFormData(prev => ({ ...prev, templateId: data.next_template_id.toString() }));
+        }
+      } catch (err) {
+        console.error('Error fetching next template ID:', err);
+        setFormData(prev => ({ ...prev, templateId: '' }));
+      } finally {
+        setIsLoadingTemplateId(false);
+      }
+    };
+
+    fetchNextTemplateId();
+  }, []);
 
   // Contract write hook
   const { data: writeData, write, isLoading: isWriting, error: writeError } = useContractWrite({
     address: REPUTATION_CARD_CONTRACT_ADDRESS as Address,
-    abi: ReputationCardAbi,
+    abi: ReputationCardAbi as any,
     functionName: 'createTemplate',
   });
 
@@ -43,36 +76,55 @@ export const CreateTemplate: React.FC = () => {
   // Listen for TemplateCreated event
   useContractEvent({
     address: REPUTATION_CARD_CONTRACT_ADDRESS as Address,
-    abi: ReputationCardAbi,
+    abi: ReputationCardAbi as any,
     eventName: 'TemplateCreated',
-    listener(logs) {
+    listener(logs: any) {
       const log = logs[0];
       if (log && log.args) {
         const templateId = log.args.templateId?.toString();
         if (templateId) {
           setCreatedTemplateId(templateId);
-          setSuccessMessage(`Template created successfully with ID: ${templateId}`);
+          setSuccessMessage(`Template "${formData.title}" created successfully with ID: ${templateId}`);
           
           // Show success notification
           showSuccessNotification({
             title: 'Template Created!',
-            message: `Template #${templateId} has been created successfully.`,
+            message: `"${formData.title}" (Template #${templateId}) has been created successfully.`,
             txHash: writeData?.hash,
             duration: 6000,
           });
+
+          // Increment the counter in Supabase for next template
+          incrementTemplateCounter();
         }
       }
     },
   });
 
+  // Function to increment template counter
+  const incrementTemplateCounter = async () => {
+    try {
+      await supabase.rpc('get_next_template_id');
+    } catch (err) {
+      console.error('Error incrementing template counter:', err);
+    }
+  };
+
   const validateForm = (): boolean => {
     const newErrors: Partial<CreateTemplateFormData> = {};
 
-    // Validate template ID
+    // Validate template ID (auto-generated, should always exist)
     if (!formData.templateId || formData.templateId.trim() === '') {
-      newErrors.templateId = 'Template ID is required';
+      newErrors.templateId = 'Template ID not loaded. Please refresh the page.';
     } else if (isNaN(Number(formData.templateId)) || Number(formData.templateId) < 0) {
-      newErrors.templateId = 'Template ID must be a positive number';
+      newErrors.templateId = 'Invalid template ID. Please refresh the page.';
+    }
+
+    // Validate title
+    if (!formData.title || formData.title.trim() === '') {
+      newErrors.title = 'Template title is required';
+    } else if (formData.title.trim().length < 3) {
+      newErrors.title = 'Title must be at least 3 characters';
     }
 
     // Validate issuer address
@@ -126,7 +178,7 @@ export const CreateTemplate: React.FC = () => {
     }
 
     try {
-      write({
+      (write as any)?.({
         args: [
           BigInt(formData.templateId),
           formData.issuer as Address,
@@ -150,9 +202,10 @@ export const CreateTemplate: React.FC = () => {
     }
   };
 
-  const handleReset = () => {
+  const handleReset = async () => {
     setFormData({
       templateId: '',
+      title: '',
       issuer: '',
       maxSupply: '',
       tier: '1',
@@ -162,6 +215,24 @@ export const CreateTemplate: React.FC = () => {
     setErrors({});
     setSuccessMessage(null);
     setCreatedTemplateId(null);
+
+    // Refetch next template ID
+    setIsLoadingTemplateId(true);
+    try {
+      const { data, error } = await supabase
+        .from('template_counter')
+        .select('next_template_id')
+        .eq('id', 1)
+        .single();
+
+      if (!error && data) {
+        setFormData(prev => ({ ...prev, templateId: data.next_template_id.toString() }));
+      }
+    } catch (err) {
+      console.error('Error fetching next template ID:', err);
+    } finally {
+      setIsLoadingTemplateId(false);
+    }
   };
 
   const isLoading = isWriting || isConfirming;
@@ -219,23 +290,24 @@ export const CreateTemplate: React.FC = () => {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Template ID */}
+          {/* Title */}
           <div>
-            <label htmlFor="templateId" className="block text-sm font-medium text-gray-700 mb-2">
-              Template ID
+            <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-2">
+              Template Title
             </label>
             <input
               type="text"
-              id="templateId"
-              name="templateId"
-              value={formData.templateId}
+              id="title"
+              name="title"
+              value={formData.title}
               onChange={handleInputChange}
               className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                errors.templateId ? 'border-red-500' : 'border-gray-300'
+                errors.title ? 'border-red-500' : 'border-gray-300'
               }`}
-              placeholder="e.g., 1"
+              placeholder="e.g., Early Adopter Badge"
             />
-            {errors.templateId && <p className="mt-1 text-sm text-red-600">{errors.templateId}</p>}
+            {errors.title && <p className="mt-1 text-sm text-red-600">{errors.title}</p>}
+            <p className="mt-1 text-sm text-gray-500">A descriptive name for this template</p>
           </div>
 
           {/* Issuer Address */}

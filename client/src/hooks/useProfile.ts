@@ -1,4 +1,4 @@
-// hooks/useProfile.ts - Modern React Query implementation
+// hooks/useProfile.ts - React Query implementation
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAccount, usePublicClient } from 'wagmi';
 import { type Address } from 'viem';
@@ -15,11 +15,6 @@ export interface UseProfileReturn {
   cards: Card[];
   loading: boolean;
   error: Error | null;
-  createProfile: (tokenURI: string) => Promise<void>;
-  updateProfile: (updates: any) => Promise<void>;
-  uploadAvatar: (file: File) => Promise<string>;
-  uploadBanner: (file: File) => Promise<string>;
-  recalculateScore: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
 
@@ -45,13 +40,59 @@ async function fetchProfileData(address: Address, publicClient: any) {
     args: [profileIdResult],
   }) as bigint;
 
-  // Fetch attached cards from contract
-  const cardsResult = await publicClient.readContract({
+  // Fetch attached card IDs from contract
+  const cardIds = await publicClient.readContract({
     address: PROFILE_NFT_CONTRACT_ADDRESS as `0x${string}`,
     abi: ProfileNFTABI,
     functionName: 'getCardsForProfile',
     args: [profileIdResult],
   }) as bigint[];
+
+  // Fetch full card details from claims_log
+  const cards: Card[] = [];
+  
+  console.log('[useProfile] Card IDs from contract:', cardIds.map(id => id.toString()));
+  
+  if (cardIds.length > 0) {
+    const { data: claimsData, error: claimsError } = await supabase
+      .from('claims_log')
+      .select('*')
+      .eq('profile_id', profileIdResult.toString())
+      .in('card_id', cardIds.map(id => id.toString()));
+
+    console.log('[useProfile] Claims data from Supabase:', claimsData);
+    console.log('[useProfile] Claims error:', claimsError);
+
+    if (claimsData && claimsData.length > 0) {
+      for (const claim of claimsData) {
+        cards.push({
+          cardId: BigInt(claim.card_id),
+          profileId: BigInt(claim.profile_id),
+          templateId: BigInt(claim.template_id),
+          tokenUri: '', // Could fetch from ReputationCard if needed
+          tier: 0, // Will fetch from template
+          issuer: '0x0000000000000000000000000000000000000000' as Address,
+          claimedAt: new Date(claim.claimed_at),
+        });
+      }
+    } else {
+      // If no claims_log data, just create basic card objects from IDs
+      console.log('[useProfile] No claims_log data, using card IDs only');
+      for (const cardId of cardIds) {
+        cards.push({
+          cardId: cardId,
+          profileId: profileIdResult,
+          templateId: 0n,
+          tokenUri: '',
+          tier: 0,
+          issuer: '0x0000000000000000000000000000000000000000' as Address,
+          claimedAt: new Date(),
+        });
+      }
+    }
+  }
+  
+  console.log('[useProfile] Final cards array:', cards);
 
   // Fetch profile metadata from Supabase
   const { data: profileData } = await supabase
@@ -77,7 +118,7 @@ async function fetchProfileData(address: Address, publicClient: any) {
       discordHandle: profileRow.discord_handle || undefined,
       websiteUrl: profileRow.website_url || undefined,
       score: scoreResult,
-      cards: [],
+      cards: cards,
       createdAt: new Date(profileRow.created_at),
     };
   }
@@ -86,7 +127,7 @@ async function fetchProfileData(address: Address, publicClient: any) {
     profile,
     profileId: profileIdResult,
     score: scoreResult,
-    cards: [] as Card[], // Simplified for now
+    cards: cards,
   };
 }
 
@@ -101,66 +142,13 @@ export function useProfile(walletAddress?: Address): UseProfileReturn {
     queryFn: () => fetchProfileData(address!, publicClient!),
     enabled: !!address && !!publicClient,
     staleTime: 2 * 60 * 1000, // 2 minutes
-    gcTime: 5 * 60 * 1000, // 5 minutes (renamed from cacheTime in v5)
+    gcTime: 5 * 60 * 1000, // 5 minutes
     refetchOnWindowFocus: false,
     refetchOnMount: false,
   });
 
   const refreshProfile = async () => {
-    await refetch();
-  };
-
-  // Create profile - not implemented in hook, use CreateProfile component instead
-  const createProfile = async (tokenURI: string) => {
-    throw new Error('Use CreateProfile component to create a profile');
-  };
-
-  // Update profile metadata
-  const updateProfile = async (updates: any) => {
-    if (!address || !data?.profileId) {
-      throw new Error('Profile not found');
-    }
-
-    const { error: dbError } = await supabase
-      .from('profiles')
-      .update({
-        display_name: updates.displayName,
-        bio: updates.bio,
-        avatar_url: updates.avatarUrl,
-        banner_url: updates.bannerUrl,
-        twitter_handle: updates.twitterHandle,
-        discord_handle: updates.discordHandle,
-        website_url: updates.websiteUrl,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('wallet', address.toLowerCase());
-
-    if (dbError) {
-      throw new Error(`Failed to update profile: ${dbError.message}`);
-    }
-
-    // Invalidate and refetch
-    await queryClient.invalidateQueries({ queryKey: ['profile', address.toLowerCase()] });
-    await refetch();
-  };
-
-  // Upload avatar (placeholder - implement with your upload service)
-  const uploadAvatar = async (file: File): Promise<string> => {
-    // Implement file upload logic here
-    throw new Error('Upload not implemented');
-  };
-
-  // Upload banner (placeholder - implement with your upload service)
-  const uploadBanner = async (file: File): Promise<string> => {
-    // Implement file upload logic here
-    throw new Error('Upload not implemented');
-  };
-
-  // Recalculate score
-  const recalculateScore = async () => {
-    if (!address || !data?.profileId) {
-      throw new Error('Profile not found');
-    }
+    await queryClient.invalidateQueries({ queryKey: ['profile', address?.toLowerCase()] });
     await refetch();
   };
 
@@ -173,11 +161,6 @@ export function useProfile(walletAddress?: Address): UseProfileReturn {
     cards: result.cards,
     loading: isLoading,
     error: error as Error | null,
-    createProfile,
-    updateProfile,
-    uploadAvatar,
-    uploadBanner,
-    recalculateScore,
     refreshProfile,
   };
 }

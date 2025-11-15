@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../hooks/useAuth';
 import { useTemplates } from '../../hooks/useTemplates';
 import { useReputationCards } from '../../hooks/useReputationCards';
@@ -9,11 +10,13 @@ import { PROFILE_NFT_CONTRACT_ADDRESS } from '../../lib/contracts';
 import ProfileNFTAbi from '../../lib/ProfileNFT.abi.json';
 import { parseContractError } from '../../lib/errors';
 import { showSuccessNotification, showErrorNotification } from '../../lib/notifications';
+import { uploadToPinata, uploadJSONToPinata, validateImageFile } from '../../lib/pinata';
 
 export const IssueCardForm: React.FC = () => {
   const [searchParams] = useSearchParams();
   const preselectedTemplateId = searchParams.get('templateId');
 
+  const queryClient = useQueryClient();
   const { address, isIssuer, isLoading: authLoading } = useAuth();
   const { templates, loading: templatesLoading } = useTemplates();
   const { issueDirect, isProcessing, error: issueError, clearError } = useReputationCards();
@@ -25,6 +28,14 @@ export const IssueCardForm: React.FC = () => {
   const [validationError, setValidationError] = useState<string | null>(null);
   const [success, setSuccess] = useState<{ cardId: bigint; txHash: string } | null>(null);
   const [checkingProfile, setCheckingProfile] = useState(false);
+  
+  // New fields for Quick Mode
+  const [mode, setMode] = useState<'quick' | 'custom'>('quick');
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   // Filter templates where issuer matches connected wallet
   const issuerTemplates = templates.filter(
@@ -85,6 +96,71 @@ export const IssueCardForm: React.FC = () => {
     }
   };
 
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const error = validateImageFile(file, 5);
+    if (error) {
+      setValidationError(error);
+      return;
+    }
+
+    setImageFile(file);
+    setValidationError(null);
+
+    // Create preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setImagePreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const generateMetadataAndUpload = async (): Promise<string> => {
+    if (!imageFile) {
+      throw new Error('No image file selected');
+    }
+
+    setIsUploading(true);
+    try {
+      // Upload image to IPFS
+      const imageUrl = await uploadToPinata(imageFile);
+
+      // Get template info for metadata
+      const template = issuerTemplates.find(
+        (t) => t.templateId.toString() === selectedTemplateId
+      );
+
+      // Create NFT metadata
+      const metadata = {
+        name: title,
+        description: description,
+        image: imageUrl,
+        attributes: [
+          {
+            trait_type: 'Tier',
+            value: template?.tier || 1,
+          },
+          {
+            trait_type: 'Template ID',
+            value: selectedTemplateId,
+          },
+          {
+            trait_type: 'Issuer',
+            value: address,
+          },
+        ],
+      };
+
+      // Upload metadata to IPFS
+      const metadataUrl = await uploadJSONToPinata(metadata);
+      return metadataUrl;
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setValidationError(null);
@@ -101,9 +177,35 @@ export const IssueCardForm: React.FC = () => {
       return;
     }
 
-    if (!tokenURI.trim()) {
-      setValidationError('Token URI is required');
-      return;
+    // Validate based on mode
+    let finalTokenURI = tokenURI;
+    
+    if (mode === 'quick') {
+      if (!title.trim()) {
+        setValidationError('Title is required in Quick Mode');
+        return;
+      }
+      if (!description.trim()) {
+        setValidationError('Description is required in Quick Mode');
+        return;
+      }
+      if (!imageFile) {
+        setValidationError('Image is required in Quick Mode');
+        return;
+      }
+
+      // Generate and upload metadata
+      try {
+        finalTokenURI = await generateMetadataAndUpload();
+      } catch (err: any) {
+        setValidationError(err.message || 'Failed to upload metadata');
+        return;
+      }
+    } else {
+      if (!tokenURI.trim()) {
+        setValidationError('Token URI is required in Custom Mode');
+        return;
+      }
     }
 
     // Check if recipient has a profile
@@ -138,7 +240,7 @@ export const IssueCardForm: React.FC = () => {
       const result = await issueDirect({
         recipient: recipientAddress as Address,
         templateId: BigInt(selectedTemplateId),
-        tokenURI: tokenURI.trim(),
+        tokenURI: finalTokenURI.trim(),
       });
 
       setSuccess({ cardId: result.cardId, txHash: result.txHash });
@@ -150,11 +252,20 @@ export const IssueCardForm: React.FC = () => {
         txHash: result.txHash,
         duration: 6000,
       });
+
+      // Invalidate queries to refresh data
+      await queryClient.invalidateQueries({ queryKey: ['templates'] });
+      await queryClient.invalidateQueries({ queryKey: ['collectibles'] });
+      await queryClient.invalidateQueries({ queryKey: ['profile'] });
       
       // Reset form
       setRecipientAddress('');
       setSelectedTemplateId(preselectedTemplateId || '');
       setTokenURI('');
+      setTitle('');
+      setDescription('');
+      setImageFile(null);
+      setImagePreview(null);
     } catch (err: any) {
       console.error('Error issuing card:', err);
       // Show error notification
@@ -228,6 +339,49 @@ export const IssueCardForm: React.FC = () => {
         ) : (
           <div className="bg-white rounded-lg shadow-md p-6">
             <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Mode Selector */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  Metadata Mode
+                </label>
+                <div className="grid grid-cols-2 gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setMode('quick')}
+                    className={`p-4 border-2 rounded-lg transition-all ${
+                      mode === 'quick'
+                        ? 'border-blue-600 bg-blue-50'
+                        : 'border-gray-300 hover:border-gray-400'
+                    }`}
+                  >
+                    <div className="text-center">
+                      <div className="text-2xl mb-2">⚡</div>
+                      <div className="font-semibold text-gray-900">Quick Mode</div>
+                      <div className="text-xs text-gray-600 mt-1">
+                        Upload image & auto-generate metadata
+                      </div>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMode('custom')}
+                    className={`p-4 border-2 rounded-lg transition-all ${
+                      mode === 'custom'
+                        ? 'border-blue-600 bg-blue-50'
+                        : 'border-gray-300 hover:border-gray-400'
+                    }`}
+                  >
+                    <div className="text-center">
+                      <div className="text-2xl mb-2">🔗</div>
+                      <div className="font-semibold text-gray-900">Custom IPFS</div>
+                      <div className="text-xs text-gray-600 mt-1">
+                        Use your own pre-made token URI
+                      </div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
               {/* Recipient Address */}
               <div>
                 <label htmlFor="recipient" className="block text-sm font-medium text-gray-700 mb-2">
@@ -244,7 +398,7 @@ export const IssueCardForm: React.FC = () => {
                   }}
                   placeholder="0x..."
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  disabled={isProcessing || checkingProfile}
+                  disabled={isProcessing || checkingProfile || isUploading}
                 />
                 <p className="mt-1 text-sm text-gray-500">
                   The wallet address of the user who will receive the card
@@ -265,7 +419,7 @@ export const IssueCardForm: React.FC = () => {
                     clearError();
                   }}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  disabled={isProcessing || checkingProfile}
+                  disabled={isProcessing || checkingProfile || isUploading}
                 >
                   <option value="">Select a template</option>
                   {issuerTemplates.map((template) => (
@@ -309,28 +463,103 @@ export const IssueCardForm: React.FC = () => {
                 )}
               </div>
 
-              {/* Token URI */}
-              <div>
-                <label htmlFor="tokenURI" className="block text-sm font-medium text-gray-700 mb-2">
-                  Token URI
-                </label>
-                <input
-                  type="text"
-                  id="tokenURI"
-                  value={tokenURI}
-                  onChange={(e) => {
-                    setTokenURI(e.target.value);
-                    setValidationError(null);
-                    clearError();
-                  }}
-                  placeholder="ipfs://... or https://..."
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  disabled={isProcessing || checkingProfile}
-                />
-                <p className="mt-1 text-sm text-gray-500">
-                  The metadata URI for this card (IPFS or HTTP URL)
-                </p>
-              </div>
+              {/* Quick Mode Fields */}
+              {mode === 'quick' && (
+                <>
+                  {/* Title */}
+                  <div>
+                    <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-2">
+                      Card Title
+                    </label>
+                    <input
+                      type="text"
+                      id="title"
+                      value={title}
+                      onChange={(e) => {
+                        setTitle(e.target.value);
+                        setValidationError(null);
+                      }}
+                      placeholder="e.g., Early Adopter Badge"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      disabled={isProcessing || checkingProfile || isUploading}
+                    />
+                  </div>
+
+                  {/* Description */}
+                  <div>
+                    <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-2">
+                      Description
+                    </label>
+                    <textarea
+                      id="description"
+                      value={description}
+                      onChange={(e) => {
+                        setDescription(e.target.value);
+                        setValidationError(null);
+                      }}
+                      rows={3}
+                      placeholder="Describe what this card represents..."
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      disabled={isProcessing || checkingProfile || isUploading}
+                    />
+                  </div>
+
+                  {/* Image Upload */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Card Image
+                    </label>
+                    <div className="flex items-start gap-4">
+                      {imagePreview && (
+                        <div className="flex-shrink-0">
+                          <img
+                            src={imagePreview}
+                            alt="Preview"
+                            className="w-32 h-32 object-cover rounded-lg border-2 border-gray-300"
+                          />
+                        </div>
+                      )}
+                      <div className="flex-1">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImageChange}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          disabled={isProcessing || checkingProfile || isUploading}
+                        />
+                        <p className="mt-1 text-sm text-gray-500">
+                          Upload an image (JPEG, PNG, GIF, or WebP, max 5MB)
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Custom Mode Fields */}
+              {mode === 'custom' && (
+                <div>
+                  <label htmlFor="tokenURI" className="block text-sm font-medium text-gray-700 mb-2">
+                    Token URI
+                  </label>
+                  <input
+                    type="text"
+                    id="tokenURI"
+                    value={tokenURI}
+                    onChange={(e) => {
+                      setTokenURI(e.target.value);
+                      setValidationError(null);
+                      clearError();
+                    }}
+                    placeholder="ipfs://... or https://..."
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    disabled={isProcessing || checkingProfile || isUploading}
+                  />
+                  <p className="mt-1 text-sm text-gray-500">
+                    The metadata URI for this card (IPFS or HTTP URL)
+                  </p>
+                </div>
+              )}
 
               {/* Validation Error */}
               {validationError && (
@@ -357,14 +586,16 @@ export const IssueCardForm: React.FC = () => {
               {/* Submit Button */}
               <button
                 type="submit"
-                disabled={isProcessing || checkingProfile}
+                disabled={isProcessing || checkingProfile || isUploading}
                 className={`w-full px-6 py-3 rounded-lg font-semibold text-white transition-colors ${
-                  isProcessing || checkingProfile
+                  isProcessing || checkingProfile || isUploading
                     ? 'bg-gray-400 cursor-not-allowed'
                     : 'bg-blue-600 hover:bg-blue-700'
                 }`}
               >
-                {checkingProfile
+                {isUploading
+                  ? 'Uploading to IPFS...'
+                  : checkingProfile
                   ? 'Verifying Profile...'
                   : isProcessing
                   ? 'Issuing Card...'
