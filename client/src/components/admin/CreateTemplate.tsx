@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useContractWrite, useWaitForTransaction, useContractEvent } from 'wagmi';
+import { useContractWrite, useWaitForTransaction, useContractEvent, usePublicClient } from 'wagmi';
 import { type Address, isAddress } from 'viem';
 import { REPUTATION_CARD_CONTRACT_ADDRESS } from '../../lib/contracts';
 import ReputationCardAbi from '../../lib/ReputationCard.abi.json';
 import { showSuccessNotification, showErrorNotification } from '../../lib/notifications';
 import { supabase } from '../../lib/supabase';
+import { syncTemplateToDatabase } from '../../lib/template-sync';
 
 interface CreateTemplateFormData {
   templateId: string;
@@ -31,6 +32,7 @@ export const CreateTemplate: React.FC = () => {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [createdTemplateId, setCreatedTemplateId] = useState<string | null>(null);
   const [isLoadingTemplateId, setIsLoadingTemplateId] = useState(false);
+  const publicClient = usePublicClient();
 
   // Fetch next template ID on mount
   useEffect(() => {
@@ -94,12 +96,40 @@ export const CreateTemplate: React.FC = () => {
             duration: 6000,
           });
 
+          // Sync template to database
+          syncTemplateToCache(BigInt(templateId));
+
           // Increment the counter in Supabase for next template
           incrementTemplateCounter();
         }
       }
     },
   });
+
+  // Function to sync template to cache
+  const syncTemplateToCache = async (templateId: bigint) => {
+    if (!publicClient) {
+      console.error('[CreateTemplate] Public client not available for sync');
+      return;
+    }
+
+    try {
+      console.log(`[CreateTemplate] Syncing template ${templateId} to database...`);
+      const result = await syncTemplateToDatabase(publicClient, templateId);
+      
+      if (result.success) {
+        console.log(`[CreateTemplate] Template ${templateId} synced successfully`);
+      } else {
+        console.error(`[CreateTemplate] Failed to sync template ${templateId}:`, result.error);
+        showErrorNotification(
+          'Template Cache Warning',
+          'Template created on-chain but failed to cache in database. It will still work correctly.'
+        );
+      }
+    } catch (err) {
+      console.error('[CreateTemplate] Exception syncing template:', err);
+    }
+  };
 
   // Function to increment template counter
   const incrementTemplateCounter = async () => {
