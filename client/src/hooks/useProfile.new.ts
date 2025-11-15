@@ -15,11 +15,6 @@ export interface UseProfileReturn {
   cards: Card[];
   loading: boolean;
   error: Error | null;
-  createProfile: (tokenURI: string) => Promise<void>;
-  updateProfile: (updates: any) => Promise<void>;
-  uploadAvatar: (file: File) => Promise<string>;
-  uploadBanner: (file: File) => Promise<string>;
-  recalculateScore: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
 
@@ -101,7 +96,7 @@ export function useProfile(walletAddress?: Address): UseProfileReturn {
     queryFn: () => fetchProfileData(address!, publicClient!),
     enabled: !!address && !!publicClient,
     staleTime: 2 * 60 * 1000, // 2 minutes
-    gcTime: 5 * 60 * 1000, // 5 minutes (renamed from cacheTime in v5)
+    cacheTime: 5 * 60 * 1000, // 5 minutes
     refetchOnWindowFocus: false,
     refetchOnMount: false,
   });
@@ -110,74 +105,13 @@ export function useProfile(walletAddress?: Address): UseProfileReturn {
     await refetch();
   };
 
-  // Create profile - not implemented in hook, use CreateProfile component instead
-  const createProfile = async (tokenURI: string) => {
-    throw new Error('Use CreateProfile component to create a profile');
-  };
-
-  // Update profile metadata
-  const updateProfile = async (updates: any) => {
-    if (!address || !data?.profileId) {
-      throw new Error('Profile not found');
-    }
-
-    const { error: dbError } = await supabase
-      .from('profiles')
-      .update({
-        display_name: updates.displayName,
-        bio: updates.bio,
-        avatar_url: updates.avatarUrl,
-        banner_url: updates.bannerUrl,
-        twitter_handle: updates.twitterHandle,
-        discord_handle: updates.discordHandle,
-        website_url: updates.websiteUrl,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('wallet', address.toLowerCase());
-
-    if (dbError) {
-      throw new Error(`Failed to update profile: ${dbError.message}`);
-    }
-
-    // Invalidate and refetch
-    await queryClient.invalidateQueries({ queryKey: ['profile', address.toLowerCase()] });
-    await refetch();
-  };
-
-  // Upload avatar (placeholder - implement with your upload service)
-  const uploadAvatar = async (file: File): Promise<string> => {
-    // Implement file upload logic here
-    throw new Error('Upload not implemented');
-  };
-
-  // Upload banner (placeholder - implement with your upload service)
-  const uploadBanner = async (file: File): Promise<string> => {
-    // Implement file upload logic here
-    throw new Error('Upload not implemented');
-  };
-
-  // Recalculate score
-  const recalculateScore = async () => {
-    if (!address || !data?.profileId) {
-      throw new Error('Profile not found');
-    }
-    await refetch();
-  };
-
-  const result = data || { profile: null, profileId: null, score: 0n, cards: [] };
-
   return {
-    profile: result.profile,
-    profileId: result.profileId,
-    score: result.score,
-    cards: result.cards,
+    profile: data?.profile || null,
+    profileId: data?.profileId || null,
+    score: data?.score || 0n,
+    cards: data?.cards || [],
     loading: isLoading,
     error: error as Error | null,
-    createProfile,
-    updateProfile,
-    uploadAvatar,
-    uploadBanner,
-    recalculateScore,
     refreshProfile,
   };
 }

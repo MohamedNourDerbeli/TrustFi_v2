@@ -6,11 +6,16 @@ import { CreateProfile } from "../components/user/CreateProfile";
 import { supabase, type ClaimLogRow } from "../lib/supabase";
 
 export const UserDashboard: React.FC = () => {
-  const { address, isConnected, hasProfile, isLoading } = useAuth();
-  const { profile, profileId, score, cards, loading: profileLoading } = useProfile(address);
+  const { address, isConnected, hasProfile, isLoading, refreshProfile } = useAuth();
+  const { profile, profileId, score, cards, loading: profileLoading, refreshProfile: refreshProfileData } = useProfile(address);
   const [showCreateProfile, setShowCreateProfile] = useState(false);
   const [recentActivity, setRecentActivity] = useState<ClaimLogRow[]>([]);
   const [loadingActivity, setLoadingActivity] = useState(true);
+
+  // Minimal debug logging - only log on mount and when hasProfile changes
+  useEffect(() => {
+    console.log('[UserDashboard] hasProfile:', hasProfile, 'profileId:', profileId?.toString());
+  }, [hasProfile, profileId]);
 
   // Fetch recent activity for the user
   useEffect(() => {
@@ -74,6 +79,12 @@ export const UserDashboard: React.FC = () => {
     return (
       <div className="max-w-2xl mx-auto">
         <div className="bg-white rounded-lg shadow-md p-8">
+          <div className="bg-yellow-50 border border-yellow-200 rounded p-4 mb-4">
+            <p className="text-sm font-mono text-yellow-800">
+              DEBUG: hasProfile={hasProfile.toString()}, isLoading={isLoading.toString()}, 
+              profileId={profileId?.toString() || 'null'}, address={address}
+            </p>
+          </div>
           <h2 className="text-2xl font-semibold text-gray-900 mb-4">
             Create Your Profile
           </h2>
@@ -115,6 +126,48 @@ export const UserDashboard: React.FC = () => {
         <p className="text-gray-600">
           Manage your profile, view your reputation, and discover new credentials
         </p>
+        
+        {/* Debug: Show if profile data is missing */}
+        {profileId && !profile && (
+          <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <p className="text-sm text-yellow-800 mb-2">
+              ⚠️ Profile exists on-chain (ID: {profileId.toString()}) but metadata is missing from database.
+            </p>
+            <button
+              onClick={async () => {
+                if (!address || !profileId) return;
+                const { error } = await supabase
+                  .from('profiles')
+                  .upsert({
+                    wallet: address.toLowerCase(),
+                    profile_id: profileId.toString(),
+                    token_uri: '',
+                    display_name: `User ${profileId.toString()}`,
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                  }, { onConflict: 'wallet' });
+                
+                if (error) {
+                  console.error('Error creating profile metadata:', error);
+                  alert('Error: ' + error.message);
+                } else {
+                  console.log('Profile metadata created, clearing cache and refreshing...');
+                  // Clear cache and refresh both auth and profile data
+                  await Promise.all([
+                    refreshProfile(),
+                    refreshProfileData()
+                  ]);
+                  alert('Profile metadata created! Page will reload.');
+                  // Force a full page reload to ensure all caches are cleared
+                  window.location.reload();
+                }
+              }}
+              className="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 text-sm"
+            >
+              Create Profile Metadata
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Profile Summary Section */}

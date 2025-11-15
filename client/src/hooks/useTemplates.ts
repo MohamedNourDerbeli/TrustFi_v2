@@ -4,7 +4,11 @@ import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
 import { type Address, parseAbiItem } from 'viem';
 import { REPUTATION_CARD_CONTRACT_ADDRESS } from '../lib/contracts';
 import ReputationCardABI from '../lib/ReputationCard.abi.json';
+import { useDataCache } from '../contexts/DataCacheContext';
 import type { Template, CreateTemplateParams } from '../types/template';
+
+const CACHE_KEY = 'templates';
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 export interface UseTemplatesReturn {
   templates: Template[];
@@ -20,6 +24,7 @@ export function useTemplates(profileId?: bigint | null): UseTemplatesReturn {
   const { address } = useAccount();
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
+  const { getCache, setCache, isCacheValid } = useDataCache();
   
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,6 +35,17 @@ export function useTemplates(profileId?: bigint | null): UseTemplatesReturn {
     if (!publicClient) {
       setLoading(false);
       return;
+    }
+
+    // Check cache first
+    if (isCacheValid(CACHE_KEY, CACHE_DURATION)) {
+      const cachedTemplates = getCache<Template[]>(CACHE_KEY);
+      if (cachedTemplates) {
+        console.log('Using cached templates');
+        setTemplates(cachedTemplates);
+        setLoading(false);
+        return;
+      }
     }
 
     try {
@@ -135,13 +151,16 @@ export function useTemplates(profileId?: bigint | null): UseTemplatesReturn {
       });
 
       setTemplates(activeTemplates);
+      
+      // Cache the results
+      setCache(CACHE_KEY, activeTemplates, CACHE_DURATION);
     } catch (err) {
       console.error('Error fetching templates:', err);
       setError(err as Error);
     } finally {
       setLoading(false);
     }
-  }, [publicClient, profileId]);
+  }, [publicClient, profileId, getCache, setCache, isCacheValid]);
 
   // Initial fetch
   useEffect(() => {

@@ -1,11 +1,12 @@
 // contexts/AuthContext.tsx
 import React, { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
-import { useAccount, useConnect, useDisconnect, useContractRead } from 'wagmi';
+import { useAccount, useConnect, useDisconnect, useContractRead, usePublicClient } from 'wagmi';
 import { type Address, keccak256, toHex } from 'viem';
 import { supabase } from '../lib/supabase';
 import { PROFILE_NFT_CONTRACT_ADDRESS, REPUTATION_CARD_CONTRACT_ADDRESS } from '../lib/contracts';
 import ProfileNFTAbi from '../lib/ProfileNFT.abi.json';
 import ReputationCardAbi from '../lib/ReputationCard.abi.json';
+import { useDataCache } from './DataCacheContext';
 
 // Role hashes
 const DEFAULT_ADMIN_ROLE = '0x0000000000000000000000000000000000000000000000000000000000000000';
@@ -27,12 +28,16 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { address, isConnected } = useAccount();
+  const publicClient = usePublicClient();
   const { connect: wagmiConnect, connectors } = useConnect();
   const { disconnect: wagmiDisconnect } = useDisconnect();
+  const { getCache, setCache, isCacheValid, clearCache } = useDataCache();
   const [hasProfile, setHasProfile] = useState(false);
   const [isCheckingProfile, setIsCheckingProfile] = useState(true);
   const checkInProgressRef = useRef(false);
   const lastCheckedAddressRef = useRef<string | null>(null);
+
+  // Removed excessive debug logging
 
   // Check if user has DEFAULT_ADMIN_ROLE on ProfileNFT contract
   const { data: isAdminOnProfile } = useContractRead({
@@ -70,9 +75,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     enabled: !!address && isConnected,
   });
 
-  // Check if profile exists in Supabase
+  // Check if profile exists (both on-chain and in Supabase)
   const checkProfile = async () => {
-    if (!address || !isConnected) {
+    if (!address || !isConnected || !publicClient) {
       setIsCheckingProfile(false);
       setHasProfile(false);
       lastCheckedAddressRef.current = null;
@@ -80,10 +85,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const lowerAddress = address.toLowerCase();
+    const cacheKey = `hasProfile_${lowerAddress}`;
+
+    // Check cache first
+    if (isCacheValid(cacheKey, 60 * 1000)) { // 1 minute cache
+      const cachedValue = getCache<boolean>(cacheKey);
+      if (cachedValue !== null) {
+        setHasProfile(cachedValue);
+        setIsCheckingProfile(false);
+        return;
+      }
+    }
 
     // Prevent duplicate checks for the same address
     if (checkInProgressRef.current && lastCheckedAddressRef.current === lowerAddress) {
-      console.log('[AuthContext] Check already in progress for:', lowerAddress);
       return;
     }
 
@@ -92,27 +107,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsCheckingProfile(true);
 
     try {
-      console.log('[AuthContext] Checking profile for address:', lowerAddress);
-      
+      // First check on-chain
+      const profileIdResult = await publicClient.readContract({
+        address: PROFILE_NFT_CONTRACT_ADDRESS as `0x${string}`,
+        abi: ProfileNFTAbi,
+        functionName: 'addressToProfileId',
+        args: [address],
+      }) as bigint;
+
+      // If profileId is 0, user doesn't have a profile
+      if (profileIdResult === 0n) {
+        setHasProfile(false);
+        setCache(cacheKey, false, 60 * 1000);
+        return;
+      }
+
+      // Profile exists on-chain, now check Supabase
       const { data, error } = await supabase
         .from('profiles')
         .select('id, wallet, profile_id')
         .ilike('wallet', lowerAddress)
         .maybeSingle();
 
-      console.log('[AuthContext] Profile check result:', { data, error, hasProfile: !!data });
-
-      if (error) {
+      if (error && error.code !== 'PGRST116') {
         console.error('[AuthContext] Error checking profile:', error);
-        setHasProfile(false);
+        // If there's an error but we have on-chain profile, still consider it valid
+        setHasProfile(true);
+        setCache(cacheKey, true, 60 * 1000);
       } else {
-        const profileExists = !!data;
-        console.log('[AuthContext] Setting hasProfile to:', profileExists);
+        const profileExists = !!data || profileIdResult > 0n;
         setHasProfile(profileExists);
+        setCache(cacheKey, profileExists, 60 * 1000);
       }
     } catch (err) {
       console.error('[AuthContext] Exception checking profile:', err);
       setHasProfile(false);
+      setCache(cacheKey, false, 60 * 1000);
     } finally {
       setIsCheckingProfile(false);
       checkInProgressRef.current = false;
@@ -120,8 +150,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    // Only check profile, don't clear cache unless address actually changed
     checkProfile();
-  }, [address, isConnected]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [address, isConnected, publicClient]);
 
   const connect = () => {
     const connector = connectors[0];
