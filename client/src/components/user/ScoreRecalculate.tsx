@@ -26,60 +26,71 @@ export function ScoreRecalculate() {
     if (!publicClient || !profileId || !txHash) return;
 
     let unwatchEvent: (() => void) | undefined;
+    let timeoutId: NodeJS.Timeout;
 
     const waitForTransaction = async () => {
       try {
         setIsConfirming(true);
         
         // Wait for transaction receipt
-        await publicClient.waitForTransactionReceipt({
+        const receipt = await publicClient.waitForTransactionReceipt({
           hash: txHash,
         });
+
+        // Parse logs to find ScoreUpdated event
+        let updatedScore: bigint | null = null;
+        for (const log of receipt.logs) {
+          try {
+            // Check if this log is from our contract
+            if (log.address.toLowerCase() !== PROFILE_NFT_CONTRACT_ADDRESS.toLowerCase()) {
+              continue;
+            }
+            
+            // Try to decode the log
+            const decoded = (publicClient as any).decodeEventLog({
+              abi: ProfileNFTABI,
+              data: log.data,
+              topics: (log as any).topics,
+            });
+            
+            if (decoded.eventName === 'ScoreUpdated') {
+              updatedScore = (decoded.args as any).newScore as bigint;
+              break;
+            }
+          } catch {
+            // Skip logs that don't match
+          }
+        }
 
         setIsConfirmed(true);
         setIsConfirming(false);
 
-        // Watch for ScoreUpdated event
-        unwatchEvent = publicClient.watchContractEvent({
-          address: PROFILE_NFT_CONTRACT_ADDRESS as `0x${string}`,
-          abi: ProfileNFTABI,
-          eventName: 'ScoreUpdated',
-          args: {
-            tokenId: profileId,
-          },
-          onLogs: (logs) => {
-            if (logs.length > 0) {
-              const log = logs[0] as any;
-              // Extract newScore from event
-              const updatedScore = log.args?.newScore as bigint;
-              if (updatedScore !== undefined) {
-                setNewScore(updatedScore);
-                setLastUpdated(new Date());
-                
-                // Show success notification
-                showScoreUpdatedNotification(score, updatedScore, txHash);
-                
-                // Refresh profile data
-                refreshProfile();
-                
-                // Stop watching
-                if (unwatchEvent) {
-                  unwatchEvent();
-                }
-              }
-            }
-          },
-        });
+        if (updatedScore !== null) {
+          setNewScore(updatedScore);
+          setLastUpdated(new Date());
+          showScoreUpdatedNotification(score, updatedScore, txHash);
+          
+          // Refresh profile data after a short delay
+          setTimeout(() => {
+            refreshProfile();
+          }, 1000);
+        } else {
+          // If we couldn't find the event in logs, just refresh the profile
+          setTimeout(() => {
+            refreshProfile();
+          }, 1000);
+        }
 
-        // Cleanup after 30 seconds
-        setTimeout(() => {
-          if (unwatchEvent) {
-            unwatchEvent();
-          }
-        }, 30000);
+        // Reset states after 5 seconds
+        timeoutId = setTimeout(() => {
+          setIsRecalculating(false);
+          setTxHash(null);
+          setIsConfirmed(false);
+        }, 5000);
       } catch (err) {
         console.error('Error waiting for transaction:', err);
         setIsConfirming(false);
+        setIsRecalculating(false);
       }
     };
 
@@ -89,16 +100,13 @@ export function ScoreRecalculate() {
       if (unwatchEvent) {
         unwatchEvent();
       }
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
     };
-  }, [publicClient, profileId, txHash, refreshProfile]);
+  }, [publicClient, profileId, txHash, score, refreshProfile]);
 
-  // Reset state when transaction is confirmed
-  useEffect(() => {
-    if (isConfirmed && newScore !== null) {
-      setIsRecalculating(false);
-      setTxHash(null);
-    }
-  }, [isConfirmed, newScore]);
+
 
   const handleRecalculate = async () => {
     if (!address || !walletClient || !publicClient) {
@@ -117,11 +125,11 @@ export function ScoreRecalculate() {
       setNewScore(null);
 
       // Check if reputation contract is set
-      const reputationContract = await publicClient.readContract({
+      const reputationContract = (await publicClient.readContract({
         address: PROFILE_NFT_CONTRACT_ADDRESS as `0x${string}`,
         abi: ProfileNFTABI,
         functionName: 'reputationContract',
-      }) as `0x${string}`;
+      } as any)) as `0x${string}`;
 
       if (!reputationContract || reputationContract === '0x0000000000000000000000000000000000000000') {
         setError('Reputation contract not set. Please contact the administrator.');
@@ -130,12 +138,12 @@ export function ScoreRecalculate() {
       }
 
       // Call recalculateMyScore
-      const hash = await walletClient.writeContract({
+      const hash = (await walletClient.writeContract({
         address: PROFILE_NFT_CONTRACT_ADDRESS as `0x${string}`,
         abi: ProfileNFTABI,
         functionName: 'recalculateMyScore',
         args: [],
-      });
+      } as any)) as Hash;
 
       setTxHash(hash);
     } catch (err: any) {

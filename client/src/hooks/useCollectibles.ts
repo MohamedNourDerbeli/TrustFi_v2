@@ -55,7 +55,9 @@ async function fetchCollectiblesData(publicClient: any, profileId?: bigint | nul
         const now = BigInt(Math.floor(Date.now() / 1000));
         const hasStarted = startTime === 0n || now >= startTime;
         const hasNotEnded = endTime === 0n || now <= endTime;
-        const isClaimable = hasStarted && hasNotEnded && !isPaused && currentSupply < maxSupply;
+        // maxSupply = 0 means unlimited supply
+        const hasSupply = maxSupply === 0n || currentSupply < maxSupply;
+        const isClaimable = hasStarted && hasNotEnded && !isPaused && hasSupply;
 
         return {
           id: item.id,

@@ -199,6 +199,42 @@ contract ReputationCard is ERC721, AccessControl, EIP712 {
 
     /* ----------------------- VIEWS ----------------------- */
 
+    /// @notice Get detailed card information for a profile
+    /// @param profileId The profile ID to query
+    /// @return cardIds Array of card IDs
+    /// @return templateIds Array of template IDs for each card
+    /// @return tiers Array of tiers for each card
+    /// @return issuers Array of issuer addresses for each card
+    function getCardsDetailForProfile(uint256 profileId)
+        external
+        view
+        returns (
+            uint256[] memory cardIds,
+            uint256[] memory templateIds,
+            uint8[] memory tiers,
+            address[] memory issuers
+        )
+    {
+        cardIds = IProfileNFT(profileNFTContract).getCardsForProfile(profileId);
+        uint256 length = cardIds.length;
+
+        templateIds = new uint256[](length);
+        tiers = new uint8[](length);
+        issuers = new address[](length);
+
+        for (uint256 i = 0; i < length; i++) {
+            uint256 cardId = cardIds[i];
+            uint256 templateId = cardToTemplate[cardId];
+            Template storage t = templates[templateId];
+
+            templateIds[i] = templateId;
+            tiers[i] = t.tier;
+            issuers[i] = t.issuer;
+        }
+
+        return (cardIds, templateIds, tiers, issuers);
+    }
+
     function tokenURI(uint256 tokenId) public view override returns (string memory) {
         require(_ownerOf(tokenId) != address(0), "Nonexistent");
         return _tokenURIs[tokenId];

@@ -37,40 +37,32 @@ async function fetchProfileScore(profileId: bigint, publicClient: any): Promise<
 
 // Fetch cards for profile
 async function fetchProfileCards(profileId: bigint, publicClient: any): Promise<Card[]> {
-  const cardsResult = await publicClient.readContract({
-    address: PROFILE_NFT_CONTRACT_ADDRESS as `0x${string}`,
-    abi: ProfileNFTABI,
-    functionName: 'getCardsForProfile',
-    args: [profileId],
-  }) as bigint[];
+  try {
+    const [cardIds, templateIds, tiers, issuers] = await publicClient.readContract({
+      address: REPUTATION_CARD_CONTRACT_ADDRESS as `0x${string}`,
+      abi: ReputationCardABI,
+      functionName: 'getCardsDetailForProfile',
+      args: [profileId],
+    }) as [bigint[], bigint[], number[], Address[]];
 
-  const cardDetails = await Promise.all(
-    cardsResult.map(async (cardId) => {
-      try {
-        const tokenUri = await publicClient.readContract({
-          address: REPUTATION_CARD_CONTRACT_ADDRESS as `0x${string}`,
-          abi: ReputationCardABI,
-          functionName: 'tokenURI',
-          args: [cardId],
-        }) as string;
+    const cards: Card[] = [];
+    for (let i = 0; i < cardIds.length; i++) {
+      cards.push({
+        cardId: cardIds[i],
+        profileId,
+        templateId: templateIds[i],
+        tokenUri: '', // Fetched on-demand in CardDisplay component
+        tier: tiers[i],
+        issuer: issuers[i],
+        claimedAt: new Date(),
+      });
+    }
 
-        return {
-          cardId,
-          templateId: 0n,
-          profileId,
-          tokenUri,
-          tier: 0,
-          issuer: '0x0000000000000000000000000000000000000000' as Address,
-          claimedAt: new Date(),
-        } as Card;
-      } catch (err) {
-        console.error(`Error fetching card ${cardId}:`, err);
-        return null;
-      }
-    })
-  );
-
-  return cardDetails.filter((card): card is Card => card !== null);
+    return cards;
+  } catch (err) {
+    console.error('Error fetching cards:', err);
+    return [];
+  }
 }
 
 // Fetch complete profile data

@@ -1,16 +1,26 @@
 // components/user/DiscoverCollectibles.tsx
+import { useState } from 'react';
 import { useCollectibles } from '../../hooks/useCollectibles';
 import { useProfile } from '../../hooks/useProfile';
 import { useAuth } from '../../hooks/useAuth';
+import { useReputationCards } from '../../hooks/useReputationCards';
+import { supabase } from '../../lib/supabase';
+import { showCardClaimedNotification, showErrorNotification } from '../../lib/notifications';
+import { parseContractError } from '../../lib/errors';
 import type { Collectible } from '../../types/collectible';
+import type { Address, Hex } from 'viem';
 
 interface CollectibleCardProps {
   collectible: Collectible & { isClaimable?: boolean };
-  onClaim: (templateId: bigint) => void;
+  onClaim: (templateId: bigint) => Promise<void>;
   hasProfile: boolean;
+  isClaiming: boolean;
 }
 
-function CollectibleCard({ collectible, onClaim, hasProfile }: CollectibleCardProps) {
+function CollectibleCard({ collectible, onClaim, hasProfile, isClaiming }: CollectibleCardProps) {
+  // Check if this is the Kusama Living Profile (template 999)
+  const isKusamaLivingProfile = collectible.templateId === 999n;
+  
   // Determine eligibility status
   let eligibilityStatus = '';
   let canClaim = false;
@@ -80,7 +90,19 @@ function CollectibleCard({ collectible, onClaim, hasProfile }: CollectibleCardPr
 
       <div className="p-6 pt-4">
         <div className="flex justify-between items-start mb-3">
-          <h3 className="text-xl font-semibold text-gray-900">{collectible.title}</h3>
+          <div className="flex-1">
+            <h3 className="text-xl font-semibold text-gray-900">{collectible.title}</h3>
+            {isKusamaLivingProfile && (
+              <div className="flex items-center gap-1 mt-1">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gradient-to-r from-purple-100 to-pink-100 text-purple-800 border border-purple-200">
+                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
+                  </svg>
+                  Dynamic NFT
+                </span>
+              </div>
+            )}
+          </div>
           {collectible.tier && (
             <span className={`px-3 py-1 rounded-full text-xs font-bold ${getTierColor(collectible.tier)}`}>
               {getTierName(collectible.tier)}
@@ -89,6 +111,15 @@ function CollectibleCard({ collectible, onClaim, hasProfile }: CollectibleCardPr
         </div>
         
         <p className="text-gray-600 mb-4 text-sm line-clamp-3">{collectible.description}</p>
+        
+        {isKusamaLivingProfile && (
+          <div className="mb-4 p-3 bg-gradient-to-r from-purple-50 to-pink-50 rounded-md border border-purple-200">
+            <p className="text-xs font-semibold text-purple-900 mb-1">✨ Living Profile</p>
+            <p className="text-xs text-purple-800">
+              This NFT updates automatically to reflect your current reputation score in real-time.
+            </p>
+          </div>
+        )}
         
         {/* Requirements */}
         {collectible.requirements && Object.keys(collectible.requirements).length > 0 && (
@@ -135,14 +166,23 @@ function CollectibleCard({ collectible, onClaim, hasProfile }: CollectibleCardPr
           
           <button
             onClick={() => onClaim(collectible.templateId)}
-            disabled={!canClaim}
+            disabled={!canClaim || isClaiming}
             className={`px-4 py-2 rounded-md font-medium transition-colors ${
-              canClaim
+              canClaim && !isClaiming
                 ? 'bg-blue-600 text-white hover:bg-blue-700'
                 : 'bg-gray-300 text-gray-500 cursor-not-allowed'
             }`}
           >
-            {collectible.hasClaimed ? 'Claimed' : 'Claim'}
+            {isClaiming ? (
+              <span className="flex items-center gap-2">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                Claiming...
+              </span>
+            ) : collectible.hasClaimed ? (
+              'Claimed'
+            ) : (
+              'Claim'
+            )}
           </button>
         </div>
       </div>
@@ -151,15 +191,80 @@ function CollectibleCard({ collectible, onClaim, hasProfile }: CollectibleCardPr
 }
 
 export function DiscoverCollectibles() {
-  const { hasProfile } = useAuth();
+  const { hasProfile, address } = useAuth();
   const { profileId } = useProfile();
   const { collectibles, loading, error, refreshCollectibles } = useCollectibles(profileId);
+  const { claimWithSignature, isProcessing } = useReputationCards();
+  const [claimingTemplateId, setClaimingTemplateId] = useState<bigint | null>(null);
 
-  const handleClaim = (templateId: bigint) => {
-    // This will be implemented in ClaimCard component
-    // For now, just log
-    console.log('Claim collectible with template:', templateId);
-    // TODO: Navigate to claim page or open claim modal
+  const handleClaim = async (templateId: bigint) => {
+    if (!address || !profileId || !hasProfile) {
+      showErrorNotification('Profile Required', 'You need to create a profile before claiming collectibles.');
+      return;
+    }
+
+    setClaimingTemplateId(templateId);
+
+    try {
+      // Find the collectible to get its data
+      const collectible = collectibles.find(c => c.templateId === templateId);
+      if (!collectible) {
+        throw new Error('Collectible not found');
+      }
+
+      // Check if this is template 999 (Kusama Living Profile)
+      const isKusamaLivingProfile = templateId === 999n;
+      let tokenURI: string;
+
+      if (isKusamaLivingProfile) {
+        // For template 999, construct dynamic metadata URI using token_uri field as prefix
+        // The token_uri field should contain the Edge Function URL prefix
+        tokenURI = `${collectible.tokenUri}${profileId.toString()}`;
+        console.log('[DiscoverCollectibles] Using dynamic URI for template 999:', tokenURI);
+      } else {
+        // For other templates, use the static token URI (or upload to IPFS if needed)
+        tokenURI = collectible.tokenUri;
+        console.log('[DiscoverCollectibles] Using static URI:', tokenURI);
+      }
+
+      // Request signature from backend
+      const { data: signatureData, error: signatureError } = await supabase.functions.invoke('generate-signature', {
+        body: {
+          user: address,
+          profileOwner: address,
+          templateId: templateId.toString(),
+          tokenURI,
+        },
+      });
+
+      if (signatureError || !signatureData) {
+        throw new Error(signatureError?.message || 'Failed to generate signature');
+      }
+
+      const { nonce, signature } = signatureData;
+
+      // Claim the collectible with signature
+      const result = await claimWithSignature({
+        user: address,
+        profileOwner: address,
+        templateId,
+        nonce: BigInt(nonce),
+        tokenURI,
+        signature: signature as Hex,
+      });
+
+      // Show success notification
+      showCardClaimedNotification(result.cardId, result.txHash);
+
+      // Refresh collectibles list
+      await refreshCollectibles();
+    } catch (err) {
+      console.error('[DiscoverCollectibles] Error claiming collectible:', err);
+      const parsed = parseContractError(err);
+      showErrorNotification('Claim Failed', parsed.message);
+    } finally {
+      setClaimingTemplateId(null);
+    }
   };
 
   if (loading) {
@@ -218,6 +323,7 @@ export function DiscoverCollectibles() {
               collectible={collectible}
               onClaim={handleClaim}
               hasProfile={hasProfile}
+              isClaiming={claimingTemplateId === collectible.templateId}
             />
           ))}
         </div>

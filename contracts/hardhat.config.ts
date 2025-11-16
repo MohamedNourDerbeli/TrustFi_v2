@@ -15,6 +15,11 @@ const config: HardhatUserConfig = {
       chainId: 1287,
       accounts: [privateKey],
     },
+    paseo: {
+      url: "https://kusama-asset-hub-eth-rpc.polkadot.io",
+      chainId: 420420418,
+      accounts: [privateKey],
+    },
   },
 };
 

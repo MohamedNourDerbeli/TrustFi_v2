@@ -2,8 +2,9 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAccount, usePublicClient } from 'wagmi';
 import { type Address } from 'viem';
-import { PROFILE_NFT_CONTRACT_ADDRESS } from '../lib/contracts';
+import { PROFILE_NFT_CONTRACT_ADDRESS, REPUTATION_CARD_CONTRACT_ADDRESS } from '../lib/contracts';
 import ProfileNFTABI from '../lib/ProfileNFT.abi.json';
+import ReputationCardABI from '../lib/ReputationCard.abi.json';
 import { supabase, type ProfileRow } from '../lib/supabase';
 import type { Profile } from '../types/profile';
 import type { Card } from '../types/card';
@@ -40,56 +41,32 @@ async function fetchProfileData(address: Address, publicClient: any) {
     args: [profileIdResult],
   }) as bigint;
 
-  // Fetch attached card IDs from contract
-  const cardIds = await publicClient.readContract({
-    address: PROFILE_NFT_CONTRACT_ADDRESS as `0x${string}`,
-    abi: ProfileNFTABI,
-    functionName: 'getCardsForProfile',
-    args: [profileIdResult],
-  }) as bigint[];
-
-  // Fetch full card details from claims_log
+  // Fetch card details directly from ReputationCard contract
   const cards: Card[] = [];
   
-  console.log('[useProfile] Card IDs from contract:', cardIds.map(id => id.toString()));
-  
-  if (cardIds.length > 0) {
-    const { data: claimsData, error: claimsError } = await supabase
-      .from('claims_log')
-      .select('*')
-      .eq('profile_id', profileIdResult.toString())
-      .in('card_id', cardIds.map(id => id.toString()));
+  try {
+    const [cardIds, templateIds, tiers, issuers] = await publicClient.readContract({
+      address: REPUTATION_CARD_CONTRACT_ADDRESS as `0x${string}`,
+      abi: ReputationCardABI,
+      functionName: 'getCardsDetailForProfile',
+      args: [profileIdResult],
+    }) as [bigint[], bigint[], number[], Address[]];
 
-    console.log('[useProfile] Claims data from Supabase:', claimsData);
-    console.log('[useProfile] Claims error:', claimsError);
+    console.log('[useProfile] Cards from contract:', { cardIds, templateIds, tiers, issuers });
 
-    if (claimsData && claimsData.length > 0) {
-      for (const claim of claimsData) {
-        cards.push({
-          cardId: BigInt(claim.card_id),
-          profileId: BigInt(claim.profile_id),
-          templateId: BigInt(claim.template_id),
-          tokenUri: '', // Could fetch from ReputationCard if needed
-          tier: 0, // Will fetch from template
-          issuer: '0x0000000000000000000000000000000000000000' as Address,
-          claimedAt: new Date(claim.claimed_at),
-        });
-      }
-    } else {
-      // If no claims_log data, just create basic card objects from IDs
-      console.log('[useProfile] No claims_log data, using card IDs only');
-      for (const cardId of cardIds) {
-        cards.push({
-          cardId: cardId,
-          profileId: profileIdResult,
-          templateId: 0n,
-          tokenUri: '',
-          tier: 0,
-          issuer: '0x0000000000000000000000000000000000000000' as Address,
-          claimedAt: new Date(),
-        });
-      }
+    for (let i = 0; i < cardIds.length; i++) {
+      cards.push({
+        cardId: cardIds[i],
+        profileId: profileIdResult,
+        templateId: templateIds[i],
+        tokenUri: '', // Fetched on-demand in CardDisplay component
+        tier: tiers[i],
+        issuer: issuers[i],
+        claimedAt: new Date(), // Could be fetched from claims_log if needed
+      });
     }
+  } catch (error) {
+    console.error('[useProfile] Error fetching cards:', error);
   }
   
   console.log('[useProfile] Final cards array:', cards);

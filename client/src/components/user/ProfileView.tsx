@@ -1,8 +1,111 @@
 // components/user/ProfileView.tsx
-import { useAccount } from 'wagmi';
+import { useState, useEffect } from 'react';
+import { useAccount, usePublicClient } from 'wagmi';
 import { useProfile } from '../../hooks/useProfile';
 import { ScoreRecalculate } from './ScoreRecalculate';
+import { REPUTATION_CARD_CONTRACT_ADDRESS } from '../../lib/contracts';
+import ReputationCardABI from '../../lib/ReputationCard.abi.json';
 import type { Address } from 'viem';
+import type { Card } from '../../types/card';
+
+// Component to display individual card with metadata
+function CardDisplay({ card }: { card: Card }) {
+  const publicClient = usePublicClient();
+  const [metadata, setMetadata] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchMetadata() {
+      try {
+        if (!publicClient) return;
+
+        // Fetch tokenURI from contract
+        const tokenURI = (await publicClient.readContract({
+          address: REPUTATION_CARD_CONTRACT_ADDRESS as Address,
+          abi: ReputationCardABI,
+          functionName: 'tokenURI',
+          args: [card.cardId],
+        } as any)) as string;
+
+        // Fetch metadata from tokenURI
+        if (tokenURI.startsWith('data:application/json;base64,')) {
+          // Base64 encoded JSON
+          const base64Data = tokenURI.replace('data:application/json;base64,', '');
+          const jsonString = atob(base64Data);
+          const metadata = JSON.parse(jsonString);
+          setMetadata(metadata);
+        } else if (tokenURI.startsWith('http')) {
+          // HTTP URL - add auth header if it's a Supabase function
+          const headers: HeadersInit = {};
+          if (tokenURI.includes('supabase.co/functions')) {
+            const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+            if (anonKey) {
+              headers['Authorization'] = `Bearer ${anonKey}`;
+            }
+          }
+          const response = await fetch(tokenURI, { headers });
+          const metadata = await response.json();
+          setMetadata(metadata);
+        }
+      } catch (err) {
+        console.error('Error fetching card metadata:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchMetadata();
+  }, [card.cardId, publicClient]);
+
+  if (loading) {
+    return (
+      <div className="bg-white rounded-lg shadow-md overflow-hidden">
+        <div className="aspect-square bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
+        </div>
+        <div className="p-4">
+          <h3 className="font-semibold text-gray-900">Card #{card.cardId.toString()}</h3>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
+      <div className="aspect-square bg-gray-100 flex items-center justify-center overflow-hidden">
+        {metadata?.image ? (
+          <img 
+            src={metadata.image} 
+            alt={metadata.name || `Card #${card.cardId.toString()}`}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div className="bg-gradient-to-br from-blue-400 to-purple-500 w-full h-full flex items-center justify-center">
+            <span className="text-6xl text-white font-bold">
+              {card.tier || '?'}
+            </span>
+          </div>
+        )}
+      </div>
+      <div className="p-4">
+        <h3 className="font-semibold text-gray-900">
+          {metadata?.name || `Card #${card.cardId.toString()}`}
+        </h3>
+        {metadata?.description && (
+          <p className="text-sm text-gray-600 mt-1 line-clamp-2">{metadata.description}</p>
+        )}
+        {card.tier > 0 && (
+          <p className="text-sm text-gray-600 mt-1">Tier {card.tier}</p>
+        )}
+        {card.issuer !== '0x0000000000000000000000000000000000000000' && (
+          <p className="text-xs text-gray-500 mt-2">
+            Issuer: {card.issuer.slice(0, 6)}...{card.issuer.slice(-4)}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
 
 interface ProfileViewProps {
   address?: Address;
@@ -184,27 +287,7 @@ export function ProfileView({ address: propAddress }: ProfileViewProps) {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {cards.map((card) => (
-              <div
-                key={card.cardId.toString()}
-                className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow"
-              >
-                <div className="aspect-square bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center">
-                  <span className="text-6xl text-white font-bold">
-                    {card.tier || '?'}
-                  </span>
-                </div>
-                <div className="p-4">
-                  <h3 className="font-semibold text-gray-900">Card #{card.cardId.toString()}</h3>
-                  {card.tier > 0 && (
-                    <p className="text-sm text-gray-600 mt-1">Tier {card.tier}</p>
-                  )}
-                  {card.issuer !== '0x0000000000000000000000000000000000000000' && (
-                    <p className="text-xs text-gray-500 mt-2">
-                      Issuer: {card.issuer.slice(0, 6)}...{card.issuer.slice(-4)}
-                    </p>
-                  )}
-                </div>
-              </div>
+              <CardDisplay key={card.cardId.toString()} card={card} />
             ))}
           </div>
         )}
