@@ -21,13 +21,14 @@ export const HomePage: React.FC = () => {
   const [loadingActivity, setLoadingActivity] = useState(true);
   const lastLoggedStateRef = useRef<string>('');
 
-  // Only log when state actually changes
+  // Only log when state actually changes (and only final state)
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
       const currentState = `${isConnected}-${hasProfile}-${isLoading}`;
       
-      if (lastLoggedStateRef.current !== currentState) {
-        console.log('[HomePage] Auth state:', { isConnected, hasProfile, isLoading });
+      // Only log when loading is complete to reduce noise
+      if (lastLoggedStateRef.current !== currentState && !isLoading) {
+        console.log('[HomePage] Auth ready:', { isConnected, hasProfile });
         lastLoggedStateRef.current = currentState;
       }
     }

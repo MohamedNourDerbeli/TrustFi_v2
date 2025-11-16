@@ -673,6 +673,40 @@
   {
     "inputs": [
       {
+        "internalType": "uint256",
+        "name": "profileId",
+        "type": "uint256"
+      }
+    ],
+    "name": "getCardsDetailForProfile",
+    "outputs": [
+      {
+        "internalType": "uint256[]",
+        "name": "cardIds",
+        "type": "uint256[]"
+      },
+      {
+        "internalType": "uint256[]",
+        "name": "templateIds",
+        "type": "uint256[]"
+      },
+      {
+        "internalType": "uint8[]",
+        "name": "tiers",
+        "type": "uint8[]"
+      },
+      {
+        "internalType": "address[]",
+        "name": "issuers",
+        "type": "address[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "bytes32",
         "name": "role",
         "type": "bytes32"

@@ -10,19 +10,28 @@ The `dynamic-metadata` Edge Function has been deployed to Supabase!
 
 ## Environment Variables Set
 
-✅ `REPUTATION_CARD_CONTRACT_ADDRESS` = `0x8a58D43E1E70D6DBa811a452de7Acb30aCf06591`  
-✅ `KUSAMA_SVG_CONTRACT_ADDRESS` = `0x4EC70469102122D27011d3d7179FF1612F1d33DB`  
-✅ `MAIN_CHAIN_RPC_URL` = `https://api-moonbase-alpha.n.dwellir.com/1350b635-a82e-4e02-b336-7de9dba9108f`
+✅ `REPUTATION_CARD_CONTRACT_ADDRESS` = `0x58ae575f894417eEa9AB42f9BFc66FC95406DdC2` (Updated Nov 16, 2025)  
+✅ `KUSAMA_SVG_CONTRACT_ADDRESS` = `0xF320656B42F663508CE06deE19C04b7C4Dc2FB89` (Updated Nov 16, 2025)  
+✅ `MAIN_CHAIN_RPC_URL` = `https://rpc.api.moonbase.moonbeam.network`
 
 ## Important Notes
 
 ### Contract Deployment Location
 
-⚠️ **Current Setup**: The KusamaSVGArt contract is currently deployed on **Moonbase Alpha** (testnet), not Kusama Hub.
+✅ **Current Setup**: All contracts deployed on **Moonbase Alpha** (testnet)
 
-- **KusamaSVGArt Address**: `0x4EC70469102122D27011d3d7179FF1612F1d33DB`
+- **ProfileNFT Address**: `0xe9721a33CB81D26013E0017b12285Cc2c02140E9`
+- **ReputationCard Address**: `0x58ae575f894417eEa9AB42f9BFc66FC95406DdC2`
+- **KusamaSVGArt Address**: `0xF320656B42F663508CE06deE19C04b7C4Dc2FB89`
 - **Network**: Moonbase Alpha (Chain ID: 1287)
-- **Deployment Details**: See `contracts/MOONBASE_DEPLOYMENT_SUCCESS.md`
+- **Deployment Details**: See `DEPLOYMENT_COMPLETE.md` in project root
+
+### New Features (Nov 16, 2025)
+
+✨ **getCardsDetailForProfile()** - New function in ReputationCard contract
+- Returns all card details in a single call (cardIds, templateIds, tiers, issuers)
+- No gas cost (view function)
+- Eliminates need for multiple contract calls or Supabase queries
 
 ### For Production
 
@@ -83,8 +92,19 @@ https://supabase.com/dashboard/project/kuqfccqirhwaqjkiglmf/functions/dynamic-me
 
 ## Test Results
 
-✅ **Successfully tested with Profile ID 1**
-- Reputation score retrieved: 20
-- SVG generated with correct color palette
+✅ **Successfully tested with Profile ID 1** (Updated Nov 16, 2025)
+- Reputation score retrieved: 0 (new deployment, no cards yet)
+- SVG generated with correct color palette (gray tier)
 - Metadata returned in proper NFT format
+- Function working with new contract addresses
 - See TEST_RESULTS.md for full details
+
+### Latest Test Response
+```json
+{
+  "name": "Kusama Living Profile #1",
+  "description": "A living Kusama profile image that evolves with a TrustFi reputation score.",
+  "image": "data:image/svg+xml;base64,...",
+  "attributes": [{"trait_type": "Score", "value": 0}]
+}
+```

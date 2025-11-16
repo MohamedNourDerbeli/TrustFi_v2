@@ -18,8 +18,8 @@ async function main() {
     return;
   }
   
-  // ReputationCard contract address (Moonbase Alpha)
-  const REPUTATION_CARD_ADDRESS = "0x8a58D43E1E70D6DBa811a452de7Acb30aCf06591";
+  // ReputationCard contract address (Moonbase Alpha) - Updated deployment
+  const REPUTATION_CARD_ADDRESS = "0x58ae575f894417eEa9AB42f9BFc66FC95406DdC2";
   
   console.log("\nConnecting to ReputationCard contract at:", REPUTATION_CARD_ADDRESS);
   
