@@ -16,7 +16,7 @@ export interface UseTemplatesReturn {
   checkEligibility: (templateId: bigint, profileId: bigint) => Promise<boolean>;
 }
 
-async function fetchTemplatesData(publicClient: any, profileId?: bigint | null) {
+async function fetchTemplatesData(publicClient: any, profileId?: bigint | null, includeAll: boolean = false) {
   // Instead of scanning blocks, we'll try reading templates directly
   // Start from template ID 1 and read until we hit an invalid template (issuer = 0x0)
   const templateIds: bigint[] = [];
@@ -98,7 +98,11 @@ async function fetchTemplatesData(publicClient: any, profileId?: bigint | null) 
   const fetchedTemplates = await Promise.all(templatePromises);
   const validTemplates = fetchedTemplates.filter((t): t is Template & { hasClaimed?: boolean } => t !== null);
 
-  // Filter templates by time windows
+  // Filter templates by time windows (unless includeAll is true)
+  if (includeAll) {
+    return validTemplates;
+  }
+
   const now = BigInt(Math.floor(Date.now() / 1000));
   const activeTemplates = validTemplates.filter(template => {
     const hasStarted = template.startTime === 0n || now >= template.startTime;
@@ -109,15 +113,15 @@ async function fetchTemplatesData(publicClient: any, profileId?: bigint | null) 
   return activeTemplates;
 }
 
-export function useTemplates(profileId?: bigint | null): UseTemplatesReturn {
+export function useTemplates(profileId?: bigint | null, includeAll: boolean = false): UseTemplatesReturn {
   const { address } = useAccount();
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
   const queryClient = useQueryClient();
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['templates', profileId?.toString()],
-    queryFn: () => fetchTemplatesData(publicClient!, profileId),
+    queryKey: ['templates', profileId?.toString(), includeAll],
+    queryFn: () => fetchTemplatesData(publicClient!, profileId, includeAll),
     enabled: !!publicClient,
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 10 * 60 * 1000, // 10 minutes

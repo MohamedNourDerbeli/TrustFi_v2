@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
-import { useTemplates } from '../../hooks/useTemplates';
 import { useWalletClient, usePublicClient } from 'wagmi';
 import { type Address, isAddress } from 'viem';
 import { Link } from 'react-router-dom';
@@ -8,15 +7,31 @@ import { REPUTATION_CARD_CONTRACT_ADDRESS, PROFILE_NFT_CONTRACT_ADDRESS } from '
 import ProfileNFTAbi from '../../lib/ProfileNFT.abi.json';
 import { getClaimTypedData, generateClaimLink } from '../../lib/signature';
 import type { ClaimParams } from '../../types/claim';
+import { supabase } from '../../lib/supabase';
+import { uploadToPinata, uploadJSONToPinata, validateImageFile } from '../../lib/pinata';
+import { Zap, Link2, Upload, Image as ImageIcon } from 'lucide-react';
 
 // Lazy load QRCode library
 const loadQRCode = () => import('qrcode');
 
+interface Template {
+  template_id: number;
+  issuer: string;
+  name: string;
+  description: string;
+  tier: number;
+  max_supply: number;
+  current_supply: number;
+  is_paused: boolean;
+}
+
 export const ClaimLinkGenerator: React.FC = () => {
   const { address, isIssuer, isLoading: authLoading } = useAuth();
-  const { templates, loading: templatesLoading } = useTemplates();
   const { data: walletClient } = useWalletClient();
   const publicClient = usePublicClient();
+  
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(true);
 
   const [userAddress, setUserAddress] = useState('');
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
@@ -27,11 +42,50 @@ export const ClaimLinkGenerator: React.FC = () => {
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string | null>(null);
   const [isSigning, setIsSigning] = useState(false);
   const [checkingProfile, setCheckingProfile] = useState(false);
+  
+  // Mode selection and Quick Mode fields
+  const [mode, setMode] = useState<'quick' | 'custom'>('quick');
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+
+  // Fetch templates from Supabase
+  useEffect(() => {
+    const fetchTemplates = async () => {
+      if (!address) {
+        setTemplatesLoading(false);
+        return;
+      }
+
+      try {
+        setTemplatesLoading(true);
+        const { data, error } = await supabase
+          .from('templates_cache')
+          .select('*')
+          .eq('issuer', address.toLowerCase())
+          .order('template_id', { ascending: true });
+
+        if (error) {
+          console.error('[ClaimLinkGenerator] Error fetching templates:', error);
+          setTemplates([]);
+        } else {
+          setTemplates(data || []);
+        }
+      } catch (err) {
+        console.error('[ClaimLinkGenerator] Error fetching templates:', err);
+        setTemplates([]);
+      } finally {
+        setTemplatesLoading(false);
+      }
+    };
+
+    fetchTemplates();
+  }, [address]);
 
   // Filter templates where issuer matches connected wallet
-  const issuerTemplates = templates.filter(
-    (template) => template.issuer.toLowerCase() === address?.toLowerCase()
-  );
+  const issuerTemplates = templates;
 
   const validateUserAddress = (addr: string): boolean => {
     if (!addr) {
@@ -99,14 +153,25 @@ export const ClaimLinkGenerator: React.FC = () => {
       return;
     }
 
-    if (!nonce.trim()) {
-      setValidationError('Nonce is required');
-      return;
-    }
-
-    if (!tokenURI.trim()) {
-      setValidationError('Token URI is required');
-      return;
+    // Mode-specific validation
+    if (mode === 'quick') {
+      if (!title.trim()) {
+        setValidationError('Card title is required');
+        return;
+      }
+      if (!description.trim()) {
+        setValidationError('Description is required');
+        return;
+      }
+      if (!imageFile) {
+        setValidationError('Please upload an image');
+        return;
+      }
+    } else {
+      if (!tokenURI.trim()) {
+        setValidationError('Token URI is required');
+        return;
+      }
     }
 
     // Check if user has a profile
@@ -117,11 +182,17 @@ export const ClaimLinkGenerator: React.FC = () => {
 
     // Find selected template
     const template = issuerTemplates.find(
-      (t) => t.templateId.toString() === selectedTemplateId
+      (t) => t.template_id.toString() === selectedTemplateId
     );
 
     if (!template) {
       setValidationError('Selected template not found');
+      return;
+    }
+
+    // Check if template is paused
+    if (template.is_paused) {
+      setValidationError('This template is currently paused and cannot be used');
       return;
     }
 
@@ -131,15 +202,60 @@ export const ClaimLinkGenerator: React.FC = () => {
     }
 
     try {
+      let finalTokenURI = tokenURI;
+
+      // Handle Quick Mode - upload to IPFS
+      if (mode === 'quick' && imageFile) {
+        setIsUploading(true);
+        
+        try {
+          // Upload image to Pinata
+          const imageUrl = await uploadToPinata(imageFile);
+          
+          // Create metadata JSON
+          const metadata = {
+            name: title,
+            description: description,
+            image: imageUrl,
+            attributes: [
+              {
+                trait_type: 'Template',
+                value: template.name || `Template #${template.template_id}`,
+              },
+              {
+                trait_type: 'Tier',
+                value: template.tier,
+              },
+              {
+                trait_type: 'Issuer',
+                value: address,
+              },
+            ],
+          };
+
+          // Upload metadata JSON to Pinata
+          finalTokenURI = await uploadJSONToPinata(metadata, `${title}-metadata`);
+        } catch (uploadError: any) {
+          console.error('Error uploading to IPFS:', uploadError);
+          setValidationError(`Failed to upload to IPFS: ${uploadError.message}`);
+          return;
+        } finally {
+          setIsUploading(false);
+        }
+      }
+
       setIsSigning(true);
+
+      // Generate unique nonce
+      const generatedNonce = BigInt(Date.now());
 
       // Construct claim parameters
       const claimParams: ClaimParams = {
         user: userAddress as Address,
         profileOwner: profileOwner,
         templateId: BigInt(selectedTemplateId),
-        nonce: BigInt(nonce),
-        tokenURI: tokenURI.trim(),
+        nonce: generatedNonce,
+        tokenURI: finalTokenURI.trim(),
       };
 
       // Get typed data for EIP712 signature
@@ -185,6 +301,7 @@ export const ClaimLinkGenerator: React.FC = () => {
       }
     } finally {
       setIsSigning(false);
+      setIsUploading(false);
     }
   };
 
@@ -206,6 +323,10 @@ export const ClaimLinkGenerator: React.FC = () => {
     setSelectedTemplateId('');
     setNonce('');
     setTokenURI('');
+    setTitle('');
+    setDescription('');
+    setImageFile(null);
+    setImagePreview(null);
     setGeneratedLink(null);
     setQrCodeDataUrl(null);
     setValidationError(null);
@@ -277,10 +398,49 @@ export const ClaimLinkGenerator: React.FC = () => {
             <div className="bg-white rounded-lg shadow-md p-6">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Claim Link Details</h2>
               <form onSubmit={handleGenerateLink} className="space-y-4">
+                {/* Mode Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                    Metadata Mode
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setMode('quick')}
+                      className={`p-4 rounded-xl border-2 transition-all ${
+                        mode === 'quick'
+                          ? 'border-green-500 bg-green-50'
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <Zap className={`w-6 h-6 mx-auto mb-2 ${mode === 'quick' ? 'text-green-600' : 'text-gray-400'}`} />
+                      <p className={`font-semibold text-sm ${mode === 'quick' ? 'text-green-900' : 'text-gray-700'}`}>
+                        Quick Mode
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">Upload image & auto-generate metadata</p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMode('custom')}
+                      className={`p-4 rounded-xl border-2 transition-all ${
+                        mode === 'custom'
+                          ? 'border-purple-500 bg-purple-50'
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <Link2 className={`w-6 h-6 mx-auto mb-2 ${mode === 'custom' ? 'text-purple-600' : 'text-gray-400'}`} />
+                      <p className={`font-semibold text-sm ${mode === 'custom' ? 'text-purple-900' : 'text-gray-700'}`}>
+                        Custom IPFS
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">Use your own pre-made token URI</p>
+                    </button>
+                  </div>
+                </div>
+
                 {/* User Address */}
                 <div>
                   <label htmlFor="userAddress" className="block text-sm font-medium text-gray-700 mb-2">
-                    User Address
+                    Recipient Address
                   </label>
                   <input
                     type="text"
@@ -292,7 +452,7 @@ export const ClaimLinkGenerator: React.FC = () => {
                     }}
                     placeholder="0x..."
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    disabled={isSigning || checkingProfile}
+                    disabled={isSigning || checkingProfile || isUploading}
                   />
                   <p className="mt-1 text-sm text-gray-500">
                     The wallet address of the user who can claim this card
@@ -312,60 +472,128 @@ export const ClaimLinkGenerator: React.FC = () => {
                       setValidationError(null);
                     }}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    disabled={isSigning || checkingProfile}
+                    disabled={isSigning || checkingProfile || isUploading}
                   >
-                    <option value="">Select a template</option>
+                    <option value="">Select a template ({issuerTemplates.length} available)</option>
                     {issuerTemplates.map((template) => (
-                      <option key={template.templateId.toString()} value={template.templateId.toString()}>
-                        Template #{template.templateId.toString()} - Tier {template.tier}
+                      <option 
+                        key={template.template_id} 
+                        value={template.template_id}
+                        disabled={template.is_paused}
+                      >
+                        {template.name} - Tier {template.tier} {template.is_paused ? '(Paused)' : ''}
                       </option>
                     ))}
                   </select>
                 </div>
 
-                {/* Nonce */}
-                <div>
-                  <label htmlFor="nonce" className="block text-sm font-medium text-gray-700 mb-2">
-                    Nonce
-                  </label>
-                  <input
-                    type="text"
-                    id="nonce"
-                    value={nonce}
-                    onChange={(e) => {
-                      setNonce(e.target.value);
-                      setValidationError(null);
-                    }}
-                    placeholder="Unique number (e.g., timestamp)"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    disabled={isSigning || checkingProfile}
-                  />
-                  <p className="mt-1 text-sm text-gray-500">
-                    A unique number to prevent replay attacks (e.g., {Date.now()})
-                  </p>
-                </div>
+                {/* Quick Mode Fields */}
+                {mode === 'quick' && (
+                  <>
+                    <div>
+                      <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-2">
+                        Card Title
+                      </label>
+                      <input
+                        type="text"
+                        id="title"
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        placeholder="e.g., Early Adopter Badge"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        disabled={isSigning || checkingProfile || isUploading}
+                      />
+                    </div>
 
-                {/* Token URI */}
-                <div>
-                  <label htmlFor="tokenURI" className="block text-sm font-medium text-gray-700 mb-2">
-                    Token URI
-                  </label>
-                  <input
-                    type="text"
-                    id="tokenURI"
-                    value={tokenURI}
-                    onChange={(e) => {
-                      setTokenURI(e.target.value);
-                      setValidationError(null);
-                    }}
-                    placeholder="ipfs://... or https://..."
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    disabled={isSigning || checkingProfile}
-                  />
-                  <p className="mt-1 text-sm text-gray-500">
-                    The metadata URI for this card
-                  </p>
-                </div>
+                    <div>
+                      <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-2">
+                        Description
+                      </label>
+                      <textarea
+                        id="description"
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        placeholder="Describe what this card represents..."
+                        rows={3}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                        disabled={isSigning || checkingProfile || isUploading}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Card Image
+                      </label>
+                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
+                        {imagePreview ? (
+                          <div className="space-y-3">
+                            <img src={imagePreview} alt="Preview" className="max-h-48 mx-auto rounded-lg" />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setImageFile(null);
+                                setImagePreview(null);
+                              }}
+                              className="text-sm text-red-600 hover:text-red-700"
+                              disabled={isSigning || checkingProfile || isUploading}
+                            >
+                              Remove Image
+                            </button>
+                          </div>
+                        ) : (
+                          <label className="cursor-pointer">
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  const validationError = validateImageFile(file, 10);
+                                  if (validationError) {
+                                    setValidationError(validationError);
+                                    return;
+                                  }
+                                  setImageFile(file);
+                                  setImagePreview(URL.createObjectURL(file));
+                                  setValidationError(null);
+                                }
+                              }}
+                              className="hidden"
+                              disabled={isSigning || checkingProfile || isUploading}
+                            />
+                            <ImageIcon className="w-12 h-12 mx-auto text-gray-400 mb-2" />
+                            <p className="text-sm text-gray-600">Click to upload image</p>
+                            <p className="text-xs text-gray-500 mt-1">PNG, JPG, GIF up to 10MB</p>
+                          </label>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* Custom IPFS Mode Fields */}
+                {mode === 'custom' && (
+                  <div>
+                    <label htmlFor="tokenURI" className="block text-sm font-medium text-gray-700 mb-2">
+                      Token URI
+                    </label>
+                    <input
+                      type="text"
+                      id="tokenURI"
+                      value={tokenURI}
+                      onChange={(e) => {
+                        setTokenURI(e.target.value);
+                        setValidationError(null);
+                      }}
+                      placeholder="ipfs://... or https://..."
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      disabled={isSigning || checkingProfile || isUploading}
+                    />
+                    <p className="mt-1 text-sm text-gray-500">
+                      The metadata URI for this card
+                    </p>
+                  </div>
+                )}
 
                 {/* Validation Error */}
                 {validationError && (
@@ -377,14 +605,16 @@ export const ClaimLinkGenerator: React.FC = () => {
                 {/* Submit Button */}
                 <button
                   type="submit"
-                  disabled={isSigning || checkingProfile}
+                  disabled={isSigning || checkingProfile || isUploading}
                   className={`w-full px-6 py-3 rounded-lg font-semibold text-white transition-colors ${
-                    isSigning || checkingProfile
+                    isSigning || checkingProfile || isUploading
                       ? 'bg-gray-400 cursor-not-allowed'
                       : 'bg-blue-600 hover:bg-blue-700'
                   }`}
                 >
-                  {checkingProfile
+                  {isUploading
+                    ? 'Uploading to IPFS...'
+                    : checkingProfile
                     ? 'Verifying Profile...'
                     : isSigning
                     ? 'Signing...'

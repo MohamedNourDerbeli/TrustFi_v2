@@ -3,6 +3,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useTemplates } from '../../hooks/useTemplates';
 import { supabase } from '../../lib/supabase';
 import { Link } from 'react-router-dom';
+import { Users, FileText, Award, Shield, Plus, Settings, Activity, TrendingUp, Zap, Lock, AlertCircle } from 'lucide-react';
 
 interface DashboardStats {
   totalProfiles: number;
@@ -21,7 +22,7 @@ interface RecentActivity {
 
 export const AdminDashboard: React.FC = () => {
   const { isAdmin, isLoading: authLoading } = useAuth();
-  const { templates, loading: templatesLoading } = useTemplates();
+  const { templates, loading: templatesLoading } = useTemplates(null, true); // Include all templates for admin
   const [stats, setStats] = useState<DashboardStats>({
     totalProfiles: 0,
     totalTemplates: 0,
@@ -31,28 +32,24 @@ export const AdminDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch total profiles from Supabase
   useEffect(() => {
     const fetchStats = async () => {
       try {
         setLoading(true);
         setError(null);
 
-        // Get total profiles count
         const { count: profileCount, error: profileError } = await supabase
           .from('profiles')
           .select('*', { count: 'exact', head: true });
 
         if (profileError) throw profileError;
 
-        // Get total issued cards count
         const { count: cardsCount, error: cardsError } = await supabase
           .from('claims_log')
           .select('*', { count: 'exact', head: true });
 
         if (cardsError) throw cardsError;
 
-        // Get recent activity
         const { data: activityData, error: activityError } = await supabase
           .from('claims_log')
           .select('*')
@@ -81,19 +78,41 @@ export const AdminDashboard: React.FC = () => {
     }
   }, [isAdmin, authLoading]);
 
-  // Update template count from useTemplates hook
   useEffect(() => {
-    if (!templatesLoading) {
-      setStats((prev) => ({ ...prev, totalTemplates: templates.length }));
-    }
+    // Fetch template count from Supabase (more accurate than blockchain scan)
+    const fetchTemplateCount = async () => {
+      try {
+        const { count, error } = await supabase
+          .from('templates_cache')
+          .select('*', { count: 'exact', head: true });
+
+        if (!error && count !== null) {
+          setStats((prev) => ({ ...prev, totalTemplates: count }));
+        } else if (!templatesLoading) {
+          // Fallback to blockchain templates if Supabase fails
+          setStats((prev) => ({ ...prev, totalTemplates: templates.length }));
+        }
+      } catch (err) {
+        console.error('Error fetching template count:', err);
+        // Fallback to blockchain templates
+        if (!templatesLoading) {
+          setStats((prev) => ({ ...prev, totalTemplates: templates.length }));
+        }
+      }
+    };
+
+    fetchTemplateCount();
   }, [templates, templatesLoading]);
 
   if (authLoading || loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">Loading dashboard...</p>
+          <div className="relative inline-block">
+            <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+            <div className="absolute inset-0 w-16 h-16 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }}></div>
+          </div>
+          <p className="mt-6 text-lg font-medium text-gray-700 animate-pulse">Loading admin dashboard...</p>
         </div>
       </div>
     );
@@ -101,12 +120,25 @@ export const AdminDashboard: React.FC = () => {
 
   if (!isAdmin) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md">
-          <h2 className="text-xl font-semibold text-red-900 mb-2">Access Denied</h2>
-          <p className="text-red-700">
-            You do not have admin permissions to access this dashboard.
-          </p>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 flex items-center justify-center p-4">
+        <div className="max-w-md w-full">
+          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-8 text-center border border-white/20">
+            <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-red-500 to-pink-600 rounded-full flex items-center justify-center">
+              <Lock className="w-10 h-10 text-white" />
+            </div>
+            <h2 className="text-2xl font-bold mb-3 text-gray-900">
+              Access Denied
+            </h2>
+            <p className="text-gray-600 mb-6">
+              You do not have admin permissions to access this dashboard.
+            </p>
+            <Link
+              to="/"
+              className="inline-block px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all duration-300 font-semibold"
+            >
+              Return Home
+            </Link>
+          </div>
         </div>
       </div>
     );
@@ -114,175 +146,283 @@ export const AdminDashboard: React.FC = () => {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md">
-          <h2 className="text-xl font-semibold text-red-900 mb-2">Error</h2>
-          <p className="text-red-700">{error}</p>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-8 border border-white/20">
+          <div className="text-center">
+            <div className="w-16 h-16 mx-auto mb-4 bg-red-100 rounded-full flex items-center justify-center">
+              <AlertCircle className="w-8 h-8 text-red-600" />
+            </div>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">Error Loading Dashboard</h2>
+            <p className="text-gray-600 mb-6">{error}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all duration-300 font-semibold"
+            >
+              Retry
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="container mx-auto px-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 py-8">
+      <div className="container mx-auto px-4 max-w-7xl">
+        {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
-          <p className="text-gray-600 mt-2">Manage platform settings and monitor activity</p>
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center">
+              <Shield className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-4xl font-black text-gray-900 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                Admin Dashboard
+              </h1>
+              <p className="text-gray-600">Manage platform settings and monitor activity</p>
+            </div>
+          </div>
         </div>
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="group bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg p-6 border border-white/20 hover:shadow-xl transition-all duration-300 hover:scale-105">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Total Profiles</p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">{stats.totalProfiles}</p>
+                <p className="text-sm font-semibold text-gray-600 mb-2">Total Profiles</p>
+                <p className="text-4xl font-black bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                  {stats.totalProfiles}
+                </p>
+                <div className="mt-2 flex items-center gap-1 text-xs text-green-600">
+                  <TrendingUp className="w-3 h-3" />
+                  <span className="font-medium">Active users</span>
+                </div>
               </div>
-              <div className="bg-blue-100 rounded-full p-3">
-                <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                </svg>
+              <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                <Users className="w-8 h-8 text-white" />
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="group bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg p-6 border border-white/20 hover:shadow-xl transition-all duration-300 hover:scale-105">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Total Templates</p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">{stats.totalTemplates}</p>
+                <p className="text-sm font-semibold text-gray-600 mb-2">Total Templates</p>
+                <p className="text-4xl font-black bg-gradient-to-r from-green-600 to-teal-600 bg-clip-text text-transparent">
+                  {stats.totalTemplates}
+                </p>
+                <div className="mt-2 flex items-center gap-1 text-xs text-green-600">
+                  <Activity className="w-3 h-3" />
+                  <span className="font-medium">Card types</span>
+                </div>
               </div>
-              <div className="bg-green-100 rounded-full p-3">
-                <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
+              <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-green-500 to-teal-500 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                <FileText className="w-8 h-8 text-white" />
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="group bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg p-6 border border-white/20 hover:shadow-xl transition-all duration-300 hover:scale-105">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Total Issued Cards</p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">{stats.totalIssuedCards}</p>
+                <p className="text-sm font-semibold text-gray-600 mb-2">Issued Cards</p>
+                <p className="text-4xl font-black bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                  {stats.totalIssuedCards}
+                </p>
+                <div className="mt-2 flex items-center gap-1 text-xs text-green-600">
+                  <Zap className="w-3 h-3" />
+                  <span className="font-medium">Total claims</span>
+                </div>
               </div>
-              <div className="bg-purple-100 rounded-full p-3">
-                <svg className="w-8 h-8 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                </svg>
+              <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                <Award className="w-8 h-8 text-white" />
               </div>
             </div>
           </div>
         </div>
 
-        {/* Navigation Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <Link
-            to="/admin/issuers"
-            className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">Issuer Management</h3>
-                <p className="text-gray-600 mt-1">Grant and revoke issuer roles</p>
+        {/* Quick Actions */}
+        <div className="mb-8">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+            <Settings className="w-6 h-6 text-purple-600" />
+            Quick Actions
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <Link
+              to="/admin/issuers"
+              className="group bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg p-6 border border-white/20 hover:shadow-xl transition-all duration-300 hover:scale-105"
+            >
+              <div className="flex items-start justify-between mb-4">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                  <Shield className="w-6 h-6 text-white" />
+                </div>
+                <svg className="w-6 h-6 text-gray-400 group-hover:text-blue-600 group-hover:translate-x-1 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
               </div>
-              <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </div>
-          </Link>
+              <h3 className="text-lg font-bold text-gray-900 mb-2">Issuer Management</h3>
+              <p className="text-sm text-gray-600">Grant and revoke issuer roles for template creation</p>
+            </Link>
 
-          <Link
-            to="/admin/templates"
-            className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">Template Management</h3>
-                <p className="text-gray-600 mt-1">View and manage templates</p>
+            <Link
+              to="/admin/templates"
+              className="group bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg p-6 border border-white/20 hover:shadow-xl transition-all duration-300 hover:scale-105"
+            >
+              <div className="flex items-start justify-between mb-4">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                  <FileText className="w-6 h-6 text-white" />
+                </div>
+                <svg className="w-6 h-6 text-gray-400 group-hover:text-green-600 group-hover:translate-x-1 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
               </div>
-              <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </div>
-          </Link>
+              <h3 className="text-lg font-bold text-gray-900 mb-2">Template Management</h3>
+              <p className="text-sm text-gray-600">View, edit, and manage existing card templates</p>
+            </Link>
 
-          <Link
-            to="/admin/templates/create"
-            className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">Create Template</h3>
-                <p className="text-gray-600 mt-1">Create new card templates</p>
+            <Link
+              to="/admin/templates/create"
+              className="group bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl shadow-lg p-6 border border-white/20 hover:shadow-xl transition-all duration-300 hover:scale-105 text-white"
+            >
+              <div className="flex items-start justify-between mb-4">
+                <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                  <Plus className="w-6 h-6 text-white" />
+                </div>
+                <svg className="w-6 h-6 text-white/80 group-hover:text-white group-hover:translate-x-1 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
               </div>
-              <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </div>
-          </Link>
+              <h3 className="text-lg font-bold mb-2">Create Template</h3>
+              <p className="text-sm text-white/90">Design and publish new card templates</p>
+            </Link>
+          </div>
         </div>
 
         {/* Recent Activity */}
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Recent Activity</h2>
+        <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg p-6 border border-white/20">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+              <Activity className="w-6 h-6 text-green-600" />
+              Recent Activity
+            </h2>
+            <span className="text-sm text-gray-600 font-medium">Last 10 claims</span>
+          </div>
+          
           {recentActivity.length === 0 ? (
-            <p className="text-gray-600 text-center py-8">No recent activity</p>
+            <div className="text-center py-16">
+              <div className="w-20 h-20 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+                <Activity className="w-10 h-10 text-gray-400" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">No Recent Activity</h3>
+              <p className="text-gray-600">Card claims will appear here</p>
+            </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead>
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Profile ID
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Template ID
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Card ID
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Type
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Date
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {recentActivity.map((activity) => (
-                    <tr key={activity.id}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {activity.profile_id}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {activity.template_id}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {activity.card_id}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                            activity.claim_type === 'direct'
-                              ? 'bg-blue-100 text-blue-800'
-                              : 'bg-green-100 text-green-800'
-                          }`}
-                        >
-                          {activity.claim_type}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(activity.claimed_at).toLocaleString()}
-                      </td>
+            <div className="overflow-hidden rounded-xl border border-gray-200">
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                        Profile ID
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                        Template ID
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                        Card ID
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                        Claim Type
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                        Date & Time
+                      </th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {recentActivity.map((activity, index) => (
+                      <tr key={activity.id} className={`hover:bg-gray-50 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white text-xs font-bold">
+                              {activity.profile_id.slice(0, 2)}
+                            </div>
+                            <span className="text-sm font-medium text-gray-900">
+                              #{activity.profile_id}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="text-sm font-medium text-gray-900">
+                            #{activity.template_id}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="text-sm font-bold text-purple-600">
+                            #{activity.card_id}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span
+                            className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${
+                              activity.claim_type === 'direct'
+                                ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                                : 'bg-purple-100 text-purple-800 border border-purple-200'
+                            }`}
+                          >
+                            {activity.claim_type === 'direct' ? (
+                              <>
+                                <Zap className="w-3 h-3" />
+                                Direct
+                              </>
+                            ) : (
+                              <>
+                                <FileText className="w-3 h-3" />
+                                Signature
+                              </>
+                            )}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                          <div className="flex flex-col">
+                            <span className="font-medium">
+                              {new Date(activity.claimed_at).toLocaleDateString('en-US', { 
+                                month: 'short', 
+                                day: 'numeric', 
+                                year: 'numeric' 
+                              })}
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              {new Date(activity.claimed_at).toLocaleTimeString('en-US', {
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
+        </div>
+
+        {/* System Info */}
+        <div className="mt-8 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-2xl shadow-xl p-1">
+          <div className="bg-white rounded-xl p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 mb-1">System Status</h3>
+                <p className="text-sm text-gray-600">All systems operational</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-green-500 animate-pulse"></div>
+                <span className="text-sm font-semibold text-green-600">Online</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

@@ -25,7 +25,7 @@ export const CreateProfilePage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-950">
+      <div className="flex items-center justify-center min-h-screen">
         <LoadingSpinner size="large" />
       </div>
     );

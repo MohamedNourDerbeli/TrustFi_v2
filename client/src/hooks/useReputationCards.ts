@@ -74,9 +74,9 @@ export function useReputationCards(): UseReputationCardsReturn {
       const { error } = await supabase
         .from('claims_log')
         .insert({
-          profile_id: profileId.toString(),
-          template_id: templateId.toString(),
-          card_id: cardId.toString(),
+          profile_id: Number(profileId),
+          template_id: Number(templateId),
+          card_id: Number(cardId),
           claim_type: claimType,
         });
 

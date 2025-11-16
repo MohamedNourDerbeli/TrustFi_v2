@@ -20,7 +20,9 @@ serve(async (req) => {
   try {
     const { user, profileOwner, templateId, tokenURI } = await req.json();
 
-    if (!user || !profileOwner || !templateId || !tokenURI) {
+    console.log('[generate-signature] Request received:', { user, profileOwner, templateId, tokenURI });
+
+    if (!user || !profileOwner || !templateId) {
       return new Response(
         JSON.stringify({ error: 'Missing required parameters' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -33,6 +35,12 @@ serve(async (req) => {
       throw new Error('ISSUER_PRIVATE_KEY not configured');
     }
 
+    // Get contract address
+    const contractAddress = Deno.env.get('REPUTATION_CARD_CONTRACT_ADDRESS');
+    if (!contractAddress) {
+      throw new Error('REPUTATION_CARD_CONTRACT_ADDRESS not configured');
+    }
+
     // Create wallet client for signing
     const account = privateKeyToAccount(issuerPrivateKey as `0x${string}`);
     const walletClient = createWalletClient({
@@ -41,17 +49,22 @@ serve(async (req) => {
       transport: http(),
     });
 
+    console.log('[generate-signature] Signer address:', account.address);
+    console.log('[generate-signature] Contract address:', contractAddress);
+
     // Generate nonce (timestamp + random)
     const nonce = BigInt(Date.now()) * 1000000n + BigInt(Math.floor(Math.random() * 1000000));
 
+    console.log('[generate-signature] Generated nonce:', nonce.toString());
+
     // Create message hash for signing
     // This should match the contract's CLAIM_TYPEHASH: keccak256("Claim(address user,address profileOwner,uint256 templateId,uint256 nonce)")
-    const messageHash = await walletClient.signTypedData({
+    const signature = await walletClient.signTypedData({
       domain: {
         name: 'TrustFi ReputationCard',
         version: '1',
         chainId: moonbaseAlpha.id,
-        verifyingContract: Deno.env.get('REPUTATION_CARD_CONTRACT_ADDRESS') as `0x${string}`,
+        verifyingContract: contractAddress as `0x${string}`,
       },
       types: {
         Claim: [
@@ -70,10 +83,13 @@ serve(async (req) => {
       },
     });
 
+    console.log('[generate-signature] Signature generated successfully');
+
     return new Response(
       JSON.stringify({
         nonce: nonce.toString(),
-        signature: messageHash,
+        signature,
+        signer: account.address,
       }),
       {
         status: 200,
@@ -81,9 +97,12 @@ serve(async (req) => {
       }
     );
   } catch (error) {
-    console.error('Error generating signature:', error);
+    console.error('[generate-signature] Error:', error);
     return new Response(
-      JSON.stringify({ error: error.message || 'Internal server error' }),
+      JSON.stringify({ 
+        error: error.message || 'Internal server error',
+        details: error.toString(),
+      }),
       {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

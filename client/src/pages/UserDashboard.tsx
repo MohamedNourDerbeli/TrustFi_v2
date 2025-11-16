@@ -4,9 +4,10 @@ import { useAuth } from "../hooks/useAuth";
 import { useProfile } from "../hooks/useProfile";
 import { supabase, type ClaimLogRow } from "../lib/supabase";
 import { Search, TrendingUp, Award, Sparkles, Filter, Grid, List, ChevronRight } from "lucide-react";
+import { CardDisplay } from "../components/shared/CardDisplay";
 
 export const UserDashboard: React.FC = () => {
-  const { address, isConnected, isLoading } = useAuth();
+  const { address, isConnected } = useAuth();
   const { profile, profileId, score, cards, loading: profileLoading } = useProfile(address);
   const [recentActivity, setRecentActivity] = useState<ClaimLogRow[]>([]);
   const [loadingActivity, setLoadingActivity] = useState(true);
@@ -53,19 +54,7 @@ export const UserDashboard: React.FC = () => {
     points: cards.filter(c => c.tier === tier).length * tier
   }));
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
-        <div className="text-center">
-          <div className="relative inline-block">
-            <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
-            <div className="absolute inset-0 w-16 h-16 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }}></div>
-          </div>
-          <p className="mt-6 text-lg font-medium text-gray-700 animate-pulse">Loading your dashboard...</p>
-        </div>
-      </div>
-    );
-  }
+  // Remove full-page loading - show layout immediately
 
   if (!isConnected) {
     return (
@@ -312,59 +301,18 @@ export const UserDashboard: React.FC = () => {
           )}
 
           {profileLoading ? (
-            <div className={viewMode === "grid" ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6" : "space-y-4"}>
-              {[1, 2, 3, 4, 5, 6].map(i => (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[1, 2, 3].map(i => (
                 <div key={i} className="animate-pulse">
-                  <div className="h-56 bg-gradient-to-br from-gray-200 to-gray-300 rounded-2xl"></div>
-                  <div className="mt-3 space-y-2">
-                    <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                    <div className="h-3 bg-gray-200 rounded w-1/2"></div>
-                  </div>
+                  <div className="h-48 bg-gray-200 rounded-xl"></div>
+                  <div className="mt-2 h-4 bg-gray-200 rounded w-2/3"></div>
                 </div>
               ))}
             </div>
           ) : filteredCards.length > 0 ? (
             <div className={viewMode === "grid" ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6" : "space-y-4"}>
               {filteredCards.map(card => (
-                <div
-                  key={card.cardId.toString()}
-                  className="group bg-gradient-to-br from-gray-50 to-white rounded-2xl p-5 hover:shadow-2xl transition-all duration-300 border border-gray-200 hover:border-purple-300 hover:scale-105 cursor-pointer"
-                >
-                  <div className={`relative w-full h-48 rounded-xl mb-4 flex items-center justify-center text-white font-bold text-3xl overflow-hidden ${
-                    card.tier === 1 ? 'bg-gradient-to-br from-green-400 via-green-500 to-green-600' :
-                    card.tier === 2 ? 'bg-gradient-to-br from-blue-400 via-blue-500 to-blue-600' :
-                    'bg-gradient-to-br from-purple-400 via-purple-500 to-purple-600'
-                  }`}>
-                    <div className="absolute inset-0 opacity-20 group-hover:opacity-30 transition-opacity" style={{
-                      backgroundImage: 'radial-gradient(circle at 20% 50%, white 1px, transparent 1px), radial-gradient(circle at 80% 80%, white 1px, transparent 1px)',
-                      backgroundSize: '50px 50px'
-                    }}></div>
-                    <div className="relative">
-                      <div className="text-5xl font-black drop-shadow-lg">#{card.cardId.toString()}</div>
-                      <div className="absolute -top-2 -right-2 w-8 h-8 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center text-xs font-bold">
-                        T{card.tier}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-bold text-gray-900">Template #{card.templateId.toString()}</p>
-                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                        card.tier === 1 ? 'bg-green-100 text-green-700' :
-                        card.tier === 2 ? 'bg-blue-100 text-blue-700' :
-                        'bg-purple-100 text-purple-700'
-                      }`}>
-                        {card.tier} pts
-                      </span>
-                    </div>
-                    <p className="text-xs text-gray-500 flex items-center gap-1">
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                      {new Date(card.claimedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                    </p>
-                  </div>
-                </div>
+                <CardDisplay key={card.cardId.toString()} card={card} />
               ))}
             </div>
           ) : (

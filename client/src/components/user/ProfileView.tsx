@@ -1,23 +1,24 @@
 // components/user/ProfileView.tsx
-import { useState, useEffect } from 'react';
-import { useAccount, usePublicClient } from 'wagmi';
+import { useAccount } from 'wagmi';
 import { useProfile } from '../../hooks/useProfile';
 import { ScoreRecalculate } from './ScoreRecalculate';
-import { REPUTATION_CARD_CONTRACT_ADDRESS } from '../../lib/contracts';
-import ReputationCardABI from '../../lib/ReputationCard.abi.json';
+import { CardDisplay } from '../shared/CardDisplay';
 import type { Address } from 'viem';
-import type { Card } from '../../types/card';
 
-// Component to display individual card with metadata
+// Remove the local CardDisplay component - using shared one now
+/*
 function CardDisplay({ card }: { card: Card }) {
   const publicClient = usePublicClient();
   const [metadata, setMetadata] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchMetadata() {
       try {
         if (!publicClient) return;
+
+        console.log(`[CardDisplay] Fetching metadata for card ${card.cardId.toString()}`);
 
         // Fetch tokenURI from contract
         const tokenURI = (await publicClient.readContract({
@@ -27,12 +28,15 @@ function CardDisplay({ card }: { card: Card }) {
           args: [card.cardId],
         } as any)) as string;
 
+        console.log(`[CardDisplay] TokenURI for card ${card.cardId.toString()}:`, tokenURI);
+
         // Fetch metadata from tokenURI
         if (tokenURI.startsWith('data:application/json;base64,')) {
           // Base64 encoded JSON
           const base64Data = tokenURI.replace('data:application/json;base64,', '');
           const jsonString = atob(base64Data);
           const metadata = JSON.parse(jsonString);
+          console.log(`[CardDisplay] Parsed base64 metadata:`, metadata);
           setMetadata(metadata);
         } else if (tokenURI.startsWith('http')) {
           // HTTP URL - add auth header if it's a Supabase function
@@ -44,11 +48,18 @@ function CardDisplay({ card }: { card: Card }) {
             }
           }
           const response = await fetch(tokenURI, { headers });
+          if (!response.ok) {
+            throw new Error(`Failed to fetch metadata: ${response.statusText}`);
+          }
           const metadata = await response.json();
+          console.log(`[CardDisplay] Fetched HTTP metadata:`, metadata);
           setMetadata(metadata);
+        } else {
+          throw new Error('Invalid tokenURI format');
         }
       } catch (err) {
-        console.error('Error fetching card metadata:', err);
+        console.error('[CardDisplay] Error fetching card metadata:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load card');
       } finally {
         setLoading(false);
       }
@@ -64,7 +75,24 @@ function CardDisplay({ card }: { card: Card }) {
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
         </div>
         <div className="p-4">
+          <h3 className="font-semibold text-gray-900">Loading...</h3>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !metadata) {
+    return (
+      <div className="bg-white rounded-lg shadow-md overflow-hidden">
+        <div className="aspect-square bg-gradient-to-br from-red-400 to-orange-500 flex items-center justify-center">
+          <div className="text-center p-4">
+            <span className="text-4xl text-white font-bold block">⚠️</span>
+            <span className="text-sm text-white/80 mt-2 block">Failed to load</span>
+          </div>
+        </div>
+        <div className="p-4">
           <h3 className="font-semibold text-gray-900">Card #{card.cardId.toString()}</h3>
+          <p className="text-xs text-red-600 mt-1">{error}</p>
         </div>
       </div>
     );
@@ -73,39 +101,69 @@ function CardDisplay({ card }: { card: Card }) {
   return (
     <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
       <div className="aspect-square bg-gray-100 flex items-center justify-center overflow-hidden">
-        {metadata?.image ? (
+        {metadata.image ? (
           <img 
             src={metadata.image} 
             alt={metadata.name || `Card #${card.cardId.toString()}`}
             className="w-full h-full object-cover"
+            onError={(e) => {
+              console.error('[CardDisplay] Image failed to load:', metadata.image);
+              const target = e.currentTarget;
+              target.style.display = 'none';
+              if (target.parentElement) {
+                target.parentElement.innerHTML = `
+                  <div class="bg-gradient-to-br from-blue-400 to-purple-500 w-full h-full flex items-center justify-center">
+                    <div class="text-center">
+                      <span class="text-6xl text-white font-bold block">#${card.cardId.toString()}</span>
+                      <span class="text-sm text-white/80 mt-2 block">Tier ${card.tier}</span>
+                    </div>
+                  </div>
+                `;
+              }
+            }}
           />
         ) : (
           <div className="bg-gradient-to-br from-blue-400 to-purple-500 w-full h-full flex items-center justify-center">
-            <span className="text-6xl text-white font-bold">
-              {card.tier || '?'}
-            </span>
+            <div className="text-center">
+              <span className="text-6xl text-white font-bold block">
+                #{card.cardId.toString()}
+              </span>
+              <span className="text-sm text-white/80 mt-2 block">
+                Tier {card.tier}
+              </span>
+            </div>
           </div>
         )}
       </div>
       <div className="p-4">
         <h3 className="font-semibold text-gray-900">
-          {metadata?.name || `Card #${card.cardId.toString()}`}
+          {metadata.name || `Card #${card.cardId.toString()}`}
         </h3>
-        {metadata?.description && (
+        {metadata.description && (
           <p className="text-sm text-gray-600 mt-1 line-clamp-2">{metadata.description}</p>
         )}
-        {card.tier > 0 && (
-          <p className="text-sm text-gray-600 mt-1">Tier {card.tier}</p>
-        )}
-        {card.issuer !== '0x0000000000000000000000000000000000000000' && (
-          <p className="text-xs text-gray-500 mt-2">
-            Issuer: {card.issuer.slice(0, 6)}...{card.issuer.slice(-4)}
-          </p>
+        <div className="flex items-center justify-between mt-2">
+          <span className="text-sm font-medium text-purple-600">
+            {card.tier === 1 ? '10 pts' : card.tier === 2 ? '50 pts' : '200 pts'}
+          </span>
+          <span className="text-xs text-gray-500">
+            {new Date(card.claimedAt).toLocaleDateString()}
+          </span>
+        </div>
+        {metadata.attributes && metadata.attributes.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-1">
+            {metadata.attributes.slice(0, 3).map((attr: any, idx: number) => (
+              <span key={idx} className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded">
+                {attr.trait_type}: {attr.value}
+              </span>
+            ))}
+          </div>
         )}
       </div>
     </div>
   );
 }
+*/
 
 interface ProfileViewProps {
   address?: Address;

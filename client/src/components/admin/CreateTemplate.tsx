@@ -1,12 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { useContractWrite, useWaitForTransaction, useContractEvent, usePublicClient } from 'wagmi';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAccount, usePublicClient } from 'wagmi';
 import { type Address, isAddress } from 'viem';
-import { REPUTATION_CARD_CONTRACT_ADDRESS } from '../../lib/contracts';
-import ReputationCardAbi from '../../lib/ReputationCard.abi.json';
-import { showSuccessNotification, showErrorNotification } from '../../lib/notifications';
+import { useTemplates } from '../../hooks/useTemplates';
 import { supabase } from '../../lib/supabase';
 import { syncTemplateToDatabase } from '../../lib/template-sync';
+import toast from 'react-hot-toast';
+import {
+  ArrowLeft,
+  Plus,
+  FileText,
+  Users,
+  Award,
+  Clock,
+  AlertCircle,
+  CheckCircle,
+  Sparkles,
+} from 'lucide-react';
 
 interface CreateTemplateFormData {
   templateId: string;
@@ -19,6 +29,11 @@ interface CreateTemplateFormData {
 }
 
 export const CreateTemplate: React.FC = () => {
+  const navigate = useNavigate();
+  const { address } = useAccount();
+  const publicClient = usePublicClient();
+  const { createTemplate } = useTemplates();
+  
   const [formData, setFormData] = useState<CreateTemplateFormData>({
     templateId: '',
     title: '',
@@ -29,32 +44,53 @@ export const CreateTemplate: React.FC = () => {
     endTime: '0',
   });
   const [errors, setErrors] = useState<Partial<CreateTemplateFormData>>({});
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [createdTemplateId, setCreatedTemplateId] = useState<string | null>(null);
   const [isLoadingTemplateId, setIsLoadingTemplateId] = useState(false);
-  const publicClient = usePublicClient();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Fetch next template ID on mount
   useEffect(() => {
     const fetchNextTemplateId = async () => {
       setIsLoadingTemplateId(true);
       try {
+        // First, check if counter exists
         const { data, error } = await supabase
           .from('template_counter')
           .select('next_template_id')
           .eq('id', 1)
-          .single();
+          .maybeSingle();
 
         if (error) {
           console.error('Error fetching next template ID:', error);
-          // Fallback to empty string if counter doesn't exist
-          setFormData(prev => ({ ...prev, templateId: '' }));
+          setFormData((prev) => ({ ...prev, templateId: '1' }));
         } else if (data) {
-          setFormData(prev => ({ ...prev, templateId: data.next_template_id.toString() }));
+          // Counter exists, use it
+          setFormData((prev) => ({ ...prev, templateId: data.next_template_id.toString() }));
+        } else {
+          // No counter exists, check existing templates to find the next ID
+          console.log('No template counter found, checking existing templates...');
+          
+          const { data: templates, error: templatesError } = await supabase
+            .from('templates_cache')
+            .select('template_id')
+            .order('template_id', { ascending: false })
+            .limit(1);
+
+          let nextId = 1;
+          if (!templatesError && templates && templates.length > 0) {
+            // Get the highest template ID and add 1
+            nextId = parseInt(templates[0].template_id) + 1;
+            console.log(`Found highest template ID: ${templates[0].template_id}, next will be: ${nextId}`);
+          }
+
+          setFormData((prev) => ({ ...prev, templateId: nextId.toString() }));
+          
+          // Note: Counter needs to be manually initialized in Supabase
+          // Run this SQL in Supabase SQL Editor:
+          // INSERT INTO template_counter (id, next_template_id) VALUES (1, 1);
+          console.log(`Next template ID will be: ${nextId} (counter needs manual initialization in Supabase)`);
         }
       } catch (err) {
         console.error('Error fetching next template ID:', err);
-        setFormData(prev => ({ ...prev, templateId: '' }));
+        setFormData((prev) => ({ ...prev, templateId: '1' }));
       } finally {
         setIsLoadingTemplateId(false);
       }
@@ -63,121 +99,38 @@ export const CreateTemplate: React.FC = () => {
     fetchNextTemplateId();
   }, []);
 
-  // Contract write hook
-  const { data: writeData, write, isLoading: isWriting, error: writeError } = useContractWrite({
-    address: REPUTATION_CARD_CONTRACT_ADDRESS as Address,
-    abi: ReputationCardAbi as any,
-    functionName: 'createTemplate',
-  });
-
-  // Wait for transaction
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransaction({
-    hash: writeData?.hash,
-  });
-
-  // Listen for TemplateCreated event
-  useContractEvent({
-    address: REPUTATION_CARD_CONTRACT_ADDRESS as Address,
-    abi: ReputationCardAbi as any,
-    eventName: 'TemplateCreated',
-    listener(logs: any) {
-      const log = logs[0];
-      if (log && log.args) {
-        const templateId = log.args.templateId?.toString();
-        if (templateId) {
-          setCreatedTemplateId(templateId);
-          setSuccessMessage(`Template "${formData.title}" created successfully with ID: ${templateId}`);
-          
-          // Show success notification
-          showSuccessNotification({
-            title: 'Template Created!',
-            message: `"${formData.title}" (Template #${templateId}) has been created successfully.`,
-            txHash: writeData?.hash,
-            duration: 6000,
-          });
-
-          // Sync template to database
-          syncTemplateToCache(BigInt(templateId));
-
-          // Increment the counter in Supabase for next template
-          incrementTemplateCounter();
-        }
-      }
-    },
-  });
-
-  // Function to sync template to cache
-  const syncTemplateToCache = async (templateId: bigint) => {
-    if (!publicClient) {
-      console.error('[CreateTemplate] Public client not available for sync');
-      return;
-    }
-
-    try {
-      console.log(`[CreateTemplate] Syncing template ${templateId} to database...`);
-      const result = await syncTemplateToDatabase(publicClient, templateId);
-      
-      if (result.success) {
-        console.log(`[CreateTemplate] Template ${templateId} synced successfully`);
-      } else {
-        console.error(`[CreateTemplate] Failed to sync template ${templateId}:`, result.error);
-        showErrorNotification(
-          'Template Cache Warning',
-          'Template created on-chain but failed to cache in database. It will still work correctly.'
-        );
-      }
-    } catch (err) {
-      console.error('[CreateTemplate] Exception syncing template:', err);
-    }
-  };
-
-  // Function to increment template counter
-  const incrementTemplateCounter = async () => {
-    try {
-      await supabase.rpc('get_next_template_id');
-    } catch (err) {
-      console.error('Error incrementing template counter:', err);
-    }
-  };
-
   const validateForm = (): boolean => {
     const newErrors: Partial<CreateTemplateFormData> = {};
 
-    // Validate template ID (auto-generated, should always exist)
     if (!formData.templateId || formData.templateId.trim() === '') {
       newErrors.templateId = 'Template ID not loaded. Please refresh the page.';
     } else if (isNaN(Number(formData.templateId)) || Number(formData.templateId) < 0) {
       newErrors.templateId = 'Invalid template ID. Please refresh the page.';
     }
 
-    // Validate title
     if (!formData.title || formData.title.trim() === '') {
       newErrors.title = 'Template title is required';
     } else if (formData.title.trim().length < 3) {
       newErrors.title = 'Title must be at least 3 characters';
     }
 
-    // Validate issuer address
     if (!formData.issuer || formData.issuer.trim() === '') {
       newErrors.issuer = 'Issuer address is required';
     } else if (!isAddress(formData.issuer)) {
       newErrors.issuer = 'Invalid Ethereum address';
     }
 
-    // Validate max supply
     if (!formData.maxSupply || formData.maxSupply.trim() === '') {
       newErrors.maxSupply = 'Max supply is required';
     } else if (isNaN(Number(formData.maxSupply)) || Number(formData.maxSupply) <= 0) {
       newErrors.maxSupply = 'Max supply must be a positive number';
     }
 
-    // Validate tier (1-3)
     const tierNum = Number(formData.tier);
     if (isNaN(tierNum) || tierNum < 1 || tierNum > 3) {
       newErrors.tier = 'Tier must be between 1 and 3';
     }
 
-    // Validate time windows
     const startTime = Number(formData.startTime);
     const endTime = Number(formData.endTime);
 
@@ -189,7 +142,6 @@ export const CreateTemplate: React.FC = () => {
       newErrors.endTime = 'End time must be a non-negative number';
     }
 
-    // If endTime > 0, startTime must be < endTime
     if (endTime > 0 && startTime >= endTime) {
       newErrors.endTime = 'End time must be greater than start time when set';
     }
@@ -200,33 +152,95 @@ export const CreateTemplate: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSuccessMessage(null);
-    setCreatedTemplateId(null);
 
     if (!validateForm()) {
       return;
     }
 
     try {
-      (write as any)?.({
-        args: [
-          BigInt(formData.templateId),
-          formData.issuer as Address,
-          BigInt(formData.maxSupply),
-          Number(formData.tier),
-          BigInt(formData.startTime),
-          BigInt(formData.endTime),
-        ],
+      setIsSubmitting(true);
+      toast.loading('Creating template...', { id: 'create' });
+
+      const templateId = BigInt(formData.templateId);
+      
+      await createTemplate({
+        templateId,
+        issuer: formData.issuer as Address,
+        maxSupply: BigInt(formData.maxSupply),
+        tier: Number(formData.tier),
+        startTime: BigInt(formData.startTime),
+        endTime: BigInt(formData.endTime),
       });
-    } catch (err) {
+
+      // Sync template to database cache with custom title
+      console.log(`Syncing template ${templateId} to database...`);
+      
+      try {
+        // Insert into database with custom title
+        const { error } = await supabase
+          .from('templates_cache')
+          .upsert({
+            template_id: templateId.toString(),
+            issuer: formData.issuer.toLowerCase(),
+            name: formData.title,
+            description: `Tier ${formData.tier} credential`,
+            max_supply: formData.maxSupply,
+            current_supply: '0',
+            tier: Number(formData.tier),
+            start_time: formData.startTime,
+            end_time: formData.endTime,
+            is_paused: false,
+          }, {
+            onConflict: 'template_id',
+          });
+
+        if (error) {
+          console.error(`Failed to sync template ${templateId}:`, error);
+          toast.error('Template created but failed to cache in database', { id: 'create' });
+        } else {
+          console.log(`Template ${templateId} synced successfully with title: ${formData.title}`);
+        }
+      } catch (syncErr) {
+        console.error('Error syncing template:', syncErr);
+      }
+
+      // Increment counter for next template
+      try {
+        const nextId = Number(formData.templateId) + 1;
+        
+        // Try to update first
+        const { error: updateError } = await supabase
+          .from('template_counter')
+          .update({ next_template_id: nextId })
+          .eq('id', 1);
+        
+        if (updateError) {
+          console.warn('Could not update template counter (this is OK if counter doesn\'t exist yet):', updateError);
+          // Counter will be initialized on next page load
+        } else {
+          console.log(`Template counter updated to: ${nextId}`);
+        }
+      } catch (updateErr) {
+        console.error('Error updating template counter:', updateErr);
+      }
+
+      toast.success(`Template "${formData.title}" created successfully!`, { id: 'create' });
+      
+      // Navigate back to templates after a short delay
+      setTimeout(() => {
+        navigate('/admin/templates');
+      }, 1500);
+    } catch (err: any) {
       console.error('Error creating template:', err);
+      toast.error(err.message || 'Failed to create template', { id: 'create' });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
-    // Clear error for this field
     if (errors[name as keyof CreateTemplateFormData]) {
       setErrors((prev) => ({ ...prev, [name]: undefined }));
     }
@@ -243,237 +257,268 @@ export const CreateTemplate: React.FC = () => {
       endTime: '0',
     });
     setErrors({});
-    setSuccessMessage(null);
-    setCreatedTemplateId(null);
 
-    // Refetch next template ID
     setIsLoadingTemplateId(true);
     try {
       const { data, error } = await supabase
         .from('template_counter')
         .select('next_template_id')
         .eq('id', 1)
-        .single();
+        .maybeSingle();
 
       if (!error && data) {
-        setFormData(prev => ({ ...prev, templateId: data.next_template_id.toString() }));
+        setFormData((prev) => ({ ...prev, templateId: data.next_template_id.toString() }));
+      } else {
+        setFormData((prev) => ({ ...prev, templateId: '1' }));
       }
     } catch (err) {
       console.error('Error fetching next template ID:', err);
+      setFormData((prev) => ({ ...prev, templateId: '1' }));
     } finally {
       setIsLoadingTemplateId(false);
     }
   };
 
-  const isLoading = isWriting || isConfirming;
-
   return (
-    <div className="max-w-2xl mx-auto">
-      <Link
-        to="/admin"
-        className="inline-flex items-center text-blue-600 hover:text-blue-700 mb-6"
-      >
-        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-        </svg>
-        Back to Admin Dashboard
-      </Link>
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-6">Create New Template</h2>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 py-8">
+      <div className="container mx-auto px-4 max-w-4xl">
+        <Link
+          to="/admin"
+          className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 mb-6 font-semibold transition-colors group"
+        >
+          <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+          Back to Admin Dashboard
+        </Link>
 
-        {successMessage && (
-          <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4">
-            <div className="flex items-center">
-              <svg className="w-5 h-5 text-green-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path
-                  fillRule="evenodd"
-                  d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                  clipRule="evenodd"
-                />
-              </svg>
-              <p className="text-green-800 font-medium">{successMessage}</p>
+        <div className="mb-8">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center">
+              <Plus className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-4xl font-black text-gray-900 bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                Create New Template
+              </h1>
+              <p className="text-gray-600">Design and publish a new card template</p>
             </div>
           </div>
-        )}
+        </div>
 
-        {writeError && (
-          <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
-            <div className="flex items-center">
-              <svg className="w-5 h-5 text-red-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path
-                  fillRule="evenodd"
-                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                  clipRule="evenodd"
+        <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg p-8 border border-white/20">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="md:col-span-2">
+                <label htmlFor="title" className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-purple-600" />
+                  Template Title
+                </label>
+                <input
+                  type="text"
+                  id="title"
+                  name="title"
+                  value={formData.title}
+                  onChange={handleInputChange}
+                  className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all ${
+                    errors.title ? 'border-red-500 bg-red-50' : 'border-gray-300 bg-white'
+                  }`}
+                  placeholder="e.g., Early Adopter Badge"
                 />
-              </svg>
-              <p className="text-red-800">
-                {writeError.message.includes('Template exists')
-                  ? 'Template with this ID already exists'
-                  : writeError.message.includes('Invalid tier')
-                  ? 'Invalid tier value (must be 1-3)'
-                  : writeError.message.includes('Unauthorized') || writeError.message.includes('AccessControl')
-                  ? 'You do not have permission to create templates'
-                  : 'Failed to create template. Please try again.'}
-              </p>
+                {errors.title && (
+                  <div className="mt-2 flex items-center gap-2 text-sm text-red-600">
+                    <AlertCircle className="w-4 h-4" />
+                    <span>{errors.title}</span>
+                  </div>
+                )}
+                <p className="mt-2 text-sm text-gray-500 flex items-center gap-1">
+                  <Sparkles className="w-3 h-3" />
+                  A descriptive name for this template
+                </p>
+              </div>
+
+              <div className="md:col-span-2">
+                <label htmlFor="issuer" className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                  <Users className="w-4 h-4 text-blue-600" />
+                  Issuer Address
+                </label>
+                <input
+                  type="text"
+                  id="issuer"
+                  name="issuer"
+                  value={formData.issuer}
+                  onChange={handleInputChange}
+                  className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all font-mono text-sm ${
+                    errors.issuer ? 'border-red-500 bg-red-50' : 'border-gray-300 bg-white'
+                  }`}
+                  placeholder="0x..."
+                />
+                {errors.issuer && (
+                  <div className="mt-2 flex items-center gap-2 text-sm text-red-600">
+                    <AlertCircle className="w-4 h-4" />
+                    <span>{errors.issuer}</span>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label htmlFor="maxSupply" className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                  <Award className="w-4 h-4 text-green-600" />
+                  Max Supply
+                </label>
+                <input
+                  type="text"
+                  id="maxSupply"
+                  name="maxSupply"
+                  value={formData.maxSupply}
+                  onChange={handleInputChange}
+                  className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all ${
+                    errors.maxSupply ? 'border-red-500 bg-red-50' : 'border-gray-300 bg-white'
+                  }`}
+                  placeholder="e.g., 1000"
+                />
+                {errors.maxSupply && (
+                  <div className="mt-2 flex items-center gap-2 text-sm text-red-600">
+                    <AlertCircle className="w-4 h-4" />
+                    <span>{errors.maxSupply}</span>
+                  </div>
+                )}
+                <p className="mt-2 text-sm text-gray-500">Maximum cards to issue</p>
+              </div>
+
+              <div>
+                <label htmlFor="tier" className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                  <Award className="w-4 h-4 text-yellow-600" />
+                  Tier
+                </label>
+                <select
+                  id="tier"
+                  name="tier"
+                  value={formData.tier}
+                  onChange={handleInputChange}
+                  className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all ${
+                    errors.tier ? 'border-red-500 bg-red-50' : 'border-gray-300 bg-white'
+                  }`}
+                >
+                  <option value="1">Tier 1</option>
+                  <option value="2">Tier 2</option>
+                  <option value="3">Tier 3</option>
+                </select>
+                {errors.tier && (
+                  <div className="mt-2 flex items-center gap-2 text-sm text-red-600">
+                    <AlertCircle className="w-4 h-4" />
+                    <span>{errors.tier}</span>
+                  </div>
+                )}
+                <p className="mt-2 text-sm text-gray-500">Reputation score value</p>
+              </div>
+
+              <div>
+                <label htmlFor="startTime" className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-teal-600" />
+                  Start Time (Unix)
+                </label>
+                <input
+                  type="text"
+                  id="startTime"
+                  name="startTime"
+                  value={formData.startTime}
+                  onChange={handleInputChange}
+                  className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all ${
+                    errors.startTime ? 'border-red-500 bg-red-50' : 'border-gray-300 bg-white'
+                  }`}
+                  placeholder="0 for immediate"
+                />
+                {errors.startTime && (
+                  <div className="mt-2 flex items-center gap-2 text-sm text-red-600">
+                    <AlertCircle className="w-4 h-4" />
+                    <span>{errors.startTime}</span>
+                  </div>
+                )}
+                <p className="mt-2 text-sm text-gray-500">0 for immediate</p>
+              </div>
+
+              <div>
+                <label htmlFor="endTime" className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-orange-600" />
+                  End Time (Unix)
+                </label>
+                <input
+                  type="text"
+                  id="endTime"
+                  name="endTime"
+                  value={formData.endTime}
+                  onChange={handleInputChange}
+                  className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all ${
+                    errors.endTime ? 'border-red-500 bg-red-50' : 'border-gray-300 bg-white'
+                  }`}
+                  placeholder="0 for no expiration"
+                />
+                {errors.endTime && (
+                  <div className="mt-2 flex items-center gap-2 text-sm text-red-600">
+                    <AlertCircle className="w-4 h-4" />
+                    <span>{errors.endTime}</span>
+                  </div>
+                )}
+                <p className="mt-2 text-sm text-gray-500">0 for no expiration</p>
+              </div>
+            </div>
+
+            <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
+              <div className="flex items-start gap-3">
+                <CheckCircle className="w-5 h-5 text-purple-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-semibold text-purple-900 mb-1">Template ID</p>
+                  <p className="text-2xl font-black text-purple-600">
+                    {isLoadingTemplateId ? '...' : `#${formData.templateId}`}
+                  </p>
+                  <p className="text-xs text-purple-700 mt-1">Auto-generated unique identifier</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-4 pt-4">
+              <button
+                type="submit"
+                disabled={isSubmitting || isLoadingTemplateId}
+                className="flex-1 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:from-purple-700 hover:to-pink-700 disabled:from-gray-400 disabled:to-gray-400 disabled:cursor-not-allowed transition-all duration-300 font-semibold shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+              >
+                {isSubmitting ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-5 h-5" />
+                    Create Template
+                  </>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={handleReset}
+                disabled={isSubmitting}
+                className="px-6 py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 disabled:bg-gray-100 disabled:cursor-not-allowed transition-all duration-300 font-semibold"
+              >
+                Reset
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <div className="mt-8 bg-gradient-to-r from-purple-500 via-pink-500 to-red-500 rounded-2xl shadow-xl p-1">
+          <div className="bg-white rounded-xl p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 mb-1">Template Creation System</h3>
+                <p className="text-sm text-gray-600">On-chain template deployment with database sync</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-green-500 animate-pulse"></div>
+                <span className="text-sm font-semibold text-green-600">Ready</span>
+              </div>
             </div>
           </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Title */}
-          <div>
-            <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-2">
-              Template Title
-            </label>
-            <input
-              type="text"
-              id="title"
-              name="title"
-              value={formData.title}
-              onChange={handleInputChange}
-              className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                errors.title ? 'border-red-500' : 'border-gray-300'
-              }`}
-              placeholder="e.g., Early Adopter Badge"
-            />
-            {errors.title && <p className="mt-1 text-sm text-red-600">{errors.title}</p>}
-            <p className="mt-1 text-sm text-gray-500">A descriptive name for this template</p>
-          </div>
-
-          {/* Issuer Address */}
-          <div>
-            <label htmlFor="issuer" className="block text-sm font-medium text-gray-700 mb-2">
-              Issuer Address
-            </label>
-            <input
-              type="text"
-              id="issuer"
-              name="issuer"
-              value={formData.issuer}
-              onChange={handleInputChange}
-              className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                errors.issuer ? 'border-red-500' : 'border-gray-300'
-              }`}
-              placeholder="0x..."
-            />
-            {errors.issuer && <p className="mt-1 text-sm text-red-600">{errors.issuer}</p>}
-          </div>
-
-          {/* Max Supply */}
-          <div>
-            <label htmlFor="maxSupply" className="block text-sm font-medium text-gray-700 mb-2">
-              Max Supply
-            </label>
-            <input
-              type="text"
-              id="maxSupply"
-              name="maxSupply"
-              value={formData.maxSupply}
-              onChange={handleInputChange}
-              className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                errors.maxSupply ? 'border-red-500' : 'border-gray-300'
-              }`}
-              placeholder="e.g., 1000"
-            />
-            {errors.maxSupply && <p className="mt-1 text-sm text-red-600">{errors.maxSupply}</p>}
-            <p className="mt-1 text-sm text-gray-500">Maximum number of cards that can be issued</p>
-          </div>
-
-          {/* Tier */}
-          <div>
-            <label htmlFor="tier" className="block text-sm font-medium text-gray-700 mb-2">
-              Tier
-            </label>
-            <select
-              id="tier"
-              name="tier"
-              value={formData.tier}
-              onChange={handleInputChange}
-              className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                errors.tier ? 'border-red-500' : 'border-gray-300'
-              }`}
-            >
-              <option value="1">Tier 1</option>
-              <option value="2">Tier 2</option>
-              <option value="3">Tier 3</option>
-            </select>
-            {errors.tier && <p className="mt-1 text-sm text-red-600">{errors.tier}</p>}
-            <p className="mt-1 text-sm text-gray-500">Tier determines the reputation score value</p>
-          </div>
-
-          {/* Start Time */}
-          <div>
-            <label htmlFor="startTime" className="block text-sm font-medium text-gray-700 mb-2">
-              Start Time (Unix Timestamp)
-            </label>
-            <input
-              type="text"
-              id="startTime"
-              name="startTime"
-              value={formData.startTime}
-              onChange={handleInputChange}
-              className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                errors.startTime ? 'border-red-500' : 'border-gray-300'
-              }`}
-              placeholder="0 for no start time"
-            />
-            {errors.startTime && <p className="mt-1 text-sm text-red-600">{errors.startTime}</p>}
-            <p className="mt-1 text-sm text-gray-500">Set to 0 for immediate availability</p>
-          </div>
-
-          {/* End Time */}
-          <div>
-            <label htmlFor="endTime" className="block text-sm font-medium text-gray-700 mb-2">
-              End Time (Unix Timestamp)
-            </label>
-            <input
-              type="text"
-              id="endTime"
-              name="endTime"
-              value={formData.endTime}
-              onChange={handleInputChange}
-              className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                errors.endTime ? 'border-red-500' : 'border-gray-300'
-              }`}
-              placeholder="0 for no end time"
-            />
-            {errors.endTime && <p className="mt-1 text-sm text-red-600">{errors.endTime}</p>}
-            <p className="mt-1 text-sm text-gray-500">Set to 0 for no expiration</p>
-          </div>
-
-          {/* Buttons */}
-          <div className="flex gap-4">
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
-            >
-              {isLoading ? (
-                <span className="flex items-center justify-center">
-                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    />
-                  </svg>
-                  {isWriting ? 'Submitting...' : 'Confirming...'}
-                </span>
-              ) : (
-                'Create Template'
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={handleReset}
-              disabled={isLoading}
-              className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 disabled:bg-gray-100 disabled:cursor-not-allowed transition-colors font-medium"
-            >
-              Reset
-            </button>
-          </div>
-        </form>
+        </div>
       </div>
     </div>
   );

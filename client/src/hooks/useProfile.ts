@@ -17,6 +17,7 @@ export interface UseProfileReturn {
   loading: boolean;
   error: Error | null;
   refreshProfile: () => Promise<void>;
+  updateProfile: (metadata: Partial<Profile>) => Promise<void>;
 }
 
 async function fetchProfileData(address: Address, publicClient: any) {
@@ -129,6 +130,35 @@ export function useProfile(walletAddress?: Address): UseProfileReturn {
     await refetch();
   };
 
+  const updateProfile = async (metadata: Partial<Profile>) => {
+    if (!address) {
+      throw new Error('No wallet address connected');
+    }
+
+    // Update profile in Supabase
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({
+        display_name: metadata.displayName,
+        bio: metadata.bio,
+        avatar_url: metadata.avatarUrl,
+        banner_url: metadata.bannerUrl,
+        twitter_handle: metadata.twitterHandle,
+        discord_handle: metadata.discordHandle,
+        website_url: metadata.websiteUrl,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('wallet', address.toLowerCase());
+
+    if (updateError) {
+      console.error('[useProfile] Error updating profile:', updateError);
+      throw new Error(`Failed to update profile: ${updateError.message}`);
+    }
+
+    // Refresh the profile data
+    await refreshProfile();
+  };
+
   const result = data || { profile: null, profileId: null, score: 0n, cards: [] };
 
   return {
@@ -139,5 +169,6 @@ export function useProfile(walletAddress?: Address): UseProfileReturn {
     loading: isLoading,
     error: error as Error | null,
     refreshProfile,
+    updateProfile,
   };
 }
