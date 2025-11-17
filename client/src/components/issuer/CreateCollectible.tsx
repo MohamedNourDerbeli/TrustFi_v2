@@ -4,7 +4,7 @@ import { useAccount } from 'wagmi';
 import { supabase } from '../../lib/supabase';
 import type { CreateCollectibleParams } from '../../types/collectible';
 import { uploadToPinata, uploadJSONToPinata, validateImageFile } from '../../lib/pinata';
-import { Zap, Link2, Upload, Image as ImageIcon, Sparkles, Copy } from 'lucide-react';
+import { Zap, Link2, Upload, Image as ImageIcon, Sparkles } from 'lucide-react';
 
 interface Template {
   template_id: number;
@@ -43,7 +43,7 @@ export function CreateCollectible() {
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const [createdCollectibleId, setCreatedCollectibleId] = useState<string | null>(null);
+  
   const [shareableLink, setShareableLink] = useState<string | null>(null);
 
   // Fetch templates from Supabase
@@ -163,10 +163,11 @@ export function CreateCollectible() {
           };
 
           // Upload metadata to IPFS
-          finalTokenUri = await uploadJSONToPinata(metadata, `${formData.title}-metadata`);
-        } catch (uploadError: any) {
+          finalTokenUri = await uploadJSONToPinata(metadata);
+        } catch (uploadError: unknown) {
           console.error('Error uploading to IPFS:', uploadError);
-          throw new Error(`Failed to upload to IPFS: ${uploadError.message}`);
+          const message = uploadError instanceof Error ? uploadError.message : String(uploadError);
+          throw new Error(`Failed to upload to IPFS: ${message}`);
         } finally {
           setIsUploading(false);
         }
@@ -176,7 +177,7 @@ export function CreateCollectible() {
       const { data: insertedData, error: insertError } = await supabase
         .from('collectibles')
         .insert({
-          template_id: formData.templateId.toString(),
+          template_id: Number(formData.templateId),
           title: formData.title,
           description: formData.description,
           image_url: finalImageUrl,
@@ -199,7 +200,6 @@ export function CreateCollectible() {
       // Generate shareable link for the collectible
       if (insertedData) {
         const collectibleId = insertedData.id;
-        setCreatedCollectibleId(collectibleId);
         
         // Generate the shareable discover link
         const baseUrl = window.location.origin;
@@ -222,9 +222,10 @@ export function CreateCollectible() {
       setCardImagePreview(null);
       setBannerImageFile(null);
       setBannerImagePreview(null);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error creating collectible:', err);
-      setError(err.message || 'Failed to create collectible');
+      const message = err instanceof Error ? err.message : String(err);
+      setError(message || 'Failed to create collectible');
     } finally {
       setIsSubmitting(false);
       setIsUploading(false);
@@ -303,7 +304,6 @@ export function CreateCollectible() {
                 onClick={() => {
                   setSuccess(false);
                   setShareableLink(null);
-                  setCreatedCollectibleId(null);
                 }}
                 className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold transition-all"
               >
@@ -577,7 +577,7 @@ export function CreateCollectible() {
           {/* Info Box */}
           <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
             <div className="flex items-start gap-3">
-              <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center flex-shrink-0">
+              <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center flex-shrink-0"> 
                 <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
@@ -642,6 +642,56 @@ export function CreateCollectible() {
                 Add
               </button>
             </div>
+          </div>
+
+          {/* Live Preview */}
+          <div className="mt-6">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Live Preview
+            </label>
+            <div className="border border-gray-200 rounded-2xl overflow-hidden bg-white">
+              <div className="relative">
+                {(() => {
+                  const selectedTemplate = templates.find(t => t.template_id === Number(formData.templateId));
+                  const previewImage = mode === 'quick' ? cardImagePreview : (formData.imageUrl || null);
+                  const previewBanner = mode === 'quick' ? bannerImagePreview : (formData.bannerUrl || null);
+                  return (
+                    <>
+                      {previewBanner && (
+                        <img
+                          src={previewBanner}
+                          alt="Banner Preview"
+                          className="w-full h-32 object-cover"
+                        />
+                      )}
+                      <div className="p-4 flex gap-4 items-start">
+                        <div className="w-24 h-24 bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center">
+                          {previewImage ? (
+                            <img src={previewImage} alt="Image Preview" className="w-full h-full object-cover" />
+                          ) : (
+                            <ImageIcon className="w-8 h-8 text-gray-400" />
+                          )}
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">
+                              {selectedTemplate ? `${selectedTemplate.name} • Tier ${selectedTemplate.tier}` : 'No template selected'}
+                            </span>
+                          </div>
+                          <h4 className="text-lg font-semibold text-gray-900">
+                            {formData.title || 'Untitled Collectible'}
+                          </h4>
+                          <p className="text-sm text-gray-600 line-clamp-2">
+                            {formData.description || 'Description will appear here.'}
+                          </p>
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
+            <p className="text-xs text-gray-500 mt-2">This is a visual approximation of what will be created.</p>
           </div>
 
           {/* Submit Button */}
