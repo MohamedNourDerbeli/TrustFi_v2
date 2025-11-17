@@ -136,13 +136,20 @@ export function CardDisplay({ card, credential, compact = false }: CardDisplayPr
 
   if (loading) {
     return (
-      <div className="group bg-gradient-to-br from-gray-50 to-white rounded-2xl p-5 border border-gray-200 animate-pulse">
-        <div className="relative w-full h-48 rounded-xl mb-4 bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
+      <div className="tf-card tf-card-skeleton">
+        <div className="tf-card-media">
+          <div className="animate-spin rounded-full h-12 w-12 border-2 border-t-transparent border-white/70"></div>
         </div>
-        <div className="space-y-2">
-          <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-          <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+        <div className="tf-card-footer">
+          <div className="h-3 w-5/6 rounded bg-gray-200" />
+          <div className="flex gap-2">
+            <div className="h-3 w-1/3 rounded bg-gray-200" />
+            <div className="h-3 w-1/4 rounded bg-gray-200" />
+          </div>
+          <div className="flex gap-1 flex-wrap">
+            <div className="h-4 w-14 rounded bg-gray-200" />
+            <div className="h-4 w-12 rounded bg-gray-200" />
+          </div>
         </div>
       </div>
     );
@@ -150,16 +157,19 @@ export function CardDisplay({ card, credential, compact = false }: CardDisplayPr
 
   if (error || !metadata) {
     return (
-      <div className="group bg-gradient-to-br from-red-50 to-white rounded-2xl p-5 border border-red-200">
-        <div className="relative w-full h-48 rounded-xl mb-4 bg-gradient-to-br from-red-400 to-orange-500 flex items-center justify-center text-white">
-          <div className="text-center">
-            <span className="text-4xl font-bold block">⚠️</span>
-            <span className="text-sm mt-2 block">Failed to load</span>
+      <div className="tf-card" style={{borderColor:'var(--tf-danger)'}}>
+        <div className="tf-card-media" style={{background:'linear-gradient(135deg,#dc2626,#f87171)'}}>
+          <div className="text-center text-white">
+            <div className="text-3xl font-black mb-1">⚠️</div>
+            <div className="text-xs font-semibold tracking-wide">Failed to load</div>
           </div>
         </div>
-        <div className="space-y-2">
-          <p className="text-sm font-bold text-gray-900">Card #{card.cardId.toString()}</p>
-          <p className="text-xs text-red-600">{error}</p>
+        <div className="tf-card-footer">
+          <div className="flex items-center">
+            <span className="tf-card-title">Card #{card.cardId.toString()}</span>
+            <span className="tf-card-pts" style={{background:'linear-gradient(135deg,#dc2626,#ef4444)'}}>ERR</span>
+          </div>
+          <p className="text-xs" style={{color:'var(--tf-danger)'}}>{error}</p>
         </div>
       </div>
     );
@@ -168,78 +178,56 @@ export function CardDisplay({ card, credential, compact = false }: CardDisplayPr
   const tierPoints = card.tier === 1 ? 10 : card.tier === 2 ? 50 : 200;
 
   return (
-    <div className="group relative bg-gradient-to-br from-gray-50 to-white rounded-2xl p-5 hover:shadow-2xl transition-all duration-300 border border-gray-200 hover:border-purple-300 hover:scale-105 cursor-pointer">
-      <div className="relative w-full h-48 rounded-xl mb-4 overflow-hidden">
-        {/* Credential Badge Overlay */}
+    <div className="tf-card">
+      <div className="tf-card-media">
         {credential && <CredentialBadge card={card} credential={credential} compact={compact} />}
+        <div className={`tf-card-tier t${card.tier}`}>T{card.tier}</div>
         {metadata.image ? (
-          <img 
-            src={metadata.image} 
+          <img
+            src={metadata.image}
             alt={metadata.name || `Card #${card.cardId.toString()}`}
-            className="w-full h-full object-cover"
+            loading="lazy"
             onError={(e) => {
               logger.error('[CardDisplay] Image failed to load:', metadata.image);
               const target = e.currentTarget;
               target.style.display = 'none';
               if (target.parentElement) {
-                target.parentElement.innerHTML = `
-                  <div class="w-full h-full bg-gradient-to-br ${
-                    card.tier === 1 ? 'from-green-400 to-green-600' :
-                    card.tier === 2 ? 'from-blue-400 to-blue-600' :
-                    'from-purple-400 to-purple-600'
-                  } flex items-center justify-center text-white">
-                    <div class="text-center">
-                      <div class="text-5xl font-black drop-shadow-lg">#${card.cardId.toString()}</div>
-                      <div class="text-sm mt-2">Tier ${card.tier}</div>
-                    </div>
+                target.parentElement.innerHTML = `<div class='w-full h-full flex items-center justify-center text-white'>
+                  <div class='text-center'>
+                    <div class='text-4xl font-black'>#${card.cardId.toString()}</div>
+                    <div class='text-xs mt-1 tracking-wide'>Tier ${card.tier}</div>
                   </div>
-                `;
+                </div>`;
+                target.parentElement.classList.add('fallback');
+                target.parentElement.classList.add(`tier-${card.tier}`);
               }
             }}
           />
         ) : (
-          <div className={`w-full h-full flex items-center justify-center text-white font-bold ${
-            card.tier === 1 ? 'bg-gradient-to-br from-green-400 via-green-500 to-green-600' :
-            card.tier === 2 ? 'bg-gradient-to-br from-blue-400 via-blue-500 to-blue-600' :
-            'bg-gradient-to-br from-purple-400 via-purple-500 to-purple-600'
-          }`}>
-            <div className="relative">
-              <div className="text-5xl font-black drop-shadow-lg">#{card.cardId.toString()}</div>
-              <div className="absolute -top-2 -right-2 w-8 h-8 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center text-xs font-bold">
-                T{card.tier}
-              </div>
-            </div>
+          <div className="flex flex-col items-center justify-center text-white">
+            <div className="text-4xl font-black">#{card.cardId.toString()}</div>
+            <div className="text-xs tracking-wide mt-1">Tier {card.tier}</div>
           </div>
         )}
       </div>
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-bold text-gray-900 truncate">
-            {metadata.name || `Card #${card.cardId.toString()}`}
-          </p>
-          <span className={`px-3 py-1 rounded-full text-xs font-bold flex-shrink-0 ml-2 ${
-            card.tier === 1 ? 'bg-green-100 text-green-700' :
-            card.tier === 2 ? 'bg-blue-100 text-blue-700' :
-            'bg-purple-100 text-purple-700'
-          }`}>
-            {tierPoints} pts
-          </span>
+      <div className="tf-card-footer">
+        <div className="flex items-center">
+          <span className="tf-card-title" title={metadata.name}>{metadata.name || `Card #${card.cardId.toString()}`}</span>
+          <span className="tf-card-pts">{tierPoints} pts</span>
         </div>
         {metadata.description && !compact && (
-          <p className="text-xs text-gray-600 line-clamp-2">{metadata.description}</p>
+          <p className="text-xs line-clamp-2" style={{color:'var(--tf-text-muted)'}}>{metadata.description}</p>
         )}
-        <p className="text-xs text-gray-500 flex items-center gap-1">
+        <div className="tf-card-meta">
           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
           </svg>
-          {new Date(card.claimedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-        </p>
+          <span>{new Date(card.claimedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+        </div>
         {Array.isArray(metadata.attributes) && metadata.attributes.length > 0 && !compact && (
-          <div className="flex flex-wrap gap-1 mt-2">
-            {(metadata.attributes as Array<{ trait_type: string; value: string | number }>).slice(0, 2).map((attr, idx: number) => (
-              <span key={idx} className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded">
-                {attr.trait_type}: {attr.value}
-              </span>
+          <div className="tf-attr-tags">
+            {(metadata.attributes as Array<{ trait_type: string; value: string | number }>).slice(0,3).map((attr, idx:number) => (
+              <span key={idx} className="tf-attr-tag" title={`${attr.trait_type}: ${attr.value}`}>{attr.trait_type}: {attr.value}</span>
             ))}
           </div>
         )}

@@ -1,13 +1,29 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
 import { WalletConnect } from "../auth/WalletConnect";
+import ThemeTogglerButton from "../animate-ui/buttons/ThemeTogglerButton";
+import { useProfile } from "../../hooks/useProfile";
+import { AnimatePresence, motion } from "motion/react";
 
 export const Navigation: React.FC = () => {
-  const { isConnected, hasProfile, isAdmin, isIssuer, address } = useAuth();
+  const { isConnected, hasProfile, isAdmin, isIssuer, address, disconnect } = useAuth();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
+  const [theme, setTheme] = useState<string>(() => localStorage.getItem('tf-theme') || 'light');
+  const { profile } = useProfile();
+
+  const initials = (name?: string) => name ? name.split(/\s+/).map(s=>s[0]).slice(0,2).join('').toUpperCase() : 'U';
+  const truncate = (addr?: string) => addr ? `${addr.slice(0,6)}...${addr.slice(-4)}` : '';
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+    localStorage.setItem('tf-theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => setTheme(t => t === 'light' ? 'dark' : 'light');
 
   const isActive = (path: string) => {
     return location.pathname === path || location.pathname.startsWith(path + "/");
@@ -28,17 +44,18 @@ export const Navigation: React.FC = () => {
   };
 
   return (
-    <nav className="bg-white shadow-sm border-b border-gray-200">
+    <nav className="relative z-20 bg-white shadow-sm border-b border-gray-200">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link to="/" className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-lg">T</span>
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">TrustFi</h1>
-            </div>
+          <Link to="/" className="flex items-center space-x-2 group">
+            <img
+              src="/TrustFi.svg"
+              alt="TrustFi Logo"
+              className="h-10 w-auto select-none transition-opacity group-hover:opacity-90"
+              draggable={false}
+            />
+            <h1 className="text-xl font-bold text-gray-900">TrustFi</h1>
           </Link>
 
           {/* Desktop Navigation */}
@@ -72,70 +89,89 @@ export const Navigation: React.FC = () => {
             {isConnected && hasProfile && (
               <div className="relative">
                 <button
-                  onClick={() => setIsProfileDropdownOpen(!isProfileDropdownOpen)}
-                  className="flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors"
+                  onClick={() => setIsProfileDropdownOpen((v) => !v)}
+                  className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-gray-100 transition-colors"
                 >
-                  <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
-                    <span className="text-white text-sm font-semibold">
-                      {address?.slice(2, 4).toUpperCase()}
-                    </span>
+                  {profile?.avatarUrl ? (
+                    <img src={profile.avatarUrl} alt="avatar" className="h-8 w-8 rounded-full object-cover" />
+                  ) : (
+                    <div className="h-8 w-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 grid place-items-center text-white text-xs font-semibold">
+                      {initials(profile?.displayName)}
+                    </div>
+                  )}
+                  <div className="text-left">
+                    <div className="text-sm font-semibold text-gray-900 leading-none">
+                      {profile?.displayName || 'User'}
+                    </div>
                   </div>
                   <svg
-                    className={`w-4 h-4 text-gray-600 transition-transform ${
-                      isProfileDropdownOpen ? "rotate-180" : ""
-                    }`}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
+                    className={`ml-1 w-4 h-4 text-gray-600 transition-transform ${isProfileDropdownOpen ? 'rotate-180' : ''}`}
+                    fill="none" viewBox="0 0 24 24" stroke="currentColor"
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M19 9l-7 7-7-7"
-                    />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
                 </button>
 
-                {/* Profile Dropdown */}
-                {isProfileDropdownOpen && (
-                  <>
-                    <div
-                      className="fixed inset-0 z-10"
-                      onClick={() => setIsProfileDropdownOpen(false)}
-                    />
-                    <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-20">
-                      <div className="px-4 py-3 border-b border-gray-200">
-                        <p className="text-sm text-gray-500">Connected as</p>
-                        <p className="text-sm font-mono text-gray-900 truncate">
-                          {address}
-                        </p>
-                      </div>
-                      <Link
-                        to="/dashboard"
-                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                        onClick={() => setIsProfileDropdownOpen(false)}
+                <AnimatePresence>
+                  {isProfileDropdownOpen && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setIsProfileDropdownOpen(false)} />
+                      <motion.div
+                        initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                        transition={{ type: 'spring', stiffness: 420, damping: 26 }}
+                        className="absolute right-0 mt-2 w-72 bg-white rounded-xl shadow-xl border border-gray-200 z-20 overflow-hidden"
                       >
-                        View Dashboard
-                      </Link>
-                      <Link
-                        to="/profile/edit"
-                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                        onClick={() => setIsProfileDropdownOpen(false)}
-                      >
-                        Edit Profile
-                      </Link>
-                    </div>
-                  </>
-                )}
+                        <div className="p-4 bg-gray-50 border-b border-gray-200 flex items-center gap-3">
+                          {profile?.avatarUrl ? (
+                            <img src={profile.avatarUrl} alt="avatar" className="h-10 w-10 rounded-full object-cover" />
+                          ) : (
+                            <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 grid place-items-center text-white text-sm font-semibold">
+                              {initials(profile?.displayName)}
+                            </div>
+                          )}
+                          <div>
+                            <div className="text-sm font-semibold text-gray-900">{profile?.displayName || 'User'}</div>
+                            <div className="text-xs text-gray-500 font-mono">{truncate(address)}</div>
+                          </div>
+                        </div>
+                        <div className="py-1">
+                          <Link
+                            to="/dashboard"
+                            className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                            onClick={() => setIsProfileDropdownOpen(false)}
+                          >
+                            View Dashboard
+                          </Link>
+                          <Link
+                            to="/profile/edit"
+                            className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                            onClick={() => setIsProfileDropdownOpen(false)}
+                          >
+                            Edit Profile
+                          </Link>
+                          <button
+                            onClick={() => { setIsProfileDropdownOpen(false); disconnect(); }}
+                            className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                          >
+                            Logout
+                          </button>
+                        </div>
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
               </div>
             )}
-            <WalletConnect />
+            <ThemeTogglerButton variant="ghost" />
+            {!isConnected && <WalletConnect />}
           </div>
 
           {/* Mobile Menu Button */}
           <div className="md:hidden flex items-center space-x-2">
-            <WalletConnect />
+            {!isConnected && <WalletConnect />}
+            <ThemeTogglerButton variant="ghost" />
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
@@ -216,14 +252,7 @@ export const Navigation: React.FC = () => {
                 </Link>
               )}
 
-              {isConnected && address && (
-                <div className="px-4 py-3 mt-4 border-t border-gray-200">
-                  <p className="text-xs text-gray-500 mb-1">Connected as</p>
-                  <p className="text-xs font-mono text-gray-900 break-all">
-                    {address}
-                  </p>
-                </div>
-              )}
+              {/* Removed wallet address display in mobile menu when connected */}
             </div>
           </div>
         )}

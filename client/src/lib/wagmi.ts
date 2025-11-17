@@ -3,6 +3,7 @@ import { configureChains, createConfig } from 'wagmi';
 import { moonbaseAlpha } from 'wagmi/chains';
 import { InjectedConnector } from 'wagmi/connectors/injected';
 import { WalletConnectConnector } from 'wagmi/connectors/walletConnect';
+import { CoinbaseWalletConnector } from 'wagmi/connectors/coinbaseWallet';
 import { jsonRpcProvider } from 'wagmi/providers/jsonRpc';
 
 // WalletConnect project ID - should be set in .env
@@ -43,6 +44,12 @@ export const config = createConfig({
   autoConnect: true,
   connectors: [
     new InjectedConnector({ chains }),
+    new CoinbaseWalletConnector({
+      chains,
+      options: {
+        appName: 'TrustFi',
+      },
+    }),
     ...(projectId
       ? [
           new WalletConnectConnector({

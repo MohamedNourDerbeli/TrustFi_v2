@@ -159,10 +159,10 @@ export const UserDashboard: React.FC = () => {
 
   if (!isConnected) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 flex items-center justify-center p-4">
+      <div className="min-h-screen tf-app-bg flex items-center justify-center p-4">
         <div className="max-w-md w-full">
-          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-8 text-center border border-white/20">
-            <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+          <div className="tf-glass rounded-2xl shadow-xl p-8 text-center border tf-border">
+            <div className="w-20 h-20 mx-auto mb-6 tf-gradient-accent rounded-full flex items-center justify-center">
               <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
               </svg>
@@ -173,8 +173,8 @@ export const UserDashboard: React.FC = () => {
             <p className="text-gray-600 mb-6">
               Unlock your personalized dashboard and start collecting cards
             </p>
-            <div className="bg-blue-50 rounded-xl p-4 mb-6">
-              <p className="text-sm text-blue-800 font-medium">
+            <div className="rounded-xl p-4 mb-6 tf-glass-alt">
+              <p className="text-sm font-medium" style={{color:'var(--tf-text)'}}>
                 Use the "Connect Wallet" button in the navigation above
               </p>
             </div>
@@ -189,134 +189,92 @@ export const UserDashboard: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
-      <div className="max-w-7xl mx-auto px-4 py-8 space-y-8">
-        {/* Profile Header */}
-        <div className="relative bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl overflow-hidden border border-white/20 transition-all duration-300 hover:shadow-2xl">
-          <div className="relative">
-            <div
-              className="w-full h-48 sm:h-64 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500"
-              style={profile?.bannerUrl ? { backgroundImage: `url(${profile.bannerUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
-          </div>
-
-          <div className="px-6 sm:px-8 pb-6 pt-6 relative">
-            <div className="flex flex-col sm:flex-row sm:items-end gap-4 sm:gap-6 -mt-24 sm:-mt-28">
-              <div className="relative group">
-                <div className="absolute -inset-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-full blur opacity-75 group-hover:opacity-100 transition duration-300"></div>
-                <div className="relative w-32 h-32 sm:w-36 sm:h-36 rounded-full border-4 border-white bg-gray-200 overflow-hidden flex-shrink-0 shadow-xl">
-                  {profile?.avatarUrl ? (
-                    <img src={profile.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-400 via-purple-500 to-pink-500">
-                      <span className="text-5xl text-white font-bold">
-                        {profile?.displayName?.[0]?.toUpperCase() || address?.slice(2, 4).toUpperCase()}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-              
-              <div className="flex-1 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
-                <div className="min-w-0 sm:mt-8">
-                  <div className="flex items-center gap-2 mb-2">
-                    <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 truncate">
-                      {profile?.displayName || `Profile #${profileId?.toString()}`}
-                    </h1>
-                    {score >= 10 && (
-                      <Award className="w-6 h-6 text-yellow-500 animate-pulse" />
-                    )}
+    <div className="min-h-screen tf-app-bg">
+      <div className="max-w-[1800px] mx-auto px-4 py-4">
+        {/* Collection Hero */}
+        <div className="tf-collection-hero">
+          <div className="hero-bg" style={profile?.bannerUrl ? { backgroundImage:`url(${profile.bannerUrl})` } : { background:'linear-gradient(120deg,#0f172a,#1e3a8a)' }} />
+          <div className="tf-collection-gradient"></div>
+          <div className="tf-collection-overlay">
+            <div className="tf-collection-header-row">
+              <div className="tf-collection-avatar">
+                {profile?.avatarUrl ? (
+                  <img src={profile.avatarUrl} alt="Avatar" />
+                ) : (
+                  <div className="flex items-center justify-center w-full h-full text-white font-bold text-2xl" style={{background:'var(--tf-gradient-accent)'}}>
+                    {profile?.displayName?.[0]?.toUpperCase() || address?.slice(2,4).toUpperCase()}
                   </div>
-                  <p className="text-gray-600 text-sm sm:text-base font-mono bg-gray-100 inline-block px-3 py-1 rounded-lg">
-                    {address?.slice(0, 6)}...{address?.slice(-4)}
-                  </p>
-                  
-                  {/* DID Display Section */}
-                  {userDid ? (
-                    <div className="mt-3 flex items-center gap-2">
-                      <div className="flex items-center gap-2 bg-gradient-to-r from-purple-50 to-blue-50 px-3 py-2 rounded-lg border border-purple-200">
-                        <div className="flex items-center gap-1.5">
-                          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                          <span className="text-xs font-semibold text-purple-700">DID:</span>
-                        </div>
-                        <span className="text-xs font-mono text-gray-700">
-                          {userDid.uri.slice(0, 20)}...{userDid.uri.slice(-8)}
-                        </span>
-                        <button
-                          onClick={copyDidToClipboard}
-                          className="ml-1 p-1 hover:bg-purple-100 rounded transition-colors"
-                          title="Copy DID"
-                        >
-                          {didCopied ? (
-                            <Check className="w-3.5 h-3.5 text-green-600" />
-                          ) : (
-                            <Copy className="w-3.5 h-3.5 text-purple-600" />
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  ) : hasProfile && (
-                    <div className="mt-3 flex items-center gap-2">
-                      <div className="flex items-center gap-2 bg-yellow-50 px-3 py-2 rounded-lg border border-yellow-200">
-                        <div className="w-3 h-3 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
-                        <span className="text-xs font-medium text-yellow-700">Creating DID...</span>
-                      </div>
-                    </div>
-                  )}
+                )}
+              </div>
+              <div className="flex flex-col gap-3 min-w-0">
+                <div className="tf-collection-name">
+                  <span>{profile?.displayName || `Profile #${profileId?.toString()}`}</span>
+                  {score >= 10 && <Award className="w-6 h-6 text-yellow-400" />}
                 </div>
-                <Link
-                  to="/profile/edit"
-                  className="self-start sm:self-auto px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 text-sm font-medium transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl whitespace-nowrap flex items-center gap-2"
-                >
-                  <span>Edit Profile</span>
-                  <ChevronRight className="w-4 h-4" />
-                </Link>
+                <div className="tf-collection-badges">
+                  <span className="tf-badge font-mono">{address?.slice(0,6)}...{address?.slice(-4)}</span>
+                  {userDid && (
+                    <button onClick={copyDidToClipboard} className="tf-badge font-mono">
+                      DID {userDid.uri.slice(0,12)}...{userDid.uri.slice(-6)} {didCopied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+                    </button>
+                  )}
+                  {!userDid && hasProfile && <span className="tf-badge">Creating DID...</span>}
+                  {profile?.bio && <span className="tf-badge" title={profile.bio}>Bio</span>}
+                  <Link to="/profile/edit" className="tf-badge" style={{background:'var(--tf-gradient-accent)'}}>
+                    Edit
+                  </Link>
+                </div>
               </div>
             </div>
-            
-            {profile?.bio && (
-              <p className="text-gray-700 mt-6 line-clamp-2 text-base leading-relaxed">{profile.bio}</p>
-            )}
+            <div className="tf-collection-stats">
+              <div className="tf-collection-stat">
+                <span className="tf-collection-stat-label">REPUTATION</span>
+                <span className="tf-collection-stat-value">{score}</span>
+              </div>
+              <div className="tf-collection-stat">
+                <span className="tf-collection-stat-label">CARDS</span>
+                <span className="tf-collection-stat-value">{cards.length}</span>
+              </div>
+              <div className="tf-collection-stat">
+                <span className="tf-collection-stat-label">VERIFIED</span>
+                <span className="tf-collection-stat-value">{loadingCredentials ? '...' : verifiedCredentialsCount}</span>
+              </div>
+              <div className="tf-collection-stat">
+                <span className="tf-collection-stat-label">CLAIMS</span>
+                <span className="tf-collection-stat-value">{recentActivity.length}</span>
+              </div>
+            </div>
           </div>
+        </div>
 
-          <div className="grid grid-cols-4 border-t border-gray-200 bg-gradient-to-r from-blue-50 via-purple-50 to-pink-50 text-center py-6 sm:py-8">
-            <div className="group cursor-pointer transition-all duration-300 hover:bg-white/50">
-              <div className="flex items-center justify-center gap-2 mb-1">
-                <TrendingUp className="w-5 h-5 text-blue-600 group-hover:scale-110 transition-transform" />
-                <p className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                  {score}
-                </p>
-              </div>
-              <p className="text-sm sm:text-base text-gray-600 font-medium">Reputation</p>
-            </div>
-            <div className="group cursor-pointer transition-all duration-300 hover:bg-white/50 border-x border-gray-200">
-              <div className="flex items-center justify-center gap-2 mb-1">
-                <Sparkles className="w-5 h-5 text-purple-600 group-hover:scale-110 transition-transform" />
-                <p className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-                  {cards.length}
-                </p>
-              </div>
-              <p className="text-sm sm:text-base text-gray-600 font-medium">Cards</p>
-            </div>
-            <div className="group cursor-pointer transition-all duration-300 hover:bg-white/50 border-r border-gray-200">
-              <div className="flex items-center justify-center gap-2 mb-1">
-                <Shield className="w-5 h-5 text-green-600 group-hover:scale-110 transition-transform" />
-                <p className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
-                  {loadingCredentials ? '...' : verifiedCredentialsCount}
-                </p>
-              </div>
-              <p className="text-sm sm:text-base text-gray-600 font-medium">Verified</p>
-            </div>
-            <div className="group cursor-pointer transition-all duration-300 hover:bg-white/50">
-              <div className="flex items-center justify-center gap-2 mb-1">
-                <Award className="w-5 h-5 text-orange-600 group-hover:scale-110 transition-transform" />
-                <p className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">
-                  {recentActivity.length}
-                </p>
-              </div>
-              <p className="text-sm sm:text-base text-gray-600 font-medium">Claims</p>
-            </div>
+        {/* Tabs */}
+        <div className="tf-collection-tabs">
+          <div className="tf-collection-tab active">Items</div>
+          <div className="tf-collection-tab">Activity</div>
+          <div className="tf-collection-tab">Traits</div>
+          <div className="tf-collection-tab">About</div>
+        </div>
+
+        {/* Toolbar */}
+        <div className="tf-toolbar mt-4">
+          <div className="relative flex-1 min-w-[220px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{color:'var(--tf-text-muted)'}} />
+            <input
+              type="text"
+              placeholder="Search by ID or trait"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="tf-input"
+            />
+          </div>
+          <div className="hidden md:flex items-center gap-2">
+            <button onClick={() => setSortBy('date')} className={`tf-chip ${sortBy==='date' ? 'active' : ''}`}>Latest</button>
+            <button onClick={() => setSortBy('tier')} className={`tf-chip ${sortBy==='tier' ? 'active' : ''}`}>Tier</button>
+          </div>
+          <div className="hidden sm:flex items-center gap-2">
+            <button onClick={() => setFilterVerified('all')} className={`tf-chip ${filterVerified==='all' ? 'active' : ''}`}>All</button>
+            <button onClick={() => setFilterVerified('verified')} className={`tf-chip ${filterVerified==='verified' ? 'active' : ''}`}>Verified</button>
+            <button onClick={() => setFilterVerified('unverified')} className={`tf-chip ${filterVerified==='unverified' ? 'active' : ''}`}>Unverified</button>
           </div>
         </div>
 
@@ -370,7 +328,7 @@ export const UserDashboard: React.FC = () => {
         </div>
             */}
         {/* My Cards */}
-        <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-6 border border-white/20">
+        <div className="tf-glass rounded-2xl shadow-xl p-6 border tf-border">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <div>
               <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
@@ -424,7 +382,7 @@ export const UserDashboard: React.FC = () => {
           </div>
 
           {showFilters && (
-            <div className="mb-6 p-4 bg-gray-50 rounded-xl border border-gray-200 animate-in slide-in-from-top">
+            <div className="mb-6 p-4 tf-glass-alt rounded-xl border tf-border animate-in slide-in-from-top">
               <div className="space-y-3">
                 <div>
                   <p className="text-xs font-semibold text-gray-600 mb-2">Sort By</p>
@@ -494,7 +452,7 @@ export const UserDashboard: React.FC = () => {
 
           {/* Credentials Loading Error */}
           {credentialsError && (
-            <div className="mb-6 p-4 bg-yellow-50 rounded-xl border border-yellow-200 flex items-start gap-3">
+            <div className="mb-6 p-4 tf-glass-alt rounded-xl border tf-border flex items-start gap-3">
               <Shield className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-semibold text-yellow-800">Credential Verification Unavailable</p>
@@ -582,7 +540,7 @@ export const UserDashboard: React.FC = () => {
             </>
           ) : (
             <div className="text-center py-16">
-              <div className="w-24 h-24 mx-auto mb-6 bg-gradient-to-br from-gray-200 to-gray-300 rounded-full flex items-center justify-center">
+              <div className="w-24 h-24 mx-auto mb-6 tf-glass-alt rounded-full flex items-center justify-center">
                 <Sparkles className="w-12 h-12 text-gray-400" />
               </div>
               <h3 className="text-xl font-bold text-gray-900 mb-2">No cards found</h3>
@@ -592,14 +550,14 @@ export const UserDashboard: React.FC = () => {
               {!searchQuery && (
                 <Link
                   to="/discover"
-                  className="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all duration-300 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105"
+                  className="inline-flex items-center gap-2 px-8 py-4 tf-gradient-accent text-white rounded-xl transition-all duration-300 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105"
                 >
                   <Sparkles className="w-5 h-5" />
                   Claim Your First Card
                 </Link>
               )}
               {credentials.length > 0 && verifiedCredentialsCount === 0 && filterVerified === 'verified' && (
-                <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-xl max-w-lg mx-auto text-left">
+                <div className="mb-6 p-4 tf-glass-alt border tf-border rounded-xl max-w-lg mx-auto text-left">
                   <p className="text-sm font-semibold text-yellow-800">You have credentials, but none are linked to current cards.</p>
                   <p className="text-xs text-yellow-700 mt-1">This usually means the credential's card_id was not stored or the card was issued to a different profile. Issue a new card after ensuring credential storage passes the cardId, or refresh if you just minted.</p>
                 </div>
@@ -609,7 +567,7 @@ export const UserDashboard: React.FC = () => {
         </div>
 
         {/* Score Breakdown */}
-        <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-6 border border-white/20">
+        <div className="tf-glass rounded-2xl shadow-xl p-6 border tf-border">
           <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
             <TrendingUp className="w-6 h-6 text-blue-600" />
             Score Breakdown
@@ -673,7 +631,7 @@ export const UserDashboard: React.FC = () => {
         </div>
 
         {/* Recent Activity */}
-        <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-6 border border-white/20">
+        <div className="tf-glass rounded-2xl shadow-xl p-6 border tf-border">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
               <Award className="w-6 h-6 text-green-600" />
@@ -698,7 +656,7 @@ export const UserDashboard: React.FC = () => {
               {recentActivity.map(activity => (
                 <div
                   key={activity.id}
-                  className="flex-shrink-0 w-72 p-5 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-200 hover:border-purple-300 hover:shadow-lg transition-all duration-300 cursor-pointer group"
+                  className="flex-shrink-0 w-72 p-5 tf-glass-alt rounded-xl border tf-border hover:border-purple-300 hover:shadow-lg transition-all duration-300 cursor-pointer group"
                 >
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center gap-2">
@@ -736,14 +694,14 @@ export const UserDashboard: React.FC = () => {
             </div>
           ) : (
             <div className="text-center py-12">
-              <div className="w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center">
+              <div className="w-20 h-20 mx-auto mb-4 tf-glass-alt rounded-full flex items-center justify-center">
                 <Award className="w-10 h-10 text-gray-400" />
               </div>
               <h3 className="text-lg font-semibold text-gray-900 mb-2">No activity yet</h3>
               <p className="text-gray-600 mb-6">Your card claims will appear here</p>
               <Link
                 to="/discover"
-                className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-teal-600 text-white rounded-xl hover:from-green-700 hover:to-teal-700 transition-all duration-300 font-medium shadow-lg hover:shadow-xl transform hover:scale-105"
+                className="inline-flex items-center gap-2 px-6 py-3 tf-gradient-success text-white rounded-xl transition-all duration-300 font-medium shadow-lg hover:shadow-xl transform hover:scale-105"
               >
                 <Sparkles className="w-4 h-4" />
                 Start Collecting
@@ -754,8 +712,8 @@ export const UserDashboard: React.FC = () => {
 
         {/* Progress Indicator */}
         {cards.length > 0 && cards.length < 10 && (
-          <div className="bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-2xl shadow-xl p-1">
-            <div className="bg-white rounded-xl p-6">
+          <div className="tf-gradient-accent rounded-2xl shadow-xl p-1">
+            <div className="tf-glass rounded-xl p-6">
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h3 className="text-lg font-bold text-gray-900">Collection Progress</h3>
@@ -770,7 +728,7 @@ export const UserDashboard: React.FC = () => {
               </div>
               <div className="relative h-3 bg-gray-200 rounded-full overflow-hidden">
                 <div
-                  className="absolute inset-y-0 left-0 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-full transition-all duration-1000 ease-out"
+                  className="absolute inset-y-0 left-0 tf-gradient-accent rounded-full transition-all duration-1000 ease-out"
                   style={{ width: `${(cards.length / 10) * 100}%` }}
                 >
                   <div className="absolute inset-0 bg-white/20 animate-pulse"></div>
@@ -785,8 +743,8 @@ export const UserDashboard: React.FC = () => {
 
         {/* Achievement Banner */}
         {cards.length >= 10 && (
-          <div className="bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 rounded-2xl shadow-xl p-1 animate-in slide-in-from-bottom">
-            <div className="bg-white rounded-xl p-6 text-center">
+          <div className="tf-gradient-warning rounded-2xl shadow-xl p-1 animate-in slide-in-from-bottom">
+            <div className="tf-glass rounded-xl p-6 text-center">
               <Award className="w-16 h-16 mx-auto mb-4 text-yellow-500 animate-bounce" />
               <h3 className="text-2xl font-black bg-gradient-to-r from-yellow-600 to-orange-600 bg-clip-text text-transparent mb-2">
                 Congratulations!

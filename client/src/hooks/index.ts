@@ -7,3 +7,6 @@ export type { UseProfileReturn } from './useProfile';
 
 export { useTransactionHandler, useTransactionConfirmation } from './useTransactionHandler';
 export type { UseTransactionHandlerReturn, TransactionState } from './useTransactionHandler';
+
+export { useTheme } from './useTheme';
+export type { ThemeMode } from './useTheme';

@@ -24,7 +24,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   }, [isConnected, location.pathname, navigate]);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 transition-colors duration-300">
       <Navigation />
       <main className="container mx-auto px-4 py-8">
         {children}
