@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { Link } from 'react-router-dom';
 import { 
   FileText, Award, CheckCircle, Link2, Send, Package, 
-  Activity, TrendingUp, Zap, Lock, AlertCircle 
+  Activity, TrendingUp, Zap, Lock, AlertCircle, Copy, Check, Shield 
 } from 'lucide-react';
 
 interface TemplateData {
@@ -36,7 +36,7 @@ interface RecentIssuance {
 }
 
 export const IssuerDashboard: React.FC = () => {
-  const { address, isIssuer, isLoading: authLoading } = useAuth();
+  const { address, isIssuer, issuerDid, isLoading: authLoading } = useAuth();
   const [issuerTemplates, setIssuerTemplates] = useState<TemplateData[]>([]);
   const [stats, setStats] = useState<IssuerStats>({
     totalTemplates: 0,
@@ -46,6 +46,19 @@ export const IssuerDashboard: React.FC = () => {
   const [recentIssuances, setRecentIssuances] = useState<RecentIssuance[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [copiedDid, setCopiedDid] = useState(false);
+
+  const copyDidToClipboard = async () => {
+    if (issuerDid?.uri) {
+      try {
+        await navigator.clipboard.writeText(issuerDid.uri);
+        setCopiedDid(true);
+        setTimeout(() => setCopiedDid(false), 2000);
+      } catch (err) {
+        console.error('Failed to copy DID:', err);
+      }
+    }
+  };
 
   useEffect(() => {
     const fetchIssuerStats = async () => {
@@ -197,6 +210,70 @@ export const IssuerDashboard: React.FC = () => {
                 Issuer Dashboard
               </h1>
               <p className="text-gray-600">Manage your templates and issue credentials</p>
+            </div>
+          </div>
+        </div>
+
+        {/* KILT Attester Status */}
+        <div className="mb-8">
+          <div className="bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-2xl shadow-xl p-1">
+            <div className="bg-white rounded-xl p-6">
+              <div className="flex items-start justify-between">
+                <div className="flex items-start gap-4 flex-1">
+                  <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg flex-shrink-0">
+                    <Shield className="w-7 h-7 text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-2">
+                      <h2 className="text-xl font-bold text-gray-900">KILT Attester Status</h2>
+                      {issuerDid && (
+                        <span className="inline-flex items-center gap-1 px-3 py-1 bg-green-100 text-green-800 text-xs font-bold rounded-full border border-green-200">
+                          <CheckCircle className="w-3 h-3" />
+                          Registered as Attester
+                        </span>
+                      )}
+                    </div>
+                    
+                    {authLoading || !issuerDid ? (
+                      <div className="flex items-center gap-2 text-gray-600">
+                        <div className="w-4 h-4 border-2 border-gray-300 border-t-indigo-600 rounded-full animate-spin"></div>
+                        <span className="text-sm font-medium">
+                          {authLoading ? 'Loading attester status...' : 'Creating attester DID...'}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold text-gray-700">DID:</span>
+                          <code className="flex-1 px-3 py-2 bg-gray-50 rounded-lg text-xs font-mono text-gray-800 border border-gray-200 truncate">
+                            {issuerDid.uri}
+                          </code>
+                          <button
+                            onClick={copyDidToClipboard}
+                            className="flex items-center gap-1 px-3 py-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded-lg transition-colors text-sm font-semibold"
+                            title="Copy DID to clipboard"
+                          >
+                            {copiedDid ? (
+                              <>
+                                <Check className="w-4 h-4" />
+                                Copied!
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-4 h-4" />
+                                Copy
+                              </>
+                            )}
+                          </button>
+                        </div>
+                        <p className="text-xs text-gray-600">
+                          Your KILT DID enables you to issue cryptographically verifiable credentials to users.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>

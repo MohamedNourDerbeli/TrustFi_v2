@@ -1,5 +1,5 @@
 // contexts/AuthContext.tsx
-import React, { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef, type ReactNode } from 'react';
 import { useAccount, useConnect, useDisconnect, useContractRead, usePublicClient } from 'wagmi';
 import { type Address, keccak256, toHex } from 'viem';
 import { supabase } from '../lib/supabase';
@@ -8,6 +8,8 @@ import ProfileNFTAbi from '../lib/ProfileNFT.abi.json';
 import ReputationCardAbi from '../lib/ReputationCard.abi.json';
 import { useDataCache } from './DataCacheContext';
 import { CACHE_TIMES } from '../lib/constants';
+import { getDid, generateDidForUser, generateDidForIssuer } from '../lib/kilt/did-manager';
+import type { DidDocument } from '../types/kilt';
 
 // Role hashes
 const DEFAULT_ADMIN_ROLE = '0x0000000000000000000000000000000000000000000000000000000000000000';
@@ -20,6 +22,8 @@ export interface AuthContextValue {
   isAdmin: boolean;
   isIssuer: boolean;
   isLoading: boolean;
+  userDid: DidDocument | null;
+  issuerDid: DidDocument | null;
   connect: () => void;
   disconnect: () => void;
   refreshProfile: () => Promise<void>;
@@ -35,6 +39,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const { getCache, setCache, isCacheValid, clearCache } = useDataCache();
   const [hasProfile, setHasProfile] = useState(false);
   const [isCheckingProfile, setIsCheckingProfile] = useState(true);
+  const [userDid, setUserDid] = useState<DidDocument | null>(null);
+  const [issuerDid, setIssuerDid] = useState<DidDocument | null>(null);
   const checkInProgressRef = useRef(false);
   const lastCheckedAddressRef = useRef<string | null>(null);
 
@@ -77,10 +83,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
 
   // Check if profile exists (both on-chain and in Supabase)
-  const checkProfile = async () => {
+  const checkProfile = async (forceRefresh = false) => {
     if (!address || !isConnected || !publicClient) {
       setIsCheckingProfile(false);
       setHasProfile(false);
+      setUserDid(null);
       lastCheckedAddressRef.current = null;
       return;
     }
@@ -88,12 +95,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const lowerAddress = address.toLowerCase();
     const cacheKey = `hasProfile_${lowerAddress}`;
 
-    // Check cache first
-    if (isCacheValid(cacheKey, CACHE_TIMES.AUTH_CACHE_TTL)) {
+    // Clear cache if force refresh is requested
+    if (forceRefresh) {
+      clearCache();
+    }
+
+    // Check cache first (unless force refresh)
+    if (!forceRefresh && isCacheValid(cacheKey, CACHE_TIMES.AUTH_CACHE_TTL)) {
       const cachedValue = getCache<boolean>(cacheKey);
       if (cachedValue !== null) {
         setHasProfile(cachedValue);
         setIsCheckingProfile(false);
+        // Still check for DID even if profile is cached
+        if (cachedValue) {
+          checkAndCreateDid(lowerAddress);
+        }
         return;
       }
     }
@@ -119,6 +135,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // If profileId is 0, user doesn't have a profile
       if (profileIdResult === 0n) {
         setHasProfile(false);
+        setUserDid(null);
         setCache(cacheKey, false, CACHE_TIMES.AUTH_CACHE_TTL);
         return;
       }
@@ -139,14 +156,66 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const profileExists = !!data || profileIdResult > 0n;
         setHasProfile(profileExists);
         setCache(cacheKey, profileExists, CACHE_TIMES.AUTH_CACHE_TTL);
+        
+        // If profile exists, check for DID and create if needed
+        if (profileExists) {
+          await checkAndCreateDid(lowerAddress);
+        }
       }
     } catch (err) {
       console.error('[AuthContext] Exception checking profile:', err);
       setHasProfile(false);
+      setUserDid(null);
       setCache(cacheKey, false, CACHE_TIMES.AUTH_CACHE_TTL);
     } finally {
       setIsCheckingProfile(false);
       checkInProgressRef.current = false;
+    }
+  };
+
+  // Check for existing DID and create if needed
+  const checkAndCreateDid = async (walletAddress: string) => {
+    try {
+      // Check if DID already exists
+      const existingDid = await getDid(walletAddress, false);
+      
+      if (existingDid) {
+        console.log('[AuthContext] Found existing DID for user:', existingDid.uri);
+        setUserDid(existingDid);
+      } else {
+        // No DID exists, create one
+        console.log('[AuthContext] No DID found, creating new DID for user');
+        const newDid = await generateDidForUser(walletAddress);
+        setUserDid(newDid);
+        console.log('[AuthContext] Successfully created DID:', newDid.uri);
+      }
+    } catch (error) {
+      console.error('[AuthContext] Error managing user DID:', error);
+      // Don't throw - DID creation failure shouldn't block the user
+      // They can still use the platform without KILT features
+    }
+  };
+
+  // Check for existing issuer DID and create if needed
+  const checkAndCreateIssuerDid = async (issuerAddress: string) => {
+    try {
+      // Check if issuer DID already exists
+      const existingIssuerDid = await getDid(issuerAddress, true);
+      
+      if (existingIssuerDid) {
+        console.log('[AuthContext] Found existing issuer DID:', existingIssuerDid.uri);
+        setIssuerDid(existingIssuerDid);
+      } else {
+        // No issuer DID exists, create one
+        console.log('[AuthContext] No issuer DID found, creating new issuer DID');
+        const newIssuerDid = await generateDidForIssuer(issuerAddress);
+        setIssuerDid(newIssuerDid);
+        console.log('[AuthContext] Successfully created issuer DID:', newIssuerDid.uri);
+      }
+    } catch (error) {
+      console.error('[AuthContext] Error managing issuer DID:', error);
+      // Don't throw - DID creation failure shouldn't block the issuer
+      // They can still use the platform without KILT features
     }
   };
 
@@ -155,6 +224,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     checkProfile();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [address, isConnected, publicClient]);
+
+  // Check for issuer DID when user becomes an issuer
+  useEffect(() => {
+    const checkIssuerDid = async () => {
+      if (address && isConnected && (isTemplateManager || isAdminOnProfile || isAdminOnReputation)) {
+        const lowerAddress = address.toLowerCase();
+        await checkAndCreateIssuerDid(lowerAddress);
+      } else {
+        // Clear issuer DID if user is no longer an issuer
+        setIssuerDid(null);
+      }
+    };
+
+    checkIssuerDid();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [address, isConnected, isTemplateManager, isAdminOnProfile, isAdminOnReputation]);
 
   const connect = () => {
     const connector = connectors[0];
@@ -180,12 +265,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       wagmiDisconnect();
       setHasProfile(false);
+      setUserDid(null);
+      setIssuerDid(null);
     }
   };
 
   const isAdmin = !!(isAdminOnProfile || isAdminOnReputation);
   const isIssuer = !!(isTemplateManager || isAdmin);
   const isLoading = isCheckingProfile;
+
+  // Refresh profile by clearing cache and re-checking
+  const refreshProfile = async () => {
+    await checkProfile(true);
+  };
 
   const value: AuthContextValue = {
     address,
@@ -194,9 +286,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isAdmin,
     isIssuer,
     isLoading,
+    userDid,
+    issuerDid,
     connect,
     disconnect,
-    refreshProfile: checkProfile,
+    refreshProfile,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

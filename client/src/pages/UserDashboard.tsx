@@ -3,12 +3,14 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { useProfile } from "../hooks/useProfile";
 import { supabase, type ClaimLogRow } from "../lib/supabase";
-import { Search, TrendingUp, Award, Sparkles, Filter, Grid, List, ChevronRight } from "lucide-react";
+import { Search, TrendingUp, Award, Sparkles, Filter, Grid, List, ChevronRight, Copy, Check, Shield } from "lucide-react";
 import { CardDisplay } from "../components/shared/CardDisplay";
 import { LIMITS } from "../lib/constants";
+import { getCredentialsByHolder } from "../lib/kilt/credential-service";
+import type { VerifiableCredential } from "../types/kilt";
 
 export const UserDashboard: React.FC = () => {
-  const { address, isConnected } = useAuth();
+  const { address, isConnected, hasProfile, userDid } = useAuth();
   const { profile, profileId, score, cards, loading: profileLoading } = useProfile(address);
   const [recentActivity, setRecentActivity] = useState<ClaimLogRow[]>([]);
   const [loadingActivity, setLoadingActivity] = useState(true);
@@ -16,6 +18,11 @@ export const UserDashboard: React.FC = () => {
   const [sortBy, setSortBy] = useState<"date" | "tier">("date");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [showFilters, setShowFilters] = useState(false);
+  const [filterVerified, setFilterVerified] = useState<"all" | "verified" | "unverified">("all");
+  const [didCopied, setDidCopied] = useState(false);
+  const [credentials, setCredentials] = useState<VerifiableCredential[]>([]);
+  const [loadingCredentials, setLoadingCredentials] = useState(false);
+  const [credentialsError, setCredentialsError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchRecentActivity = async () => {
@@ -42,8 +49,60 @@ export const UserDashboard: React.FC = () => {
     fetchRecentActivity();
   }, [profileId]);
 
+  // Fetch verifiable credentials for user's DID
+  useEffect(() => {
+    const fetchCredentials = async () => {
+      if (!userDid?.uri) {
+        setCredentials([]);
+        setLoadingCredentials(false);
+        return;
+      }
+
+      setLoadingCredentials(true);
+      setCredentialsError(null);
+
+      try {
+        console.log('[UserDashboard] Fetching credentials for DID:', userDid.uri);
+        const fetchedCredentials = await getCredentialsByHolder(userDid.uri);
+        setCredentials(fetchedCredentials);
+        console.log(`[UserDashboard] Loaded ${fetchedCredentials.length} credentials`);
+      } catch (err) {
+        console.error('[UserDashboard] Error fetching credentials:', err);
+        setCredentialsError(err instanceof Error ? err.message : 'Failed to load credentials');
+      } finally {
+        setLoadingCredentials(false);
+      }
+    };
+
+    fetchCredentials();
+  }, [userDid]);
+
+  // Create a map of card_id to credential for easy lookup
+  const credentialsByCardId = new Map<string, VerifiableCredential>();
+  credentials.forEach(cred => {
+    if (cred.claim.card_id !== undefined && cred.claim.card_id !== null) {
+      // Convert card_id to string for consistent mapping
+      const cardIdStr = cred.claim.card_id.toString();
+      credentialsByCardId.set(cardIdStr, cred);
+    }
+  });
+
   const filteredCards = cards
-    .filter(card => card.cardId.toString().includes(searchQuery))
+    .filter(card => {
+      // Search filter
+      if (!card.cardId.toString().includes(searchQuery)) return false;
+      
+      // Verification filter
+      if (filterVerified === "verified") {
+        const hasCredential = credentialsByCardId.has(card.cardId.toString());
+        return hasCredential;
+      } else if (filterVerified === "unverified") {
+        const hasCredential = credentialsByCardId.has(card.cardId.toString());
+        return !hasCredential;
+      }
+      
+      return true;
+    })
     .sort((a, b) => {
       if (sortBy === "tier") return b.tier - a.tier;
       return new Date(b.claimedAt).getTime() - new Date(a.claimedAt).getTime();
@@ -54,6 +113,21 @@ export const UserDashboard: React.FC = () => {
     count: cards.filter(c => c.tier === tier).length,
     points: cards.filter(c => c.tier === tier).length * tier
   }));
+
+  // Count verified credentials (non-revoked)
+  const verifiedCredentialsCount = credentials.filter(c => !c.revoked).length;
+
+  const copyDidToClipboard = async () => {
+    if (userDid?.uri) {
+      try {
+        await navigator.clipboard.writeText(userDid.uri);
+        setDidCopied(true);
+        setTimeout(() => setDidCopied(false), 2000);
+      } catch (err) {
+        console.error('Failed to copy DID:', err);
+      }
+    }
+  };
 
   // Remove full-page loading - show layout immediately
 
@@ -131,6 +205,39 @@ export const UserDashboard: React.FC = () => {
                   <p className="text-gray-600 text-sm sm:text-base font-mono bg-gray-100 inline-block px-3 py-1 rounded-lg">
                     {address?.slice(0, 6)}...{address?.slice(-4)}
                   </p>
+                  
+                  {/* DID Display Section */}
+                  {userDid ? (
+                    <div className="mt-3 flex items-center gap-2">
+                      <div className="flex items-center gap-2 bg-gradient-to-r from-purple-50 to-blue-50 px-3 py-2 rounded-lg border border-purple-200">
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                          <span className="text-xs font-semibold text-purple-700">DID:</span>
+                        </div>
+                        <span className="text-xs font-mono text-gray-700">
+                          {userDid.uri.slice(0, 20)}...{userDid.uri.slice(-8)}
+                        </span>
+                        <button
+                          onClick={copyDidToClipboard}
+                          className="ml-1 p-1 hover:bg-purple-100 rounded transition-colors"
+                          title="Copy DID"
+                        >
+                          {didCopied ? (
+                            <Check className="w-3.5 h-3.5 text-green-600" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5 text-purple-600" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  ) : hasProfile && (
+                    <div className="mt-3 flex items-center gap-2">
+                      <div className="flex items-center gap-2 bg-yellow-50 px-3 py-2 rounded-lg border border-yellow-200">
+                        <div className="w-3 h-3 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
+                        <span className="text-xs font-medium text-yellow-700">Creating DID...</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <Link
                   to="/profile/edit"
@@ -147,7 +254,7 @@ export const UserDashboard: React.FC = () => {
             )}
           </div>
 
-          <div className="grid grid-cols-3 border-t border-gray-200 bg-gradient-to-r from-blue-50 via-purple-50 to-pink-50 text-center py-6 sm:py-8">
+          <div className="grid grid-cols-4 border-t border-gray-200 bg-gradient-to-r from-blue-50 via-purple-50 to-pink-50 text-center py-6 sm:py-8">
             <div className="group cursor-pointer transition-all duration-300 hover:bg-white/50">
               <div className="flex items-center justify-center gap-2 mb-1">
                 <TrendingUp className="w-5 h-5 text-blue-600 group-hover:scale-110 transition-transform" />
@@ -166,14 +273,23 @@ export const UserDashboard: React.FC = () => {
               </div>
               <p className="text-sm sm:text-base text-gray-600 font-medium">Cards</p>
             </div>
+            <div className="group cursor-pointer transition-all duration-300 hover:bg-white/50 border-r border-gray-200">
+              <div className="flex items-center justify-center gap-2 mb-1">
+                <Shield className="w-5 h-5 text-green-600 group-hover:scale-110 transition-transform" />
+                <p className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
+                  {loadingCredentials ? '...' : verifiedCredentialsCount}
+                </p>
+              </div>
+              <p className="text-sm sm:text-base text-gray-600 font-medium">Verified</p>
+            </div>
             <div className="group cursor-pointer transition-all duration-300 hover:bg-white/50">
               <div className="flex items-center justify-center gap-2 mb-1">
-                <Award className="w-5 h-5 text-green-600 group-hover:scale-110 transition-transform" />
-                <p className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-green-600 to-teal-600 bg-clip-text text-transparent">
+                <Award className="w-5 h-5 text-orange-600 group-hover:scale-110 transition-transform" />
+                <p className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">
                   {recentActivity.length}
                 </p>
               </div>
-              <p className="text-sm sm:text-base text-gray-600 font-medium">Recent Claims</p>
+              <p className="text-sm sm:text-base text-gray-600 font-medium">Claims</p>
             </div>
           </div>
         </div>
@@ -235,7 +351,14 @@ export const UserDashboard: React.FC = () => {
                 <Sparkles className="w-6 h-6 text-purple-600" />
                 My Cards
               </h2>
-              <p className="text-sm text-gray-600 mt-1">{cards.length} total collectibles</p>
+              <p className="text-sm text-gray-600 mt-1">
+                {cards.length} total collectibles
+                {verifiedCredentialsCount > 0 && (
+                  <span className="ml-2 text-green-600 font-semibold">
+                    • {verifiedCredentialsCount} verified
+                  </span>
+                )}
+              </p>
             </div>
             
             <div className="flex items-center gap-3">
@@ -276,27 +399,82 @@ export const UserDashboard: React.FC = () => {
 
           {showFilters && (
             <div className="mb-6 p-4 bg-gray-50 rounded-xl border border-gray-200 animate-in slide-in-from-top">
-              <div className="flex flex-wrap gap-3">
-                <button
-                  onClick={() => setSortBy("date")}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                    sortBy === "date"
-                      ? "bg-purple-600 text-white shadow-lg"
-                      : "bg-white text-gray-700 hover:bg-gray-100"
-                  }`}
-                >
-                  Latest First
-                </button>
-                <button
-                  onClick={() => setSortBy("tier")}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                    sortBy === "tier"
-                      ? "bg-purple-600 text-white shadow-lg"
-                      : "bg-white text-gray-700 hover:bg-gray-100"
-                  }`}
-                >
-                  Highest Tier
-                </button>
+              <div className="space-y-3">
+                <div>
+                  <p className="text-xs font-semibold text-gray-600 mb-2">Sort By</p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => setSortBy("date")}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                        sortBy === "date"
+                          ? "bg-purple-600 text-white shadow-lg"
+                          : "bg-white text-gray-700 hover:bg-gray-100"
+                      }`}
+                    >
+                      Latest First
+                    </button>
+                    <button
+                      onClick={() => setSortBy("tier")}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                        sortBy === "tier"
+                          ? "bg-purple-600 text-white shadow-lg"
+                          : "bg-white text-gray-700 hover:bg-gray-100"
+                      }`}
+                    >
+                      Highest Tier
+                    </button>
+                  </div>
+                </div>
+                
+                <div>
+                  <p className="text-xs font-semibold text-gray-600 mb-2">Verification Status</p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => setFilterVerified("all")}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                        filterVerified === "all"
+                          ? "bg-purple-600 text-white shadow-lg"
+                          : "bg-white text-gray-700 hover:bg-gray-100"
+                      }`}
+                    >
+                      All Cards
+                    </button>
+                    <button
+                      onClick={() => setFilterVerified("verified")}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-1 ${
+                        filterVerified === "verified"
+                          ? "bg-green-600 text-white shadow-lg"
+                          : "bg-white text-gray-700 hover:bg-gray-100"
+                      }`}
+                    >
+                      <Shield className="w-4 h-4" />
+                      Verified Only
+                    </button>
+                    <button
+                      onClick={() => setFilterVerified("unverified")}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                        filterVerified === "unverified"
+                          ? "bg-gray-600 text-white shadow-lg"
+                          : "bg-white text-gray-700 hover:bg-gray-100"
+                      }`}
+                    >
+                      Unverified Only
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Credentials Loading Error */}
+          {credentialsError && (
+            <div className="mb-6 p-4 bg-yellow-50 rounded-xl border border-yellow-200 flex items-start gap-3">
+              <Shield className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-yellow-800">Credential Verification Unavailable</p>
+                <p className="text-xs text-yellow-700 mt-1">
+                  Unable to load credential verification status. Cards are still displayed normally.
+                </p>
               </div>
             </div>
           )}
@@ -312,9 +490,17 @@ export const UserDashboard: React.FC = () => {
             </div>
           ) : filteredCards.length > 0 ? (
             <div className={viewMode === "grid" ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6" : "space-y-4"}>
-              {filteredCards.map(card => (
-                <CardDisplay key={card.cardId.toString()} card={card} />
-              ))}
+              {filteredCards.map(card => {
+                const cardIdStr = card.cardId.toString();
+                const credential = credentialsByCardId.get(cardIdStr);
+                return (
+                  <CardDisplay 
+                    key={cardIdStr} 
+                    card={card} 
+                    credential={credential}
+                  />
+                );
+              })}
             </div>
           ) : (
             <div className="text-center py-16">

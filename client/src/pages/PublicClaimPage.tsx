@@ -8,6 +8,8 @@ import { useReputationCards } from '../hooks/useReputationCards';
 import { useTemplates } from '../hooks/useTemplates';
 import { parseContractError } from '../lib/errors';
 import { showCardClaimedNotification, showErrorNotification } from '../lib/notifications';
+import { getPendingCredentialByNonce, updatePendingCredential } from '../lib/kilt/credential-service';
+import { getDid } from '../lib/kilt/did-manager';
 
 export const PublicClaimPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -73,6 +75,23 @@ export const PublicClaimPage: React.FC = () => {
 
     try {
       setError(null);
+
+      // Check for duplicate claim (KILT integration)
+      // Verify if credential has already been claimed
+      try {
+        const pendingCredential = await getPendingCredentialByNonce(claimParams.nonce.toString());
+        
+        if (pendingCredential && pendingCredential.holderDid && pendingCredential.holderDid !== '') {
+          // Credential already has a holder - it's been claimed
+          setError('This credential has already been claimed');
+          showErrorNotification('Claim Failed', 'This credential has already been claimed');
+          return;
+        }
+      } catch (checkError) {
+        console.error('[PublicClaimPage] Error checking credential status:', checkError);
+        // Continue with claim if check fails - don't block on KILT errors
+      }
+
       const result = await claimWithSignature({
         user: address,
         profileOwner: address,
@@ -87,6 +106,38 @@ export const PublicClaimPage: React.FC = () => {
       
       // Show success notification with confetti
       showCardClaimedNotification(result.cardId, result.txHash);
+
+      // Update pending verifiable credential (KILT integration)
+      // This is wrapped in try-catch to not block the claim success flow
+      try {
+        console.log('[PublicClaimPage] Updating pending credential...');
+
+        // Retrieve pending credential by nonce
+        const pendingCredential = await getPendingCredentialByNonce(claimParams.nonce.toString());
+
+        if (pendingCredential) {
+          // Get user's DID
+          const userDid = await getDid(address, false);
+
+          if (userDid) {
+            // Update credential with holder DID and card ID
+            await updatePendingCredential(
+              pendingCredential.credentialId,
+              userDid.uri,
+              result.cardId.toString()
+            );
+
+            console.log('[PublicClaimPage] Credential updated successfully');
+          } else {
+            console.log('[PublicClaimPage] User DID not found, credential not updated');
+          }
+        } else {
+          console.log('[PublicClaimPage] No pending credential found for this claim');
+        }
+      } catch (kiltError) {
+        console.error('[PublicClaimPage] Failed to update credential:', kiltError);
+        // Don't block the claim success - credential update is optional
+      }
     } catch (err) {
       console.error('Error claiming card:', err);
       const parsed = parseContractError(err);

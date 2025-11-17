@@ -5,14 +5,17 @@ import { REPUTATION_CARD_CONTRACT_ADDRESS } from '../../lib/contracts';
 import ReputationCardABI from '../../lib/ReputationCard.abi.json';
 import type { Address } from 'viem';
 import type { Card } from '../../types/card';
+import type { VerifiableCredential } from '../../types/kilt';
 import { logger } from '../../lib/logger';
+import { CredentialBadge } from '../user/CredentialBadge';
 
 interface CardDisplayProps {
   card: Card;
+  credential?: VerifiableCredential;
   compact?: boolean;
 }
 
-export function CardDisplay({ card, compact = false }: CardDisplayProps) {
+export function CardDisplay({ card, credential, compact = false }: CardDisplayProps) {
   const publicClient = usePublicClient();
   const [metadata, setMetadata] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -107,8 +110,10 @@ export function CardDisplay({ card, compact = false }: CardDisplayProps) {
   const tierPoints = card.tier === 1 ? 10 : card.tier === 2 ? 50 : 200;
 
   return (
-    <div className="group bg-gradient-to-br from-gray-50 to-white rounded-2xl p-5 hover:shadow-2xl transition-all duration-300 border border-gray-200 hover:border-purple-300 hover:scale-105 cursor-pointer">
+    <div className="group relative bg-gradient-to-br from-gray-50 to-white rounded-2xl p-5 hover:shadow-2xl transition-all duration-300 border border-gray-200 hover:border-purple-300 hover:scale-105 cursor-pointer">
       <div className="relative w-full h-48 rounded-xl mb-4 overflow-hidden">
+        {/* Credential Badge Overlay */}
+        {credential && <CredentialBadge card={card} credential={credential} compact={compact} />}
         {metadata.image ? (
           <img 
             src={metadata.image} 

@@ -13,6 +13,10 @@ import { showSuccessNotification, showErrorNotification } from '../../lib/notifi
 import { uploadToPinata, uploadJSONToPinata, validateImageFile } from '../../lib/pinata';
 import { ArrowLeft, Upload, Zap, Link2, AlertCircle, CheckCircle, Image as ImageIcon } from 'lucide-react';
 import { logger } from '../../lib/logger';
+import { getDid } from '../../lib/kilt/did-manager';
+import { createCredential, signCredential, storeCredential } from '../../lib/kilt/credential-service';
+import { getCTypeHash } from '../../lib/kilt/ctype-manager';
+import type { ClaimInput } from '../../types/kilt';
 
 interface TemplateData {
   template_id: string;
@@ -32,7 +36,7 @@ export const IssueCardForm: React.FC = () => {
   const preselectedTemplateId = searchParams.get('templateId');
 
   const queryClient = useQueryClient();
-  const { address, isIssuer, isLoading: authLoading } = useAuth();
+  const { address, isIssuer, isLoading: authLoading, issuerDid } = useAuth();
   const { issueDirect, isProcessing, error: issueError, clearError } = useReputationCards();
   const publicClient = usePublicClient();
 
@@ -44,6 +48,7 @@ export const IssueCardForm: React.FC = () => {
   const [validationError, setValidationError] = useState<string | null>(null);
   const [success, setSuccess] = useState<{ cardId: bigint; txHash: string } | null>(null);
   const [checkingProfile, setCheckingProfile] = useState(false);
+  const [recipientDidWarning, setRecipientDidWarning] = useState<string | null>(null);
   
   // New fields for Quick Mode
   const [mode, setMode] = useState<'quick' | 'custom'>('quick');
@@ -140,6 +145,28 @@ export const IssueCardForm: React.FC = () => {
       return false;
     } finally {
       setCheckingProfile(false);
+    }
+  };
+
+  const checkRecipientDid = async (addr: Address): Promise<void> => {
+    try {
+      // Check if recipient has a DID
+      const recipientDid = await getDid(addr, false);
+      
+      if (!recipientDid) {
+        // Set warning but allow card issuance to proceed (backward compatibility)
+        setRecipientDidWarning(
+          'Recipient does not have a DID yet. The card will be issued, but they will need to connect their wallet and create a profile to receive the verifiable credential.'
+        );
+        logger.info('[IssueCardForm] Recipient has no DID, credential will not be issued');
+      } else {
+        setRecipientDidWarning(null);
+        logger.info('[IssueCardForm] Recipient has DID:', recipientDid.uri);
+      }
+    } catch (err) {
+      console.error('Error checking recipient DID:', err);
+      // Don't block card issuance on DID check failure
+      setRecipientDidWarning('Could not verify recipient DID status. Card will still be issued.');
     }
   };
 
@@ -271,6 +298,9 @@ export const IssueCardForm: React.FC = () => {
       return;
     }
 
+    // Check if recipient has a DID (for credential issuance)
+    await checkRecipientDid(recipientAddress as Address);
+
     // Find selected template (handle both string and number comparison)
     const template = issuerTemplates.find(
       (t) => String(t.template_id) === String(selectedTemplateId)
@@ -316,10 +346,63 @@ export const IssueCardForm: React.FC = () => {
 
       setSuccess({ cardId: result.cardId, txHash: result.txHash });
       
+      // Try to issue KILT verifiable credential
+      let credentialIssued = false;
+      try {
+        // Check if we have issuer DID and recipient has DID
+        const recipientDid = await getDid(recipientAddress as Address, false);
+        
+        if (issuerDid && recipientDid) {
+          logger.info('[IssueCardForm] Issuing KILT verifiable credential...');
+          
+          // Build claim input
+          const claimInput: ClaimInput = {
+            cTypeHash: getCTypeHash(),
+            contents: {
+              template_id: selectedTemplateId,
+              card_id: result.cardId.toString(),
+              tier: template.tier,
+              issue_date: new Date().toISOString(),
+              issuer_address: address!.toLowerCase(),
+              holder_did: recipientDid.uri,
+            },
+          };
+
+          // Create and sign credential
+          const credential = await createCredential(claimInput, issuerDid);
+          const signedCredential = await signCredential(credential, issuerDid);
+          
+          // Store credential in database
+          await storeCredential(
+            signedCredential,
+            result.cardId.toString(),
+            selectedTemplateId
+          );
+          
+          credentialIssued = true;
+          logger.info('[IssueCardForm] Verifiable credential issued successfully');
+        } else {
+          if (!issuerDid) {
+            logger.warn('[IssueCardForm] No issuer DID available, skipping credential issuance');
+          }
+          if (!recipientDid) {
+            logger.warn('[IssueCardForm] Recipient has no DID, skipping credential issuance');
+          }
+        }
+      } catch (credError: any) {
+        // Log error but don't block card issuance
+        console.error('[IssueCardForm] Failed to issue verifiable credential:', credError);
+        logger.error('[IssueCardForm] Credential issuance failed, but card was issued successfully');
+      }
+      
       // Show success notification
+      const successMessage = credentialIssued
+        ? `Card #${result.cardId.toString()} and verifiable credential have been issued to ${recipientAddress.slice(0, 6)}...${recipientAddress.slice(-4)}`
+        : `Card #${result.cardId.toString()} has been issued to ${recipientAddress.slice(0, 6)}...${recipientAddress.slice(-4)}`;
+      
       showSuccessNotification({
-        title: 'Card Issued Successfully!',
-        message: `Card #${result.cardId.toString()} has been issued to ${recipientAddress.slice(0, 6)}...${recipientAddress.slice(-4)}`,
+        title: credentialIssued ? 'Card & Credential Issued!' : 'Card Issued Successfully!',
+        message: successMessage,
         txHash: result.txHash,
         duration: 6000,
       });
@@ -337,6 +420,7 @@ export const IssueCardForm: React.FC = () => {
       setDescription('');
       setImageFile(null);
       setImagePreview(null);
+      setRecipientDidWarning(null);
     } catch (err: any) {
       console.error('Error issuing card:', err);
       // Show error notification
@@ -489,6 +573,7 @@ export const IssueCardForm: React.FC = () => {
                   onChange={(e) => {
                     setRecipientAddress(e.target.value);
                     setValidationError(null);
+                    setRecipientDidWarning(null);
                     clearError();
                   }}
                   placeholder="0x..."
@@ -498,6 +583,17 @@ export const IssueCardForm: React.FC = () => {
                 <p className="mt-1 text-sm text-gray-500">
                   The wallet address of the user who will receive the card
                 </p>
+                
+                {/* Recipient DID Warning */}
+                {recipientDidWarning && (
+                  <div className="mt-3 bg-yellow-50 border-2 border-yellow-200 rounded-xl p-3 flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-yellow-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-yellow-800 text-sm font-medium">Note about Verifiable Credentials</p>
+                      <p className="text-yellow-700 text-xs mt-1">{recipientDidWarning}</p>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Template Selection */}

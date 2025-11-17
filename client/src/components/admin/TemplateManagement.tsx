@@ -22,12 +22,6 @@ import {
   Grid,
   List,
 } from 'lucide-react';
-import { on } from 'events';
-import { on } from 'events';
-import { on } from 'events';
-import { type } from 'os';
-import { type } from 'os';
-import { type } from 'os';
 
 interface Template {
   template_id: string;
