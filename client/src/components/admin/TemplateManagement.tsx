@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useWalletClient, useAccount, usePublicClient } from 'wagmi';
+import { useWalletClient, useAccount } from 'wagmi';
 import { type Address } from 'viem';
 import { REPUTATION_CARD_CONTRACT_ADDRESS } from '../../lib/contracts';
 import ReputationCardAbi from '../../lib/ReputationCard.abi.json';
-import { supabase } from '../../lib/supabase';
+import { useTemplates } from '../../hooks/useTemplates';
 import toast from 'react-hot-toast';
 import { logger } from '../../lib/logger';
 import {
@@ -38,11 +38,10 @@ interface Template {
 export const TemplateManagement: React.FC = () => {
   const { data: walletClient } = useWalletClient();
   const { address } = useAccount();
-  const publicClient = usePublicClient();
+  const { templates: blockchainTemplates, loading: templatesLoading, refreshTemplates } = useTemplates(null, true); // includeAll = true
 
   const [templates, setTemplates] = useState<Template[]>([]);
   const [filteredTemplates, setFilteredTemplates] = useState<Template[]>([]);
-  const [loading, setLoading] = useState(true);
   const [processingTemplate, setProcessingTemplate] = useState<string | null>(null);
   
   // Filter and search states
@@ -79,32 +78,24 @@ export const TemplateManagement: React.FC = () => {
     setFilteredTemplates(filtered);
   }, [templates, searchQuery, selectedTier, statusFilter]);
 
+  // Convert blockchain templates to component format
   useEffect(() => {
-    const fetchTemplates = async () => {
-      setLoading(true);
-      try {
-        const { data, error} = await supabase
-          .from('templates_cache')
-          .select('*')
-          .order('template_id', { ascending: true });
-
-        if (error) {
-          console.error('Error fetching templates:', error);
-          toast.error('Failed to load templates');
-        } else {
-          setTemplates(data || []);
-          logger.debug('Loaded templates:', data);
-        }
-      } catch (err) {
-        console.error('Error fetching templates:', err);
-        toast.error('Failed to load templates');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchTemplates();
-  }, []);
+    if (blockchainTemplates) {
+      const formattedTemplates: Template[] = blockchainTemplates.map(t => ({
+        template_id: t.templateId.toString(),
+        name: t.name || `Template #${t.templateId}`,
+        issuer: t.issuer,
+        max_supply: t.maxSupply.toString(),
+        current_supply: t.currentSupply.toString(),
+        tier: t.tier,
+        start_time: t.startTime.toString(),
+        end_time: t.endTime.toString(),
+        is_paused: t.isPaused,
+      }));
+      setTemplates(formattedTemplates);
+      logger.debug('Loaded templates from blockchain:', formattedTemplates);
+    }
+  }, [blockchainTemplates]);
 
   const handleTogglePause = async (templateId: string, currentPauseState: boolean) => {
     if (!walletClient || !address) {
@@ -124,22 +115,13 @@ export const TemplateManagement: React.FC = () => {
         functionName: 'setTemplatePaused',
         args: [BigInt(templateId), !currentPauseState],
         account: address,
+        chain: walletClient.chain,
       } as any);
 
-      if (publicClient) {
-        await publicClient.waitForTransactionReceipt({ hash });
-      }
+      await walletClient.waitForTransactionReceipt({ hash });
 
-      await supabase
-        .from('templates_cache')
-        .update({ is_paused: !currentPauseState })
-        .eq('template_id', templateId);
-
-      setTemplates((prev) =>
-        prev.map((t) =>
-          t.template_id === templateId ? { ...t, is_paused: !currentPauseState } : t
-        )
-      );
+      // Refresh templates from blockchain
+      await refreshTemplates();
 
       toast.success(
         `Template ${templateId} ${currentPauseState ? 'unpaused' : 'paused'} successfully`,
@@ -153,7 +135,7 @@ export const TemplateManagement: React.FC = () => {
     }
   };
 
-  if (loading) {
+  if (templatesLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
         <div className="text-center">
@@ -165,7 +147,7 @@ export const TemplateManagement: React.FC = () => {
             ></div>
           </div>
           <p className="mt-6 text-lg font-medium text-gray-700 animate-pulse">
-            Loading templates...
+            Loading templates from blockchain...
           </p>
         </div>
       </div>

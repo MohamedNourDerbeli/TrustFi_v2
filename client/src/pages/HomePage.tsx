@@ -6,6 +6,7 @@ import { supabase } from "../lib/supabase";
 import { LoadingSpinner } from "../components/shared/LoadingSpinner";
 import { logger } from "../lib/logger";
 import { LIMITS } from "../lib/constants";
+import FloatingLinesBackground from "../components/shared/FloatingLinesBackground";
 
 interface RecentActivity {
   id: string;
@@ -74,7 +75,11 @@ export const HomePage: React.FC = () => {
   }, []);
 
   return (
-    <div className="max-w-6xl mx-auto">
+    <div className="relative">
+      {/* Decorative background */}
+      <FloatingLinesBackground className="z-0 opacity-60" />
+      {/* Content container */}
+      <div className="relative z-10 max-w-6xl mx-auto">
       {/* Hero Section */}
       <div className="text-center py-16 px-4">
         <h1 className="text-5xl font-bold text-gray-900 mb-6">
@@ -197,6 +202,7 @@ export const HomePage: React.FC = () => {
           )}
         </div>
       )}
+      </div>
     </div>
   );
 };

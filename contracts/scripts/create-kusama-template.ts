@@ -4,8 +4,8 @@ import { ethers } from "hardhat";
 async function main() {
   console.log("🚀 Creating Kusama Living Profile Template (999)...\n");
 
-  const REPUTATION_CARD_ADDRESS = process.env.REPUTATION_CARD_ADDRESS || "0x60BdA778B580262376aAd0Bc8a15AEe374168559";
-  const DYNAMIC_METADATA_BASE_URI = process.env.DYNAMIC_METADATA_BASE_URI || "https://your-project.supabase.co/functions/v1/dynamic-metadata?profileId=";
+  const REPUTATION_CARD_ADDRESS = process.env.REPUTATION_CARD_ADDRESS || "0x60349A98a7C743bb3B7FDb5580f77748578B34e3";
+  const DYNAMIC_METADATA_BASE_URI = process.env.DYNAMIC_METADATA_BASE_URI || "https://kuqfccqirhwaqjkiglmf.supabase.co/functions/v1/dynamic-metadata?profileId=";
 
   const [deployer] = await ethers.getSigners();
   console.log("📍 Creating from address:", deployer.address);
@@ -34,6 +34,8 @@ async function main() {
   console.log("📋 Template Configuration:");
   console.log("─".repeat(50));
   console.log("   Template ID: 999");
+  console.log("   Name: Kusama Living Profile");
+  console.log("   Description: Dynamic NFT representing your Kusama ecosystem journey");
   console.log("   Issuer:", deployer.address);
   console.log("   Tier: 3 (Gold)");
   console.log("   Max Supply: 0 (Unlimited)");
@@ -49,7 +51,9 @@ async function main() {
     0, // maxSupply (unlimited)
     3, // tier (Gold)
     0, // startTime (immediate)
-    0  // endTime (no expiry)
+    0,  // endTime (no expiry)
+    "Kusama Living Profile", // name
+    "Dynamic NFT representing your Kusama ecosystem journey" // description
   );
 
   console.log("📝 Transaction hash:", tx.hash);
@@ -62,10 +66,11 @@ async function main() {
   const template = await reputationCard.templates(999);
   console.log("\n✅ Template 999 Created Successfully!");
   console.log("─".repeat(50));
+  console.log("   Name:", template.name);
+  console.log("   Description:", template.description);
   console.log("   Issuer:", template.issuer);
   console.log("   Tier:", template.tier.toString());
   console.log("   Max Supply:", template.maxSupply.toString());
-  console.log("   Token URI:", template.tokenUri);
 
   console.log("\n📝 Next Steps:");
   console.log("─".repeat(50));

@@ -23,6 +23,9 @@ export const UserDashboard: React.FC = () => {
   const [credentials, setCredentials] = useState<VerifiableCredential[]>([]);
   const [loadingCredentials, setLoadingCredentials] = useState(false);
   const [credentialsError, setCredentialsError] = useState<string | null>(null);
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(6); // default cards per page
 
   useEffect(() => {
     const fetchRecentActivity = async () => {
@@ -77,15 +80,27 @@ export const UserDashboard: React.FC = () => {
     fetchCredentials();
   }, [userDid]);
 
-  // Create a map of card_id to credential for easy lookup
+  // Create a map of card_id to credential for easy lookup (only linked credentials)
   const credentialsByCardId = new Map<string, VerifiableCredential>();
+  const unmappedCredentials: VerifiableCredential[] = [];
   credentials.forEach(cred => {
-    if (cred.claim.card_id !== undefined && cred.claim.card_id !== null) {
-      // Convert card_id to string for consistent mapping
-      const cardIdStr = cred.claim.card_id.toString();
+    const rawCardId = (cred.claim as any).card_id;
+    if (rawCardId === undefined || rawCardId === null || rawCardId === '' || rawCardId === '0') {
+      unmappedCredentials.push(cred);
+      return;
+    }
+    try {
+      const cardIdStr = rawCardId.toString().trim();
       credentialsByCardId.set(cardIdStr, cred);
+    } catch (e) {
+      console.error('[UserDashboard] Failed to process credential card_id', rawCardId, e);
+      unmappedCredentials.push(cred);
     }
   });
+  if (unmappedCredentials.length > 0) {
+    console.warn(`[UserDashboard] ${unmappedCredentials.length} credential(s) have no linked card_id and will not show as verified.`);
+    unmappedCredentials.forEach(c => console.debug('[UserDashboard] Unmapped credential ID:', c.credentialId, 'claim contents:', c.claim));
+  }
 
   const filteredCards = cards
     .filter(card => {
@@ -108,14 +123,25 @@ export const UserDashboard: React.FC = () => {
       return new Date(b.claimedAt).getTime() - new Date(a.claimedAt).getTime();
     });
 
+  // Reset page when filters/search/sort change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, sortBy, filterVerified, cards.length]);
+
+  const totalCards = filteredCards.length;
+  const totalPages = Math.max(1, Math.ceil(totalCards / pageSize));
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = startIndex + pageSize;
+  const paginatedCards = filteredCards.slice(startIndex, endIndex);
+
   const tierStats = [1, 2, 3].map(tier => ({
     tier,
     count: cards.filter(c => c.tier === tier).length,
     points: cards.filter(c => c.tier === tier).length * tier
   }));
 
-  // Count verified credentials (non-revoked)
-  const verifiedCredentialsCount = credentials.filter(c => !c.revoked).length;
+  // Count verified credentials that are linked to existing cards (non-revoked & mapped)
+  const verifiedCredentialsCount = credentials.filter(c => !c.revoked && (c.claim as any).card_id && credentialsByCardId.has((c.claim as any).card_id.toString().trim())).length;
 
   const copyDidToClipboard = async () => {
     if (userDid?.uri) {
@@ -489,19 +515,71 @@ export const UserDashboard: React.FC = () => {
               ))}
             </div>
           ) : filteredCards.length > 0 ? (
-            <div className={viewMode === "grid" ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6" : "space-y-4"}>
-              {filteredCards.map(card => {
-                const cardIdStr = card.cardId.toString();
-                const credential = credentialsByCardId.get(cardIdStr);
-                return (
-                  <CardDisplay 
-                    key={cardIdStr} 
-                    card={card} 
-                    credential={credential}
-                  />
-                );
-              })}
-            </div>
+            <>
+              <div className={viewMode === "grid" ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6" : "space-y-4"}>
+                {paginatedCards.map(card => {
+                  const cardIdStr = card.cardId.toString();
+                  const credential = credentialsByCardId.get(cardIdStr);
+                  return (
+                    <CardDisplay 
+                      key={cardIdStr} 
+                      card={card} 
+                      credential={credential}
+                    />
+                  );
+                })}
+              </div>
+              {/* Pagination Controls */}
+              <div className="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <span>Showing</span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    className="border border-gray-300 rounded-lg px-2 py-1 bg-white"
+                  >
+                    {[6, 9, 12, 24].map(size => (
+                      <option key={size} value={size}>{size}</option>
+                    ))}
+                  </select>
+                  <span>per page • {totalCards} total</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium border ${currentPage === 1 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white hover:bg-gray-50 text-gray-700'}`}
+                  >Prev</button>
+                  {Array.from({ length: totalPages }).map((_, i) => {
+                    const page = i + 1;
+                    const isActive = page === currentPage;
+                    if (totalPages > 7) {
+                      const show = page === 1 || page === totalPages || Math.abs(page - currentPage) <= 1;
+                      if (!show) {
+                        if (page === 2 && currentPage > 3) return <span key={page} className="px-2 text-gray-400">…</span>;
+                        if (page === totalPages - 1 && currentPage < totalPages - 2) return <span key={page} className="px-2 text-gray-400">…</span>;
+                        return null;
+                      }
+                    }
+                    return (
+                      <button
+                        key={page}
+                        onClick={() => setCurrentPage(page)}
+                        className={`min-w-[2.25rem] px-3 py-2 rounded-lg text-sm font-medium border ${isActive ? 'bg-purple-600 text-white border-purple-600' : 'bg-white hover:bg-gray-50 text-gray-700'}`}
+                      >{page}</button>
+                    );
+                  })}
+                  <button
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium border ${currentPage === totalPages ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white hover:bg-gray-50 text-gray-700'}`}
+                  >Next</button>
+                </div>
+              </div>
+            </>
           ) : (
             <div className="text-center py-16">
               <div className="w-24 h-24 mx-auto mb-6 bg-gradient-to-br from-gray-200 to-gray-300 rounded-full flex items-center justify-center">
@@ -519,6 +597,12 @@ export const UserDashboard: React.FC = () => {
                   <Sparkles className="w-5 h-5" />
                   Claim Your First Card
                 </Link>
+              )}
+              {credentials.length > 0 && verifiedCredentialsCount === 0 && filterVerified === 'verified' && (
+                <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-xl max-w-lg mx-auto text-left">
+                  <p className="text-sm font-semibold text-yellow-800">You have credentials, but none are linked to current cards.</p>
+                  <p className="text-xs text-yellow-700 mt-1">This usually means the credential's card_id was not stored or the card was issued to a different profile. Issue a new card after ensuring credential storage passes the cardId, or refresh if you just minted.</p>
+                </div>
               )}
             </div>
           )}

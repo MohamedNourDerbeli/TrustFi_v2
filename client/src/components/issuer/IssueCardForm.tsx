@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../hooks/useAuth';
 import { useReputationCards } from '../../hooks/useReputationCards';
+import { useTemplates } from '../../hooks/useTemplates';
 import { usePublicClient } from 'wagmi';
 import { type Address, isAddress } from 'viem';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -13,6 +14,7 @@ import { showSuccessNotification, showErrorNotification } from '../../lib/notifi
 import { uploadToPinata, uploadJSONToPinata, validateImageFile } from '../../lib/pinata';
 import { ArrowLeft, Upload, Zap, Link2, AlertCircle, CheckCircle, Image as ImageIcon } from 'lucide-react';
 import { logger } from '../../lib/logger';
+import { parseContractError } from '../../lib/errors';
 import { getDid } from '../../lib/kilt/did-manager';
 import { createCredential, signCredential, storeCredential } from '../../lib/kilt/credential-service';
 import { getCTypeHash } from '../../lib/kilt/ctype-manager';
@@ -38,10 +40,10 @@ export const IssueCardForm: React.FC = () => {
   const queryClient = useQueryClient();
   const { address, isIssuer, isLoading: authLoading, issuerDid } = useAuth();
   const { issueDirect, isProcessing, error: issueError, clearError } = useReputationCards();
+  const { templates: blockchainTemplates, loading: templatesLoading } = useTemplates(null, true);
   const publicClient = usePublicClient();
 
   const [issuerTemplates, setIssuerTemplates] = useState<TemplateData[]>([]);
-  const [templatesLoading, setTemplatesLoading] = useState(true);
   const [recipientAddress, setRecipientAddress] = useState('');
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [tokenURI, setTokenURI] = useState('');
@@ -58,41 +60,34 @@ export const IssueCardForm: React.FC = () => {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
-  // Fetch templates from Supabase
+  // Filter blockchain templates for this issuer
   useEffect(() => {
-    const fetchTemplates = async () => {
-      if (!address || !isIssuer) return;
-
-      try {
-        setTemplatesLoading(true);
-        
-        const { data: templates, error } = await supabase
-          .from('templates_cache')
-          .select('*')
-          .eq('issuer', address.toLowerCase())
-          .eq('is_paused', false)
-          .order('tier', { ascending: true });
-
-        if (error) {
-          console.error('Failed to fetch templates:', error);
-          throw error;
-        }
-        
-        // Note: Templates in Supabase may not all exist on-chain
-        // We verify on-chain existence before issuing cards
-        setIssuerTemplates(templates || []);
-      } catch (err) {
-        console.error('Error fetching templates:', err);
-        showErrorNotification('Failed to Load Templates', 'Could not fetch your templates');
-      } finally {
-        setTemplatesLoading(false);
-      }
-    };
-
-    if (isIssuer && !authLoading) {
-      fetchTemplates();
+    if (!address || !isIssuer || !blockchainTemplates) {
+      setIssuerTemplates([]);
+      return;
     }
-  }, [address, isIssuer, authLoading]);
+
+    const templates = blockchainTemplates
+      .filter(t => 
+        t.issuer.toLowerCase() === address.toLowerCase() && 
+        !t.isPaused
+      )
+      .map(t => ({
+        template_id: t.templateId.toString(),
+        issuer: t.issuer,
+        name: t.name || `Template #${t.templateId}`,
+        description: t.description || '',
+        max_supply: t.maxSupply.toString(),
+        current_supply: t.currentSupply.toString(),
+        tier: t.tier,
+        start_time: t.startTime.toString(),
+        end_time: t.endTime.toString(),
+        is_paused: t.isPaused,
+      }))
+      .sort((a, b) => a.tier - b.tier);
+        
+    setIssuerTemplates(templates);
+  }, [address, isIssuer, blockchainTemplates]);
 
   // Set preselected template if provided in URL
   useEffect(() => {
@@ -181,20 +176,14 @@ export const IssueCardForm: React.FC = () => {
       setImagePreview(null);
       return;
     }
-
+    // Revoke previous object URL to avoid memory leaks
+    if (imagePreview) {
+      try { URL.revokeObjectURL(imagePreview); } catch {}
+    }
+    const objectUrl = URL.createObjectURL(file);
     setImageFile(file);
+    setImagePreview(objectUrl);
     setValidationError(null);
-
-    // Create preview
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setImagePreview(reader.result as string);
-    };
-    reader.onerror = () => {
-      setValidationError('Failed to read image file');
-      setImagePreview(null);
-    };
-    reader.readAsDataURL(file);
   };
 
   const generateMetadataAndUpload = async (): Promise<string> => {
@@ -300,6 +289,52 @@ export const IssueCardForm: React.FC = () => {
 
     // Check if recipient has a DID (for credential issuance)
     await checkRecipientDid(recipientAddress as Address);
+
+    // Pre-check: has the profile already claimed this template?
+    try {
+      // Read profileId again (already fetched earlier for profile existence)
+      // @ts-ignore wagmi v2 typing
+      const profileId = await publicClient!.readContract({
+        address: PROFILE_NFT_CONTRACT_ADDRESS as Address,
+        abi: ProfileNFTAbi,
+        functionName: 'addressToProfileId',
+        args: [recipientAddress as Address]
+      }) as bigint;
+      if (profileId !== 0n) {
+        // @ts-ignore public mapping getter
+        const alreadyClaimed = await publicClient!.readContract({
+          address: REPUTATION_CARD_CONTRACT_ADDRESS as Address,
+          abi: ReputationCardABI,
+          functionName: 'hasProfileClaimed',
+          args: [BigInt(selectedTemplateId), profileId]
+        }) as boolean;
+        if (alreadyClaimed) {
+          const msg = 'Recipient already claimed this template.';
+          setValidationError(msg);
+          showErrorNotification('Duplicate Claim', msg);
+          return;
+        }
+      }
+    } catch (claimCheckErr) {
+      console.warn('[IssueCardForm] Already-claimed pre-check failed (continuing):', claimCheckErr);
+    }
+
+    // Dry-run simulation to catch immediate reverts (e.g., Already claimed, Paused, Max supply)
+    try {
+      await publicClient!.simulateContract({
+        address: REPUTATION_CARD_CONTRACT_ADDRESS as Address,
+        abi: ReputationCardABI,
+        functionName: 'issueDirect',
+        args: [recipientAddress as Address, BigInt(selectedTemplateId), finalTokenURI.trim()],
+        account: address as Address,
+      });
+    } catch (simErr: any) {
+      const parsed = parseContractError(simErr);
+      const msg = parsed.message || 'Transaction would revert';
+      setValidationError(msg);
+      showErrorNotification('Card Issuance Blocked', msg);
+      return;
+    }
 
     // Find selected template (handle both string and number comparison)
     const template = issuerTemplates.find(
@@ -423,11 +458,13 @@ export const IssueCardForm: React.FC = () => {
       setRecipientDidWarning(null);
     } catch (err: any) {
       console.error('Error issuing card:', err);
-      // Show error notification
-      if (err.message) {
-        showErrorNotification('Card Issuance Failed', err.message);
-      }
-      // Error is also handled by the hook
+      let message = err?.message || 'Unknown error';
+      // Try parseContractError for cleaner message
+      try {
+        const parsed = parseContractError(err);
+        if (parsed?.message) message = parsed.message;
+      } catch {}
+      showErrorNotification('Card Issuance Failed', message);
     }
   };
 
@@ -563,78 +600,42 @@ export const IssueCardForm: React.FC = () => {
 
               {/* Recipient Address */}
               <div>
-                <label htmlFor="recipient" className="block text-sm font-medium text-gray-700 mb-2">
-                  Recipient Address
-                </label>
+                <label htmlFor="recipient" className="block text-sm font-medium text-gray-700 mb-2">Recipient Address</label>
                 <input
                   type="text"
                   id="recipient"
                   value={recipientAddress}
                   onChange={(e) => {
-                    setRecipientAddress(e.target.value);
+                    setRecipientAddress(e.target.value.trim());
                     setValidationError(null);
-                    setRecipientDidWarning(null);
                     clearError();
                   }}
-                  placeholder="0x..."
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="0xRecipientAddress..."
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent font-medium mb-4"
                   disabled={isProcessing || checkingProfile || isUploading}
                 />
-                <p className="mt-1 text-sm text-gray-500">
-                  The wallet address of the user who will receive the card
-                </p>
-                
-                {/* Recipient DID Warning */}
-                {recipientDidWarning && (
-                  <div className="mt-3 bg-yellow-50 border-2 border-yellow-200 rounded-xl p-3 flex items-start gap-2">
-                    <AlertCircle className="w-4 h-4 text-yellow-600 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-yellow-800 text-sm font-medium">Note about Verifiable Credentials</p>
-                      <p className="text-yellow-700 text-xs mt-1">{recipientDidWarning}</p>
-                    </div>
-                  </div>
-                )}
-              </div>
 
-              {/* Template Selection */}
-              <div>
-                <label htmlFor="template" className="block text-sm font-bold text-gray-900 mb-2">
-                  Template
-                </label>
-                {issuerTemplates.length === 0 ? (
-                  <div className="p-4 bg-yellow-50 border-2 border-yellow-200 rounded-xl">
-                    <p className="text-yellow-800 font-medium">⚠️ No active templates available</p>
-                    <p className="text-yellow-700 text-sm mt-1">
-                      You need to have at least one active (non-paused) template to issue cards.
-                    </p>
-                    <Link
-                      to="/issuer/templates"
-                      className="inline-block mt-3 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors text-sm font-semibold"
-                    >
-                      Manage Templates
-                    </Link>
-                  </div>
-                ) : (
-                  <select
-                    id="template"
-                    value={selectedTemplateId}
-                    onChange={(e) => {
-                      setSelectedTemplateId(e.target.value);
-                      setValidationError(null);
-                      clearError();
-                    }}
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent font-medium"
-                    disabled={isProcessing || checkingProfile || isUploading}
-                  >
-                    <option value="">Select a template ({issuerTemplates.length} available)</option>
-                    {issuerTemplates.map((template) => (
-                      <option key={template.template_id} value={template.template_id}>
-                        {template.name || `Template #${template.template_id}`} - Tier {template.tier} (
-                        {template.current_supply}/{template.max_supply})
-                      </option>
-                    ))}
-                  </select>
-                )}
+                <label htmlFor="template" className="block text-sm font-medium text-gray-700 mb-2">Select Template</label>
+                <select
+                  id="template"
+                  value={selectedTemplateId}
+                  onChange={(e) => {
+                    setSelectedTemplateId(e.target.value);
+                    setValidationError(null);
+                    clearError();
+                  }}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent font-medium"
+                  disabled={isProcessing || checkingProfile || isUploading}
+                >
+                  <option value="">Select a template ({issuerTemplates.length} available)</option>
+                  {issuerTemplates.map((template) => (
+                    <option key={template.template_id} value={template.template_id}>
+                      {template.name || `Template #${template.template_id}`} - Tier {template.tier} (
+                      {template.current_supply}/{template.max_supply})
+                    </option>
+                  ))}
+                </select>
+
                 {selectedTemplateId && issuerTemplates.length > 0 && (
                   <div className="mt-3 p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl border-2 border-blue-200 shadow-sm">
                     {(() => {

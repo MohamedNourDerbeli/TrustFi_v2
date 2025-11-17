@@ -44,10 +44,9 @@ CREATE TABLE IF NOT EXISTS verifiable_credentials (
   template_id BIGINT,
   revoked BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMP DEFAULT NOW(),
-  CONSTRAINT fk_template
-    FOREIGN KEY (template_id)
-    REFERENCES templates_cache(template_id)
-    ON DELETE SET NULL
+  -- NOTE: We intentionally do NOT enforce a foreign key to templates_cache
+  -- because templates are sourced on-chain. Keeping this column denormalized
+  -- avoids coupling credential storage to a cached copy of templates.
 );
 
 -- Create indexes for efficient queries

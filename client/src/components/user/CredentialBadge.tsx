@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Check, Shield, AlertCircle, Info, X, Loader2 } from 'lucide-react';
+import { Check, Shield, AlertCircle, Info, X, Loader2, Trash2 } from 'lucide-react';
 import type { VerifiableCredential, VerificationResult } from '../../types/kilt';
 import type { Card } from '../../types/card';
-import { verifyCredential } from '../../lib/kilt/credential-service';
+import { verifyCredential, revokeCredential } from '../../lib/kilt/credential-service';
 import { VerificationStatus } from '../kilt/VerificationStatus';
 
 interface CredentialBadgeProps {
@@ -18,6 +18,8 @@ export function CredentialBadge({ card, credential }: CredentialBadgeProps) {
   const [showDetails, setShowDetails] = useState(false);
   const [verificationResult, setVerificationResult] = useState<VerificationResult | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [isRevoking, setIsRevoking] = useState(false);
+  const [revokeError, setRevokeError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!credential) return;
@@ -136,8 +138,34 @@ export function CredentialBadge({ card, credential }: CredentialBadgeProps) {
   const badgeConfig = getBadgeConfig();
   const BadgeIcon = badgeConfig.icon;
 
+  const canRevoke = !isRevoked && credential && credential.issuerDid && credential.issuerDid === verificationResult?.issuerDid;
+
+  const handleRevoke = async () => {
+    if (!credential) return;
+    setIsRevoking(true);
+    setRevokeError(null);
+    try {
+      await revokeCredential(credential.credentialId);
+      // Update cached verification result
+      const updated: VerificationResult = {
+        valid: false,
+        issuerDid: verificationResult?.issuerDid || credential.issuerDid,
+        holderDid: verificationResult?.holderDid || credential.holderDid,
+        revoked: true,
+        errors: ['Credential revoked']
+      };
+      verificationCache.set(credential.credentialId, updated);
+      setVerificationResult(updated);
+    } catch (e: any) {
+      setRevokeError(e.message || 'Failed to revoke credential');
+    } finally {
+      setIsRevoking(false);
+    }
+  };
+
   return (
-    <div className="absolute top-0 left-0 w-full h-full pointer-events-none">
+    // Added z-20 to ensure badge overlays above card image
+    <div className="absolute top-0 left-0 w-full h-full pointer-events-none z-20">
       <div className="absolute top-2 right-2 z-10 pointer-events-auto">
         <div 
           className={`flex items-center gap-1 ${badgeConfig.bgColor} text-white px-2 py-1 rounded-lg shadow-lg cursor-pointer ${badgeConfig.hoverColor} transition-colors`}
@@ -214,6 +242,25 @@ export function CredentialBadge({ card, credential }: CredentialBadgeProps) {
                 This credential is cryptographically signed and verifiable on the KILT blockchain.
               </p>
             </div>
+
+            {/* Revoke Section */}
+            {canRevoke && (
+              <div className="bg-red-50 rounded-lg p-3 border border-red-200 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Trash2 className="w-4 h-4 text-red-600" />
+                  <span className="text-xs font-semibold text-red-800">Issuer Actions</span>
+                </div>
+                <button
+                  onClick={handleRevoke}
+                  disabled={isRevoking}
+                  className={`w-full text-xs font-semibold px-3 py-2 rounded-lg transition-colors ${isRevoking ? 'bg-red-300 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700 text-white'}`}
+                >
+                  {isRevoking ? 'Revoking...' : 'Revoke Credential'}
+                </button>
+                {revokeError && <p className="text-xs text-red-700">{revokeError}</p>}
+                <p className="text-[10px] text-red-600">Revocation marks the credential invalid for future verifications.</p>
+              </div>
+            )}
           </div>
         </div>
       )}

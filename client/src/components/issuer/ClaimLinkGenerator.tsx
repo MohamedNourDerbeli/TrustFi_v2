@@ -1,36 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
-import { useWalletClient, usePublicClient } from 'wagmi';
+import { useWalletClient } from 'wagmi';
 import { type Address } from 'viem';
 import { Link } from 'react-router-dom';
 import { REPUTATION_CARD_CONTRACT_ADDRESS } from '../../lib/contracts';
 import { getClaimTypedData, generateClaimLink } from '../../lib/signature';
 import type { ClaimParams } from '../../types/claim';
 import { supabase } from '../../lib/supabase';
+import { useTemplates } from '../../hooks/useTemplates';
 import { uploadToPinata, uploadJSONToPinata, validateImageFile } from '../../lib/pinata';
 import { Zap, Link2, Image as ImageIcon, Copy, Check, QrCode, ArrowLeft, Upload, FileText, Sparkles, AlertCircle, X } from 'lucide-react';
 
 // Lazy load QRCode library
 const loadQRCode = () => import('qrcode');
 
-interface Template {
-  template_id: number;
-  issuer: string;
-  name: string;
-  description: string;
-  tier: number;
-  max_supply: number;
-  current_supply: number;
-  is_paused: boolean;
-}
-
 export const ClaimLinkGenerator: React.FC = () => {
   const { address, isIssuer, isLoading: authLoading } = useAuth();
   const { data: walletClient } = useWalletClient();
-  const publicClient = usePublicClient();
-
-  const [templates, setTemplates] = useState<Template[]>([]);
-  const [templatesLoading, setTemplatesLoading] = useState(true);
+  // Use on-chain templates (includeAll=true for issuer to view paused templates too)
+  const { templates: chainTemplates, loading: templatesLoading } = useTemplates(null, true);
 
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [nonce, setNonce] = useState('');
@@ -49,40 +37,8 @@ export const ClaimLinkGenerator: React.FC = () => {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
-  // Fetch templates from Supabase
-  useEffect(() => {
-    const fetchTemplates = async () => {
-      if (!address) {
-        setTemplatesLoading(false);
-        return;
-      }
-
-      try {
-        setTemplatesLoading(true);
-        const { data, error } = await supabase
-          .from('templates_cache')
-          .select('*')
-          .eq('issuer', address.toLowerCase())
-          .order('template_id', { ascending: true });
-
-        if (error) {
-          console.error('[ClaimLinkGenerator] Error fetching templates:', error);
-          setTemplates([]);
-        } else {
-          setTemplates(data || []);
-        }
-      } catch (err) {
-        console.error('[ClaimLinkGenerator] Error fetching templates:', err);
-        setTemplates([]);
-      } finally {
-        setTemplatesLoading(false);
-      }
-    };
-
-    fetchTemplates();
-  }, [address]);
-
-  const issuerTemplates = templates;
+  // Filter templates for this issuer directly from on-chain data
+  const issuerTemplates = (chainTemplates || []).filter(t => t.issuer.toLowerCase() === address?.toLowerCase());
 
   const handleGenerateLink = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -390,8 +346,8 @@ export const ClaimLinkGenerator: React.FC = () => {
                     >
                       <option value="">Choose a template...</option>
                       {issuerTemplates.map((t) => (
-                        <option key={t.template_id} value={t.template_id}>
-                          {t.name} - Tier {t.tier} {t.is_paused ? '(Paused)' : ''}
+                        <option key={t.templateId.toString()} value={t.templateId.toString()}>
+                          {t.name} - Tier {t.tier} {t.isPaused ? '(Paused)' : ''}
                         </option>
                       ))}
                     </select>

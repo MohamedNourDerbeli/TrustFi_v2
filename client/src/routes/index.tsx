@@ -10,7 +10,6 @@ import {
   PublicClaimPage,
   NotFoundPage,
 } from "../pages";
-import { TemplateSyncPage } from "../pages/TemplateSyncPage";
 import { LoadingSpinner } from "../components/shared";
 import { ProtectedRoute } from "../components/auth";
 
@@ -40,7 +39,6 @@ export const AppRoutes: React.FC = () => {
       {/* Public Routes */}
       <Route path="/" element={<HomePage />} />
       <Route path="/claim" element={<PublicClaimPage />} />
-      <Route path="/admin/sync-templates" element={<TemplateSyncPage />} />
       <Route 
         path="/create-profile" 
         element={
@@ -137,6 +135,16 @@ export const AppRoutes: React.FC = () => {
           <ProtectedRoute requireIssuer>
             <Suspense fallback={<RouteLoadingFallback />}>
               <TemplateList />
+            </Suspense>
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/issuer/template/:templateId" 
+        element={
+          <ProtectedRoute requireIssuer>
+            <Suspense fallback={<RouteLoadingFallback />}>
+              <IssueCardForm />
             </Suspense>
           </ProtectedRoute>
         } 

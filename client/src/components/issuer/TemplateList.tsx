@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '../../hooks/useAuth'
+import { useTemplates } from '../../hooks/useTemplates'
 import { supabase } from '../../lib/supabase'
 import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { useWalletClient, usePublicClient } from 'wagmi'
-import { REPUTATION_CARD_CONTRACT_ADDRESS } from '../../lib/contracts'
-import ReputationCardABI from '../../lib/ReputationCard.abi.json'
-import type { Address } from 'viem'
+// Removed direct contract interaction & Supabase cache update for pause state
+// We now rely solely on useTemplates().pauseTemplate which handles on-chain update & refetch
 import {
   FileText,
   ArrowLeft,
@@ -38,14 +37,12 @@ interface TemplateData {
 
 export const TemplateList: React.FC = () => {
   const { address, isIssuer, isLoading: authLoading } = useAuth()
-  const { data: walletClient } = useWalletClient()
-  const publicClient = usePublicClient()
+  const { templates: blockchainTemplates, loading: templatesLoading, refreshTemplates, pauseTemplate } = useTemplates(null, true)
 
   const [templatesWithClaims, setTemplatesWithClaims] = useState<
     TemplateData[]
   >([])
   const [filteredTemplates, setFilteredTemplates] = useState<TemplateData[]>([])
-  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [pausingTemplate, setPausingTemplate] = useState<string | null>(null)
 
@@ -57,30 +54,26 @@ export const TemplateList: React.FC = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [showFilters, setShowFilters] = useState(false)
 
-  // Fetch templates from Supabase
+  // Convert blockchain templates to component format
   useEffect(() => {
-    const fetchTemplates = async () => {
-      if (!address || !isIssuer) return
+    const loadTemplates = async () => {
+      if (!address || !isIssuer || !blockchainTemplates || blockchainTemplates.length === 0) return
 
       try {
-        setLoading(true)
         setError(null)
 
-        // Fetch templates for this issuer
-        const { data: templates, error: templatesError } = await supabase
-          .from('templates_cache')
-          .select('*')
-          .eq('issuer', address.toLowerCase())
+        // Filter templates for this issuer
+        const issuerTemplates = blockchainTemplates.filter(
+          t => t.issuer.toLowerCase() === address.toLowerCase()
+        )
 
-        if (templatesError) throw templatesError
-
-        if (!templates || templates.length === 0) {
+        if (issuerTemplates.length === 0) {
           setTemplatesWithClaims([])
           return
         }
 
         // Fetch claim counts for all templates
-        const templateIds = templates.map(t => t.template_id)
+        const templateIds = issuerTemplates.map(t => t.templateId.toString())
         const { data: claimsData, error: claimsError } = await supabase
           .from('claims_log')
           .select('template_id')
@@ -98,9 +91,18 @@ export const TemplateList: React.FC = () => {
         })
 
         // Combine templates with claim counts
-        const templatesWithClaimsData = templates.map(template => ({
-          ...template,
-          totalClaims: claimCounts[template.template_id] || 0
+        const templatesWithClaimsData = issuerTemplates.map(template => ({
+          template_id: template.templateId.toString(),
+          issuer: template.issuer,
+          name: template.name,
+          description: template.description,
+          max_supply: template.maxSupply.toString(),
+          current_supply: template.currentSupply.toString(),
+          tier: template.tier,
+          start_time: template.startTime.toString(),
+          end_time: template.endTime.toString(),
+          is_paused: template.isPaused,
+          totalClaims: claimCounts[template.templateId.toString()] || 0
         }))
 
         setTemplatesWithClaims(templatesWithClaimsData)
@@ -108,15 +110,11 @@ export const TemplateList: React.FC = () => {
         console.error('Error fetching templates:', err)
         setError('Failed to load templates')
         toast.error('Failed to load templates')
-      } finally {
-        setLoading(false)
       }
     }
 
-    if (isIssuer && !authLoading) {
-      fetchTemplates()
-    }
-  }, [isIssuer, authLoading, address])
+    loadTemplates()
+  }, [isIssuer, address, blockchainTemplates?.length])
 
   // Filtering logic
   useEffect(() => {
@@ -146,51 +144,21 @@ export const TemplateList: React.FC = () => {
     setFilteredTemplates(filtered)
   }, [templatesWithClaims, searchQuery, selectedTier, statusFilter])
 
-  const handlePauseToggle = async (
-    templateId: string,
-    currentPauseState: boolean
-  ) => {
-    if (!walletClient || !address || !publicClient) {
-      toast.error('Wallet not connected')
+  const handlePauseToggle = async (templateId: string, currentPauseState: boolean) => {
+    if (!templateId) {
+      toast.error('Invalid template ID')
       return
     }
-
     try {
       setPausingTemplate(templateId)
       setError(null)
-
-      // Call smart contract to pause/unpause
-      const hash = await walletClient.writeContract({
-        address: REPUTATION_CARD_CONTRACT_ADDRESS as Address,
-        abi: ReputationCardABI,
-        functionName: 'setTemplatePaused',
-        args: [BigInt(templateId), !currentPauseState],
-        account: address
-      })
-
-      // Wait for transaction
-      await publicClient.waitForTransactionReceipt({ hash })
-
-      // Update Supabase cache
-      const { error: updateError } = await supabase
-        .from('templates_cache')
-        .update({ is_paused: !currentPauseState })
-        .eq('template_id', templateId)
-
-      if (updateError) throw updateError
-
-      // Update local state
-      setTemplatesWithClaims(prev =>
-        prev.map(t =>
-          t.template_id === templateId
-            ? { ...t, is_paused: !currentPauseState }
-            : t
-        )
-      )
-
-      toast.success(
-        `Template ${currentPauseState ? 'unpaused' : 'paused'} successfully`
-      )
+      // Invoke hook pauseTemplate with desired state (contract + refetch handled internally)
+      await pauseTemplate(BigInt(templateId), !currentPauseState)
+      // Update local state immediately for responsiveness; authoritative state comes from refetch
+      setTemplatesWithClaims(prev => prev.map(t => t.template_id === templateId ? { ...t, is_paused: !currentPauseState } : t))
+      toast.success(`Template ${currentPauseState ? 'unpaused' : 'paused'} successfully`)
+      // Refresh full template list to sync with on-chain state
+      await refreshTemplates()
     } catch (err: any) {
       console.error('Error toggling template pause state:', err)
       setError(err.message || 'Failed to update template pause state')
@@ -206,7 +174,7 @@ export const TemplateList: React.FC = () => {
     return new Date(Number(ts) * 1000).toLocaleDateString()
   }
 
-  if (authLoading || loading) {
+  if (authLoading || templatesLoading) {
     return (
       <div className='min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50'>
         <div className='text-center'>
@@ -478,13 +446,9 @@ export const TemplateList: React.FC = () => {
                             }`}
                           >
                             {template.is_paused ? (
-                              <>
-                                <Pause className='w-3 h-3' /> Paused
-                              </>
+                              <><Pause className='w-3 h-3' /> Paused</>
                             ) : (
-                              <>
-                                <CheckCircle className='w-3 h-3' /> Active
-                              </>
+                              <><CheckCircle className='w-3 h-3' /> Active</>
                             )}
                           </span>
                         </div>
@@ -580,13 +544,9 @@ export const TemplateList: React.FC = () => {
                       }`}
                     >
                       {template.is_paused ? (
-                        <>
-                          <Pause className='w-3 h-3' /> Paused
-                        </>
+                        <><Pause className='w-3 h-3' /> Paused</>
                       ) : (
-                        <>
-                          <CheckCircle className='w-3 h-3' /> Active
-                        </>
+                        <><CheckCircle className='w-3 h-3' /> Active</>
                       )}
                     </span>
                     <span className='flex items-center gap-1 text-sm text-gray-600'>

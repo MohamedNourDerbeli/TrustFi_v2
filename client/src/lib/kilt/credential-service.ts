@@ -230,11 +230,22 @@ export async function storeCredential(
   try {
     console.log('[Credential Service] Storing credential...');
 
+    if (!cardId || cardId === '0') {
+      console.warn('[Credential Service] Aborting credential storage: invalid cardId (0).');
+      throw new Error('Invalid cardId (0) - credential not stored');
+    }
+
     // Generate unique credential ID
     const credentialId = `cred_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
     // Extract holder DID from claim contents
     const holderDid = credential.claim.contents.holder_did || '';
+
+    // Ensure card_id present inside claim contents (backward compatibility for older credentials)
+    if (!credential.claim.contents.card_id) {
+      console.warn('[Credential Service] card_id missing in claim.contents. Injecting now.');
+      (credential.claim.contents as any).card_id = cardId;
+    }
 
     // Prepare credential data for storage
     // Note: ctype_hash is stored inside credential_data JSONB, not as a separate column

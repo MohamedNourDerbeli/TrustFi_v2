@@ -79,29 +79,10 @@ export const AdminDashboard: React.FC = () => {
   }, [isAdmin, authLoading]);
 
   useEffect(() => {
-    // Fetch template count from Supabase (more accurate than blockchain scan)
-    const fetchTemplateCount = async () => {
-      try {
-        const { count, error } = await supabase
-          .from('templates_cache')
-          .select('*', { count: 'exact', head: true });
-
-        if (!error && count !== null) {
-          setStats((prev) => ({ ...prev, totalTemplates: count }));
-        } else if (!templatesLoading) {
-          // Fallback to blockchain templates if Supabase fails
-          setStats((prev) => ({ ...prev, totalTemplates: templates.length }));
-        }
-      } catch (err) {
-        console.error('Error fetching template count:', err);
-        // Fallback to blockchain templates
-        if (!templatesLoading) {
-          setStats((prev) => ({ ...prev, totalTemplates: templates.length }));
-        }
-      }
-    };
-
-    fetchTemplateCount();
+    // Use blockchain template count directly
+    if (!templatesLoading && templates) {
+      setStats((prev) => ({ ...prev, totalTemplates: templates.length }));
+    }
   }, [templates, templatesLoading]);
 
   if (authLoading || loading) {
@@ -345,7 +326,7 @@ export const AdminDashboard: React.FC = () => {
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center gap-2">
                             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white text-xs font-bold">
-                              {activity.profile_id.slice(0, 2)}
+                              {String(activity.profile_id).slice(0, 2)}
                             </div>
                             <span className="text-sm font-medium text-gray-900">
                               #{activity.profile_id}

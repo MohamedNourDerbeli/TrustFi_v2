@@ -26,6 +26,8 @@ contract ReputationCard is ERC721, AccessControl, EIP712 {
         uint256 startTime;
         uint256 endTime;
         bool isPaused;
+        string name;
+        string description;
     }
 
     uint256 private _nextTokenId = 1;
@@ -37,6 +39,11 @@ contract ReputationCard is ERC721, AccessControl, EIP712 {
     mapping(uint8 => uint256) public tierToScore;
     mapping(uint256 => uint256) private cardToTemplate;
     mapping(uint256 => mapping(uint256 => mapping(uint256 => bool))) public usedNonceForTemplate;
+    
+    // Template tracking
+    uint256 public templateCount;
+    uint256[] private allTemplateIds;
+    mapping(address => uint256[]) private issuerTemplates;
 
     bytes32 private constant CLAIM_TYPEHASH =
         keccak256("Claim(address user,address profileOwner,uint256 templateId,uint256 nonce)");
@@ -48,9 +55,17 @@ contract ReputationCard is ERC721, AccessControl, EIP712 {
         uint256 maxSupply,
         uint8 tier,
         uint256 startTime,
+        uint256 endTime,
+        string name
+    );
+    event TemplateUpdated(
+        uint256 indexed templateId,
+        uint256 maxSupply,
+        uint256 startTime,
         uint256 endTime
     );
     event TemplatePaused(uint256 indexed templateId, bool isPaused);
+    event BatchCardsIssued(uint256 indexed templateId, uint256 count, address indexed issuer);
 
     constructor(address admin, address _profileNFTContract)
         ERC721("TrustFi Reputation Card", "TFIC")
@@ -75,11 +90,14 @@ contract ReputationCard is ERC721, AccessControl, EIP712 {
         uint256 maxSupply,
         uint8 tier,
         uint256 startTime,
-        uint256 endTime
+        uint256 endTime,
+        string calldata name,
+        string calldata description
     ) external onlyRole(TEMPLATE_MANAGER_ROLE) {
         require(templates[templateId].issuer == address(0), "Template exists");
         require(issuer != address(0), "Zero issuer");
         require(tier >= 1 && tierToScore[tier] > 0, "Invalid tier");
+        require(bytes(name).length > 0, "Name required");
         if (endTime > 0) require(startTime < endTime, "Start < End");
 
         templates[templateId] = Template({
@@ -89,10 +107,35 @@ contract ReputationCard is ERC721, AccessControl, EIP712 {
             tier: tier,
             startTime: startTime,
             endTime: endTime,
-            isPaused: false
+            isPaused: false,
+            name: name,
+            description: description
         });
 
-        emit TemplateCreated(templateId, issuer, maxSupply, tier, startTime, endTime);
+        templateCount++;
+        allTemplateIds.push(templateId);
+        issuerTemplates[issuer].push(templateId);
+
+        emit TemplateCreated(templateId, issuer, maxSupply, tier, startTime, endTime, name);
+    }
+
+    function updateTemplate(
+        uint256 templateId,
+        uint256 maxSupply,
+        uint256 startTime,
+        uint256 endTime
+    ) external {
+        Template storage t = templates[templateId];
+        require(t.issuer != address(0), "Template missing");
+        require(msg.sender == t.issuer || hasRole(TEMPLATE_MANAGER_ROLE, msg.sender), "Not allowed");
+        require(maxSupply == 0 || maxSupply >= t.currentSupply, "Max supply < current");
+        if (endTime > 0) require(startTime < endTime, "Start < End");
+
+        t.maxSupply = maxSupply;
+        t.startTime = startTime;
+        t.endTime = endTime;
+
+        emit TemplateUpdated(templateId, maxSupply, startTime, endTime);
     }
 
     function setTemplatePaused(uint256 templateId, bool isPaused) external {
@@ -108,6 +151,51 @@ contract ReputationCard is ERC721, AccessControl, EIP712 {
     }
 
     /* ----------------------- DIRECT ISSUE ----------------------- */
+
+    function batchIssueDirect(
+        address[] calldata recipients,
+        uint256 templateId,
+        string[] calldata tokenURIs
+    ) external returns (uint256[] memory) {
+        require(recipients.length == tokenURIs.length, "Length mismatch");
+        require(recipients.length > 0, "Empty array");
+        require(recipients.length <= 100, "Batch too large");
+
+        Template storage t = templates[templateId];
+        require(t.issuer != address(0), "Template missing");
+        require(msg.sender == t.issuer, "Only issuer");
+        require(!t.isPaused, "Paused");
+        require(tierToScore[t.tier] > 0, "Invalid tier");
+
+        if (t.maxSupply > 0) {
+            require(t.currentSupply + recipients.length <= t.maxSupply, "Exceeds max supply");
+        }
+
+        uint256[] memory cardIds = new uint256[](recipients.length);
+
+        for (uint256 i = 0; i < recipients.length; i++) {
+            address recipient = recipients[i];
+            uint256 profileId = IProfileNFT(profileNFTContract).addressToProfileId(recipient);
+            require(profileId != 0, "No profile");
+            require(!hasProfileClaimed[templateId][profileId], "Already claimed");
+
+            hasProfileClaimed[templateId][profileId] = true;
+            uint256 cardId = _nextTokenId++;
+            _mint(profileNFTContract, cardId);
+            _tokenURIs[cardId] = tokenURIs[i];
+            cardToTemplate[cardId] = templateId;
+
+            IProfileNFT(profileNFTContract).notifyNewCard(profileId, cardId);
+            cardIds[i] = cardId;
+
+            emit CardIssued(profileId, cardId, msg.sender, t.tier);
+        }
+
+        t.currentSupply += recipients.length;
+        emit BatchCardsIssued(templateId, recipients.length, msg.sender);
+
+        return cardIds;
+    }
 
     function issueDirect(
         address recipient,
@@ -238,6 +326,59 @@ contract ReputationCard is ERC721, AccessControl, EIP712 {
     function tokenURI(uint256 tokenId) public view override returns (string memory) {
         require(_ownerOf(tokenId) != address(0), "Nonexistent");
         return _tokenURIs[tokenId];
+    }
+
+    /// @notice Get total number of templates created
+    function getTemplateCount() external view returns (uint256) {
+        return templateCount;
+    }
+
+    /// @notice Get all template IDs
+    function getAllTemplateIds() external view returns (uint256[] memory) {
+        return allTemplateIds;
+    }
+
+    /// @notice Get template IDs by issuer
+    function getTemplatesByIssuer(address issuer) external view returns (uint256[] memory) {
+        return issuerTemplates[issuer];
+    }
+
+    /// @notice Get active templates (not paused, within time window)
+    function getActiveTemplates() external view returns (uint256[] memory) {
+        uint256 activeCount = 0;
+        uint256 currentTime = block.timestamp;
+
+        // First pass: count active templates
+        for (uint256 i = 0; i < allTemplateIds.length; i++) {
+            uint256 templateId = allTemplateIds[i];
+            Template storage t = templates[templateId];
+            
+            bool isActive = !t.isPaused;
+            if (t.startTime > 0) isActive = isActive && currentTime >= t.startTime;
+            if (t.endTime > 0) isActive = isActive && currentTime <= t.endTime;
+            
+            if (isActive) activeCount++;
+        }
+
+        // Second pass: collect active template IDs
+        uint256[] memory activeTemplates = new uint256[](activeCount);
+        uint256 index = 0;
+        
+        for (uint256 i = 0; i < allTemplateIds.length; i++) {
+            uint256 templateId = allTemplateIds[i];
+            Template storage t = templates[templateId];
+            
+            bool isActive = !t.isPaused;
+            if (t.startTime > 0) isActive = isActive && currentTime >= t.startTime;
+            if (t.endTime > 0) isActive = isActive && currentTime <= t.endTime;
+            
+            if (isActive) {
+                activeTemplates[index] = templateId;
+                index++;
+            }
+        }
+
+        return activeTemplates;
     }
 
     /* ----------------------- SOULBOUND ----------------------- */

@@ -9,7 +9,24 @@ import { jsonRpcProvider } from 'wagmi/providers/jsonRpc';
 const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || '';
 
 // Use private RPC if available, fallback to public
-const rpcUrl = import.meta.env.VITE_RPC_URL || moonbaseAlpha.rpcUrls.default.http[0];
+// IMPORTANT: Browser-based JSON-RPC calls will fail CORS on many private endpoints (e.g. dwellir.com UUID URLs).
+// Detect known CORS-hostile domains and automatically switch to a public RPC to keep the dapp functional.
+const envRpc = import.meta.env.VITE_RPC_URL;
+const PUBLIC_FALLBACK_RPC = moonbaseAlpha.rpcUrls.default.http[0];
+const CORS_RISK_PATTERN = /dwellir\.com|\.onrender\.com|localhost:8545/i; // extend as needed
+
+// If running in a browser and the custom RPC matches a risky pattern, ignore it.
+let rpcUrl = PUBLIC_FALLBACK_RPC;
+if (envRpc && envRpc.trim().length > 0) {
+  if (typeof window === 'undefined') {
+    // Node/server-side can use the private endpoint directly
+    rpcUrl = envRpc;
+  } else if (!CORS_RISK_PATTERN.test(envRpc)) {
+    rpcUrl = envRpc;
+  } else {
+    console.warn('[wagmi] Detected RPC that is likely to fail CORS in browser; using public fallback:', envRpc);
+  }
+}
 
 const { chains, publicClient, webSocketPublicClient } = configureChains(
   [moonbaseAlpha],

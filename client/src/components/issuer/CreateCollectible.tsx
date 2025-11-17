@@ -1,6 +1,7 @@
 // components/issuer/CreateCollectible.tsx
 import { useState, useEffect } from 'react';
 import { useAccount } from 'wagmi';
+import { useTemplates } from '../../hooks/useTemplates';
 import { supabase } from '../../lib/supabase';
 import type { CreateCollectibleParams } from '../../types/collectible';
 import { uploadToPinata, uploadJSONToPinata, validateImageFile } from '../../lib/pinata';
@@ -16,8 +17,8 @@ interface Template {
 
 export function CreateCollectible() {
   const { address } = useAccount();
+  const { templates: blockchainTemplates, loading: templatesLoading } = useTemplates(null, true);
   const [templates, setTemplates] = useState<Template[]>([]);
-  const [templatesLoading, setTemplatesLoading] = useState(true);
   
   const [mode, setMode] = useState<'quick' | 'custom'>('quick');
   const [formData, setFormData] = useState<CreateCollectibleParams>({
@@ -46,35 +47,28 @@ export function CreateCollectible() {
   
   const [shareableLink, setShareableLink] = useState<string | null>(null);
 
-  // Fetch templates from Supabase
+  // Filter blockchain templates for this issuer
   useEffect(() => {
-    const fetchTemplates = async () => {
-      if (!address) {
-        setTemplatesLoading(false);
-        return;
-      }
+    if (!address || !blockchainTemplates) {
+      setTemplates([]);
+      return;
+    }
 
-      try {
-        setTemplatesLoading(true);
-        const { data, error } = await supabase
-          .from('templates_cache')
-          .select('*')
-          .eq('issuer', address.toLowerCase())
-          .eq('is_paused', false)
-          .order('template_id', { ascending: true });
+    const issuerTemplates = blockchainTemplates
+      .filter(t => 
+        t.issuer.toLowerCase() === address.toLowerCase() && 
+        !t.isPaused
+      )
+      .map(t => ({
+        template_id: Number(t.templateId),
+        issuer: t.issuer,
+        name: t.name || `Template #${t.templateId}`,
+        tier: t.tier,
+        is_paused: t.isPaused,
+      }));
 
-        if (error) throw error;
-        setTemplates(data || []);
-      } catch (err) {
-        console.error('[CreateCollectible] Error fetching templates:', err);
-        setTemplates([]);
-      } finally {
-        setTemplatesLoading(false);
-      }
-    };
-
-    fetchTemplates();
-  }, [address]);
+    setTemplates(issuerTemplates);
+  }, [address, blockchainTemplates]);
 
   const handleAddRequirement = () => {
     if (requirementKey && requirementValue) {

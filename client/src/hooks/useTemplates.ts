@@ -13,54 +13,49 @@ export interface UseTemplatesReturn {
   loading: boolean;
   error: Error | null;
   createTemplate: (params: CreateTemplateParams) => Promise<void>;
+  updateTemplate: (templateId: bigint, params: { maxSupply: bigint; startTime: bigint; endTime: bigint }) => Promise<void>;
   pauseTemplate: (templateId: bigint, isPaused: boolean) => Promise<void>;
   refreshTemplates: () => Promise<void>;
   checkEligibility: (templateId: bigint, profileId: bigint) => Promise<boolean>;
+  batchIssueDirect: (recipients: Address[], templateId: bigint, tokenURIs: string[]) => Promise<bigint[]>;
 }
 
 async function fetchTemplatesData(publicClient: any, profileId?: bigint | null, includeAll: boolean = false) {
-  // Instead of scanning blocks, we'll try reading templates directly
-  // Start from template ID 1 and read until we hit an invalid template (issuer = 0x0)
-  const templateIds: bigint[] = [];
-  const MAX_TEMPLATES = LIMITS.MAX_TEMPLATES; // Safety limit to prevent infinite loops
-  
-  // Try reading templates sequentially
-  for (let i = 1; i <= MAX_TEMPLATES; i++) {
-    try {
-      const templateData = await publicClient.readContract({
-        address: REPUTATION_CARD_CONTRACT_ADDRESS as Address,
-        abi: ReputationCardABI,
-        functionName: 'templates',
-        args: [BigInt(i)],
-      }) as [Address, bigint, bigint, number, bigint, bigint, boolean];
+  // Use the new getTemplateCount and getAllTemplateIds functions
+  try {
+    // Get total template count from contract
+    const templateCount = await publicClient.readContract({
+      address: REPUTATION_CARD_CONTRACT_ADDRESS as Address,
+      abi: ReputationCardABI,
+      functionName: 'getTemplateCount',
+    }) as bigint;
 
-      const [issuer] = templateData;
-      
-      // If issuer is zero address, this template doesn't exist
-      if (issuer === '0x0000000000000000000000000000000000000000') {
-        // We've reached the end of templates
-        break;
-      }
-      
-      templateIds.push(BigInt(i));
-    } catch (error) {
-      // If we get an error, assume we've reached the end
-      logger.debug(`Stopped at template ${i}`);
-      break;
+    logger.debug(`[useTemplates] Total templates: ${templateCount}`);
+
+    if (templateCount === 0n) {
+      return [];
     }
-  }
 
-  // Fetch template details for each ID
-  const templatePromises = templateIds.map(async (templateId) => {
-    try {
-      const templateData = await publicClient.readContract({
-        address: REPUTATION_CARD_CONTRACT_ADDRESS as Address,
-        abi: ReputationCardABI,
-        functionName: 'templates',
-        args: [templateId],
-      }) as [Address, bigint, bigint, number, bigint, bigint, boolean];
+    // Get all template IDs
+    const allTemplateIds = await publicClient.readContract({
+      address: REPUTATION_CARD_CONTRACT_ADDRESS as Address,
+      abi: ReputationCardABI,
+      functionName: 'getAllTemplateIds',
+    }) as bigint[];
 
-      const [issuer, maxSupply, currentSupply, tier, startTime, endTime, isPaused] = templateData;
+    logger.debug(`[useTemplates] Fetched ${allTemplateIds.length} template IDs`);
+
+    // Fetch template data for each ID
+    const templatePromises = allTemplateIds.map(async (templateId) => {
+      try {
+        const templateData = await publicClient.readContract({
+          address: REPUTATION_CARD_CONTRACT_ADDRESS as Address,
+          abi: ReputationCardABI,
+          functionName: 'templates',
+          args: [templateId],
+        }) as [Address, bigint, bigint, number, bigint, bigint, boolean, string, string];
+
+      const [issuer, maxSupply, currentSupply, tier, startTime, endTime, isPaused, name, description] = templateData;
 
       // Skip templates with zero address issuer (deleted/invalid)
       if (issuer === '0x0000000000000000000000000000000000000000') {
@@ -81,8 +76,8 @@ async function fetchTemplatesData(publicClient: any, profileId?: bigint | null, 
       return {
         templateId,
         issuer,
-        name: `Template #${templateId}`,
-        description: `Tier ${tier} credential`,
+        name: name || `Template #${templateId}`,
+        description: description || `Tier ${tier} credential`,
         maxSupply,
         currentSupply,
         tier,
@@ -97,22 +92,26 @@ async function fetchTemplatesData(publicClient: any, profileId?: bigint | null, 
     }
   });
 
-  const fetchedTemplates = await Promise.all(templatePromises);
-  const validTemplates = fetchedTemplates.filter((t): t is Template & { hasClaimed?: boolean } => t !== null);
+    const fetchedTemplates = await Promise.all(templatePromises);
+    const validTemplates = fetchedTemplates.filter((t): t is Template & { hasClaimed?: boolean } => t !== null);
 
-  // Filter templates by time windows (unless includeAll is true)
-  if (includeAll) {
-    return validTemplates;
+    // Filter templates by time windows (unless includeAll is true)
+    if (includeAll) {
+      return validTemplates;
+    }
+
+    const now = BigInt(Math.floor(Date.now() / 1000));
+    const activeTemplates = validTemplates.filter(template => {
+      const hasStarted = template.startTime === 0n || now >= template.startTime;
+      const hasNotEnded = template.endTime === 0n || now <= template.endTime;
+      return hasStarted && hasNotEnded;
+    });
+
+    return activeTemplates;
+  } catch (error) {
+    logger.error('[useTemplates] Error fetching templates:', error);
+    return [];
   }
-
-  const now = BigInt(Math.floor(Date.now() / 1000));
-  const activeTemplates = validTemplates.filter(template => {
-    const hasStarted = template.startTime === 0n || now >= template.startTime;
-    const hasNotEnded = template.endTime === 0n || now <= template.endTime;
-    return hasStarted && hasNotEnded;
-  });
-
-  return activeTemplates;
 }
 
 export function useTemplates(profileId?: bigint | null, includeAll: boolean = false): UseTemplatesReturn {
@@ -216,12 +215,77 @@ export function useTemplates(profileId?: bigint | null, includeAll: boolean = fa
     await refetch();
   };
 
+  // Update template
+  const updateTemplate = async (
+    templateId: bigint,
+    params: { maxSupply: bigint; startTime: bigint; endTime: bigint }
+  ) => {
+    if (!walletClient || !address) {
+      throw new Error('Wallet not connected');
+    }
+
+    const hash = await walletClient.writeContract({
+      address: REPUTATION_CARD_CONTRACT_ADDRESS as Address,
+      abi: ReputationCardABI,
+      functionName: 'updateTemplate',
+      args: [templateId, params.maxSupply, params.startTime, params.endTime],
+      account: address,
+      chain: walletClient.chain,
+    });
+
+    await publicClient?.waitForTransactionReceipt({ hash });
+
+    // Invalidate and refetch templates
+    await queryClient.invalidateQueries({ queryKey: ['templates'] });
+    await refetch();
+  };
+
+  // Batch issue cards
+  const batchIssueDirect = async (
+    recipients: Address[],
+    templateId: bigint,
+    tokenURIs: string[]
+  ): Promise<bigint[]> => {
+    if (!walletClient || !address) {
+      throw new Error('Wallet not connected');
+    }
+
+    if (recipients.length !== tokenURIs.length) {
+      throw new Error('Recipients and tokenURIs length mismatch');
+    }
+
+    if (recipients.length === 0 || recipients.length > 100) {
+      throw new Error('Batch size must be between 1 and 100');
+    }
+
+    const hash = await walletClient.writeContract({
+      address: REPUTATION_CARD_CONTRACT_ADDRESS as Address,
+      abi: ReputationCardABI,
+      functionName: 'batchIssueDirect',
+      args: [recipients, templateId, tokenURIs],
+      account: address,
+      chain: walletClient.chain,
+    });
+
+    const receipt = await publicClient?.waitForTransactionReceipt({ hash });
+
+    // Extract card IDs from events or return value
+    // For now, we'll invalidate templates cache
+    await queryClient.invalidateQueries({ queryKey: ['templates'] });
+    await refetch();
+
+    // Return empty array for now - in production, parse events to get actual card IDs
+    return [];
+  };
+
   return {
     templates: data || [],
     loading: isLoading,
     error: error as Error | null,
     createTemplate,
+    updateTemplate,
     pauseTemplate,
+    batchIssueDirect,
     refreshTemplates,
     checkEligibility,
   };

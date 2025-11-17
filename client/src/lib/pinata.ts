@@ -1,7 +1,8 @@
 // lib/pinata.ts
 const PINATA_API_KEY = import.meta.env.VITE_PINATA_API_KEY;
 const PINATA_API_SECRET = import.meta.env.VITE_PINATA_API_SECRET;
-const PINATA_GATEWAY = 'https://gateway.pinata.cloud/ipfs/';
+// Use CORS-friendly IPFS gateway instead of Pinata's restricted gateway
+const PINATA_GATEWAY = 'https://ipfs.io/ipfs/';
 
 if (!PINATA_API_KEY || !PINATA_API_SECRET) {
   console.warn('Pinata credentials not configured. Image uploads will not work.');

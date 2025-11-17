@@ -3,6 +3,19 @@ import { useState, useCallback } from 'react';
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
 import { type Address, type Hex } from 'viem';
 import { REPUTATION_CARD_CONTRACT_ADDRESS, PROFILE_NFT_CONTRACT_ADDRESS } from '../lib/contracts';
+// Minimal ERC721 ABI fragment for Transfer event fallback decoding
+const ERC721_ABI_TRANSFER_ONLY = [
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, internalType: 'address', name: 'from', type: 'address' },
+      { indexed: true, internalType: 'address', name: 'to', type: 'address' },
+      { indexed: true, internalType: 'uint256', name: 'tokenId', type: 'uint256' }
+    ],
+    name: 'Transfer',
+    type: 'event'
+  }
+];
 import ReputationCardABI from '../lib/ReputationCard.abi.json';
 import ProfileNFTABI from '../lib/ProfileNFT.abi.json';
 import { parseContractError, isUserRejection } from '../lib/errors';
@@ -104,6 +117,30 @@ export function useReputationCards(): UseReputationCardsReturn {
     setRetryCount(0);
 
     try {
+      // Pre-fetch existing cards for recipient profile for fallback diff logic
+      let preCards: bigint[] = [];
+      try {
+        // @ts-ignore - wagmi v2 type issue with readContract
+        const preProfileId = await publicClient.readContract({
+          address: PROFILE_NFT_CONTRACT_ADDRESS as Address,
+          abi: ProfileNFTABI,
+          functionName: 'addressToProfileId',
+          args: [params.recipient],
+        }) as bigint;
+        if (preProfileId !== 0n) {
+          // @ts-ignore
+          const preDetail = await publicClient.readContract({
+            address: REPUTATION_CARD_CONTRACT_ADDRESS as Address,
+            abi: ReputationCardABI,
+            functionName: 'getCardsDetailForProfile',
+            args: [preProfileId],
+          }) as [bigint[], bigint[], number[], string[]];
+          preCards = preDetail[0];
+        }
+      } catch (e) {
+        console.warn('[useReputationCards] Pre-fetch cards failed (non-critical):', e);
+      }
+
       // Execute transaction with retry logic
       // @ts-ignore - Complex type inference issue with executeTransactionFlow
       const { hash, receipt } = await executeTransactionFlow(
@@ -160,9 +197,69 @@ export function useReputationCards(): UseReputationCardsReturn {
         return { cardId, txHash: hash };
       }
 
-      console.warn('[useReputationCards] CardIssued event not found, but transaction succeeded');
+      console.warn('[useReputationCards] CardIssued event not found, attempting fallback decoding & diff to determine cardId');
+
+      // Fallback 1: Decode Transfer event emitted by ReputationCard (minted to profileNFTContract)
+      try {
+        for (const log of receipt.logs) {
+          try {
+            // @ts-ignore viem decode
+            const decodedTransfer = publicClient.decodeEventLog({
+              abi: ERC721_ABI_TRANSFER_ONLY,
+              data: log.data,
+              topics: log.topics
+            });
+            if (decodedTransfer.eventName === 'Transfer') {
+              const tokenId = decodedTransfer.args.tokenId as bigint;
+              if (tokenId && tokenId > 0n) {
+                console.log('[useReputationCards] Fallback Transfer decoded tokenId:', tokenId.toString());
+                logClaim(params.recipient, params.templateId, tokenId, 'direct').catch(console.error);
+                setRetryCount(0);
+                return { cardId: tokenId, txHash: hash };
+              }
+            }
+          } catch { /* ignore individual log decode errors */ }
+        }
+      } catch (e) {
+        console.warn('[useReputationCards] Transfer fallback failed:', e);
+      }
+
+      // Fallback: fetch cards again and diff
+      try {
+        // @ts-ignore - wagmi v2 type issue with readContract
+        const postProfileId = await publicClient.readContract({
+          address: PROFILE_NFT_CONTRACT_ADDRESS as Address,
+          abi: ProfileNFTABI,
+          functionName: 'addressToProfileId',
+          args: [params.recipient],
+        }) as bigint;
+        if (postProfileId !== 0n) {
+          // @ts-ignore
+            const postDetail = await publicClient.readContract({
+            address: REPUTATION_CARD_CONTRACT_ADDRESS as Address,
+            abi: ReputationCardABI,
+            functionName: 'getCardsDetailForProfile',
+            args: [postProfileId],
+          }) as [bigint[], bigint[], number[], string[]];
+          const postCards = postDetail[0];
+          const preSet = new Set(preCards.map(c => c.toString()));
+          const diff = postCards.filter(c => !preSet.has(c.toString()));
+          if (diff.length === 1) {
+            const inferredCardId = diff[0];
+            console.log('[useReputationCards] Fallback diff inferred cardId:', inferredCardId.toString());
+            logClaim(params.recipient, params.templateId, inferredCardId, 'direct').catch(console.error);
+            setRetryCount(0);
+            return { cardId: inferredCardId, txHash: hash };
+          } else {
+            console.warn('[useReputationCards] Fallback diff ambiguous. Diff size:', diff.length);
+          }
+        }
+      } catch (e) {
+        console.warn('[useReputationCards] Fallback diff fetch failed:', e);
+      }
+
       setRetryCount(0);
-      return { cardId: 0n, txHash: hash };
+      return { cardId: 0n, txHash: hash }; // still unknown
     } catch (err: any) {
       // Don't set error state for user rejections
       if (!isUserRejection(err)) {
@@ -250,7 +347,30 @@ export function useReputationCards(): UseReputationCardsReturn {
         return { cardId, txHash: hash };
       }
 
-      console.warn('[useReputationCards] CardIssued event not found, but transaction succeeded');
+      console.warn('[useReputationCards] CardIssued event not found (signature claim)');
+      // Attempt Transfer fallback for signature claim
+      try {
+        for (const log of receipt.logs) {
+          try {
+            // @ts-ignore
+            const decodedTransfer = publicClient.decodeEventLog({
+              abi: ERC721_ABI_TRANSFER_ONLY,
+              data: log.data,
+              topics: log.topics
+            });
+            if (decodedTransfer.eventName === 'Transfer') {
+              const tokenId = decodedTransfer.args.tokenId as bigint;
+              if (tokenId && tokenId > 0n) {
+                console.log('[useReputationCards] Signature claim Transfer fallback tokenId:', tokenId.toString());
+                logClaim(params.profileOwner, params.templateId, tokenId, 'signature').catch(console.error);
+                return { cardId: tokenId, txHash: hash };
+              }
+            }
+          } catch { /* ignore */ }
+        }
+      } catch (e) {
+        console.warn('[useReputationCards] Signature claim Transfer fallback failed:', e);
+      }
       setRetryCount(0);
       return { cardId: 0n, txHash: hash };
     } catch (err: any) {

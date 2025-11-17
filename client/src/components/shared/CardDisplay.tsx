@@ -9,6 +9,23 @@ import type { VerifiableCredential } from '../../types/kilt';
 import { logger } from '../../lib/logger';
 import { CredentialBadge } from '../user/CredentialBadge';
 
+// Fallback metadata generator for cards with broken/missing metadata
+function createFallbackMetadata(card: Card) {
+  const tierNames = ['Bronze', 'Silver', 'Gold'];
+  const tierName = tierNames[card.tier - 1] || 'Unknown';
+  
+  return {
+    name: `${tierName} Card #${card.cardId.toString()}`,
+    description: `A Tier ${card.tier} reputation card. This card represents achievement and contribution to the TrustFi ecosystem.`,
+    image: '', // Will use fallback rendering in the component
+    attributes: [
+      { trait_type: 'Tier', value: card.tier },
+      { trait_type: 'Card ID', value: card.cardId.toString() },
+      { trait_type: 'Status', value: 'Active' }
+    ]
+  };
+}
+
 interface CardDisplayProps {
   card: Card;
   credential?: VerifiableCredential;
@@ -28,13 +45,39 @@ export function CardDisplay({ card, credential, compact = false }: CardDisplayPr
 
         logger.debug(`[CardDisplay] Fetching metadata for card ${card.cardId.toString()}`);
 
+        // Special case: Kusama Living Profile template (dynamic metadata via Supabase Function)
+        if (card.templateId && card.templateId.toString() === '999') {
+          const base = import.meta.env.VITE_DYNAMIC_METADATA_URI as string | undefined;
+          const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+          if (base) {
+            const url = `${base}${card.profileId.toString()}`;
+            const headers: HeadersInit = {};
+            if (anonKey) headers['Authorization'] = `Bearer ${anonKey}`;
+            try {
+              const res = await fetch(url, { headers });
+              if (!res.ok) {
+                throw new Error(`Dynamic metadata fetch failed: ${res.status}`);
+              }
+              const dyn = await res.json();
+              logger.debug('[CardDisplay] Loaded dynamic Kusama metadata:', dyn);
+              setMetadata(dyn);
+              setLoading(false);
+              return; // skip on-chain tokenURI path
+            } catch (e) {
+              console.warn('[CardDisplay] Dynamic metadata endpoint failed, falling back to tokenURI', e);
+              // continue to tokenURI fallback below
+            }
+          }
+        }
+
         // Fetch tokenURI from contract
-        const tokenURI = (await publicClient.readContract({
+        // @ts-expect-error wagmi v2 typing quirk for readContract
+        const tokenURI = await publicClient.readContract({
           address: REPUTATION_CARD_CONTRACT_ADDRESS as Address,
           abi: ReputationCardABI,
           functionName: 'tokenURI',
           args: [card.cardId],
-        } as any)) as string;
+        }) as unknown as string;
 
         logger.debug(`[CardDisplay] TokenURI for card ${card.cardId.toString()}:`, tokenURI);
 
@@ -55,15 +98,30 @@ export function CardDisplay({ card, credential, compact = false }: CardDisplayPr
               headers['Authorization'] = `Bearer ${anonKey}`;
             }
           }
-          const response = await fetch(tokenURI, { headers });
-          if (!response.ok) {
-            throw new Error(`Failed to fetch metadata: ${response.statusText}`);
+          
+          try {
+            const response = await fetch(tokenURI, { headers });
+            if (!response.ok) {
+              // If IPFS gateway fails, create fallback metadata
+              if (tokenURI.includes('ipfs.io') || tokenURI.includes('pinata') || tokenURI.includes('ipfs://')) {
+                console.warn('[CardDisplay] IPFS gateway failed, using fallback metadata');
+                setMetadata(createFallbackMetadata(card));
+                return;
+              }
+              throw new Error(`Failed to fetch metadata: ${response.statusText}`);
+            }
+            const metadata = await response.json();
+            logger.debug(`[CardDisplay] Fetched HTTP metadata:`, metadata);
+            setMetadata(metadata);
+          } catch (fetchError) {
+            // Fallback to generated metadata if fetch fails
+            console.error('[CardDisplay] Fetch failed, using fallback:', fetchError);
+            setMetadata(createFallbackMetadata(card));
           }
-          const metadata = await response.json();
-          logger.debug(`[CardDisplay] Fetched HTTP metadata:`, metadata);
-          setMetadata(metadata);
         } else {
-          throw new Error('Invalid tokenURI format');
+          // Unknown format - create fallback
+          console.warn('[CardDisplay] Unknown tokenURI format, using fallback');
+          setMetadata(createFallbackMetadata(card));
         }
       } catch (err) {
         console.error('[CardDisplay] Error fetching card metadata:', err);
@@ -74,7 +132,7 @@ export function CardDisplay({ card, credential, compact = false }: CardDisplayPr
     }
 
     fetchMetadata();
-  }, [card.cardId, publicClient]);
+  }, [card, publicClient]);
 
   if (loading) {
     return (
@@ -176,9 +234,9 @@ export function CardDisplay({ card, credential, compact = false }: CardDisplayPr
           </svg>
           {new Date(card.claimedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
         </p>
-        {metadata.attributes && metadata.attributes.length > 0 && !compact && (
+        {Array.isArray(metadata.attributes) && metadata.attributes.length > 0 && !compact && (
           <div className="flex flex-wrap gap-1 mt-2">
-            {metadata.attributes.slice(0, 2).map((attr: any, idx: number) => (
+            {(metadata.attributes as Array<{ trait_type: string; value: string | number }>).slice(0, 2).map((attr, idx: number) => (
               <span key={idx} className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded">
                 {attr.trait_type}: {attr.value}
               </span>
