@@ -7,8 +7,3 @@ export type { UseProfileReturn } from './useProfile';
 
 export { useTransactionHandler, useTransactionConfirmation } from './useTransactionHandler';
 export type { UseTransactionHandlerReturn, TransactionState } from './useTransactionHandler';
-
-// React Query versions (optimized with caching)
-export { useAuthQuery } from './useAuthQuery';
-export { useProfileQuery } from './useProfileQuery';
-export { useTemplatesQuery } from './useTemplatesQuery';

@@ -112,11 +112,11 @@ export const Navigation: React.FC = () => {
                         </p>
                       </div>
                       <Link
-                        to={`/profile/${address}`}
+                        to="/dashboard"
                         className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                         onClick={() => setIsProfileDropdownOpen(false)}
                       >
-                        View Profile
+                        View Dashboard
                       </Link>
                       <Link
                         to="/profile/edit"
@@ -185,13 +185,6 @@ export const Navigation: React.FC = () => {
                     onClick={() => setIsMobileMenuOpen(false)}
                   >
                     Discover
-                  </Link>
-                  <Link
-                    to={`/profile/${address}`}
-                    className={mobileNavLinkClass(`/profile/${address}`)}
-                    onClick={() => setIsMobileMenuOpen(false)}
-                  >
-                    View Profile
                   </Link>
                   <Link
                     to="/profile/edit"

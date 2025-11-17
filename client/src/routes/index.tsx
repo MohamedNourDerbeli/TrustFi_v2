@@ -68,6 +68,7 @@ export const AppRoutes: React.FC = () => {
         } 
       />
       <Route path="/profile/:address" element={<ProfilePage />} />
+      <Route path="/profile" element={<ProfilePage />} />
       <Route 
         path="/profile/edit" 
         element={

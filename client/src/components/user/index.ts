@@ -1,6 +1,5 @@
 // components/user/index.ts
 export { CreateProfile } from './CreateProfile';
-export { ProfileView } from './ProfileView';
 export { ProfileEdit } from './ProfileEdit';
 export { AvatarUpload } from './AvatarUpload';
 export { BannerUpload } from './BannerUpload';

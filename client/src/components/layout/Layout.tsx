@@ -15,8 +15,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   // Redirect to home when user disconnects (except for public routes)
   useEffect(() => {
     const publicRoutes = ['/', '/claim', '/create-profile'];
-    const isPublicRoute = publicRoutes.some(route => location.pathname === route) || 
-                         location.pathname.startsWith('/profile/');
+    const isPublicRoute = publicRoutes.some(route => location.pathname === route);
 
     // If user disconnects and is not on a public route, redirect to home
     if (!isConnected && !isPublicRoute) {

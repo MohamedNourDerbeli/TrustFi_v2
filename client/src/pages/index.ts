@@ -1,7 +1,7 @@
 export { HomePage } from './HomePage';
 export { UserDashboard } from './UserDashboard';
 export { DiscoverPage } from './DiscoverPage';
-export { ProfilePage } from './ProfilePage';
+export { ProfilePage } from './ProfilePage'; // Redirects to dashboard
 export { ProfileEditPage } from './ProfileEditPage';
 export { CreateProfilePage } from './CreateProfilePage';
 export { PublicClaimPage } from './PublicClaimPage';
