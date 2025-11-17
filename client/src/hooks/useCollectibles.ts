@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase';
 import { REPUTATION_CARD_CONTRACT_ADDRESS } from '../lib/contracts';
 import ReputationCardABI from '../lib/ReputationCard.abi.json';
 import type { Collectible } from '../types/collectible';
+import { CACHE_TIMES } from '../lib/constants';
 
 async function fetchCollectiblesData(publicClient: any, profileId?: bigint | null) {
   // Fetch collectibles from Supabase
@@ -97,8 +98,8 @@ export function useCollectibles(profileId?: bigint | null) {
     queryKey: ['collectibles', profileId?.toString()],
     queryFn: () => fetchCollectiblesData(publicClient!, profileId),
     enabled: !!publicClient,
-    staleTime: 2 * 60 * 1000, // 2 minutes
-    gcTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: CACHE_TIMES.COLLECTIBLES_STALE,
+    gcTime: CACHE_TIMES.COLLECTIBLES_GC,
     refetchOnWindowFocus: false,
   });
 

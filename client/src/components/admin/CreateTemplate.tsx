@@ -6,6 +6,14 @@ import { useTemplates } from '../../hooks/useTemplates';
 import { supabase } from '../../lib/supabase';
 import { syncTemplateToDatabase } from '../../lib/template-sync';
 import toast from 'react-hot-toast';
+import { logger } from '../../lib/logger';
+import {
+  validateTemplateName,
+  validateTemplateDescription,
+  validateEthereumAddress,
+  validatePositiveNumber,
+  validateInteger,
+} from '../../lib/validation';
 import {
   ArrowLeft,
   Plus,
@@ -66,7 +74,7 @@ export const CreateTemplate: React.FC = () => {
           setFormData((prev) => ({ ...prev, templateId: data.next_template_id.toString() }));
         } else {
           // No counter exists, check existing templates to find the next ID
-          console.log('No template counter found, checking existing templates...');
+          logger.info('No template counter found, checking existing templates...');
           
           const { data: templates, error: templatesError } = await supabase
             .from('templates_cache')
@@ -78,7 +86,7 @@ export const CreateTemplate: React.FC = () => {
           if (!templatesError && templates && templates.length > 0) {
             // Get the highest template ID and add 1
             nextId = parseInt(templates[0].template_id) + 1;
-            console.log(`Found highest template ID: ${templates[0].template_id}, next will be: ${nextId}`);
+            logger.info(`Found highest template ID: ${templates[0].template_id}, next will be: ${nextId}`);
           }
 
           setFormData((prev) => ({ ...prev, templateId: nextId.toString() }));
@@ -86,7 +94,7 @@ export const CreateTemplate: React.FC = () => {
           // Note: Counter needs to be manually initialized in Supabase
           // Run this SQL in Supabase SQL Editor:
           // INSERT INTO template_counter (id, next_template_id) VALUES (1, 1);
-          console.log(`Next template ID will be: ${nextId} (counter needs manual initialization in Supabase)`);
+          logger.info(`Next template ID will be: ${nextId} (counter needs manual initialization in Supabase)`);
         }
       } catch (err) {
         console.error('Error fetching next template ID:', err);
@@ -108,22 +116,28 @@ export const CreateTemplate: React.FC = () => {
       newErrors.templateId = 'Invalid template ID. Please refresh the page.';
     }
 
-    if (!formData.title || formData.title.trim() === '') {
-      newErrors.title = 'Template title is required';
-    } else if (formData.title.trim().length < 3) {
-      newErrors.title = 'Title must be at least 3 characters';
+    // Validate title using validation utility
+    const titleResult = validateTemplateName(formData.title || '');
+    if (!titleResult.isValid) {
+      newErrors.title = titleResult.error!;
     }
 
-    if (!formData.issuer || formData.issuer.trim() === '') {
-      newErrors.issuer = 'Issuer address is required';
-    } else if (!isAddress(formData.issuer)) {
-      newErrors.issuer = 'Invalid Ethereum address';
+    // Validate issuer address using validation utility
+    const issuerResult = validateEthereumAddress(formData.issuer || '');
+    if (!issuerResult.isValid) {
+      newErrors.issuer = issuerResult.error!;
     }
 
+    // Validate max supply
     if (!formData.maxSupply || formData.maxSupply.trim() === '') {
       newErrors.maxSupply = 'Max supply is required';
-    } else if (isNaN(Number(formData.maxSupply)) || Number(formData.maxSupply) <= 0) {
-      newErrors.maxSupply = 'Max supply must be a positive number';
+    } else {
+      const maxSupplyResult = validateInteger(formData.maxSupply, 'Max supply');
+      if (!maxSupplyResult.isValid) {
+        newErrors.maxSupply = maxSupplyResult.error!;
+      } else if (Number(formData.maxSupply) < 0) {
+        newErrors.maxSupply = 'Max supply must be 0 (unlimited) or a positive number';
+      }
     }
 
     const tierNum = Number(formData.tier);
@@ -173,7 +187,7 @@ export const CreateTemplate: React.FC = () => {
       });
 
       // Sync template to database cache with custom title
-      console.log(`Syncing template ${templateId} to database...`);
+      logger.info(`Syncing template ${templateId} to database...`);
       
       try {
         // Insert into database with custom title
@@ -198,7 +212,7 @@ export const CreateTemplate: React.FC = () => {
           console.error(`Failed to sync template ${templateId}:`, error);
           toast.error('Template created but failed to cache in database', { id: 'create' });
         } else {
-          console.log(`Template ${templateId} synced successfully with title: ${formData.title}`);
+          logger.info(`Template ${templateId} synced successfully with title: ${formData.title}`);
         }
       } catch (syncErr) {
         console.error('Error syncing template:', syncErr);
@@ -218,7 +232,7 @@ export const CreateTemplate: React.FC = () => {
           console.warn('Could not update template counter (this is OK if counter doesn\'t exist yet):', updateError);
           // Counter will be initialized on next page load
         } else {
-          console.log(`Template counter updated to: ${nextId}`);
+          logger.info(`Template counter updated to: ${nextId}`);
         }
       } catch (updateErr) {
         console.error('Error updating template counter:', updateErr);

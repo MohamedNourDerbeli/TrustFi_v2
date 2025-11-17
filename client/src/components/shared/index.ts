@@ -6,3 +6,5 @@ export {
   CircularProgress, 
   IndeterminateProgress 
 } from './ProgressBar';
+
+export { ErrorBoundary, ErrorBoundaryWrapper } from './ErrorBoundary';

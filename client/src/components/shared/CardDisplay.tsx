@@ -5,6 +5,7 @@ import { REPUTATION_CARD_CONTRACT_ADDRESS } from '../../lib/contracts';
 import ReputationCardABI from '../../lib/ReputationCard.abi.json';
 import type { Address } from 'viem';
 import type { Card } from '../../types/card';
+import { logger } from '../../lib/logger';
 
 interface CardDisplayProps {
   card: Card;
@@ -22,7 +23,7 @@ export function CardDisplay({ card, compact = false }: CardDisplayProps) {
       try {
         if (!publicClient) return;
 
-        console.log(`[CardDisplay] Fetching metadata for card ${card.cardId.toString()}`);
+        logger.debug(`[CardDisplay] Fetching metadata for card ${card.cardId.toString()}`);
 
         // Fetch tokenURI from contract
         const tokenURI = (await publicClient.readContract({
@@ -32,7 +33,7 @@ export function CardDisplay({ card, compact = false }: CardDisplayProps) {
           args: [card.cardId],
         } as any)) as string;
 
-        console.log(`[CardDisplay] TokenURI for card ${card.cardId.toString()}:`, tokenURI);
+        logger.debug(`[CardDisplay] TokenURI for card ${card.cardId.toString()}:`, tokenURI);
 
         // Fetch metadata from tokenURI
         if (tokenURI.startsWith('data:application/json;base64,')) {
@@ -40,7 +41,7 @@ export function CardDisplay({ card, compact = false }: CardDisplayProps) {
           const base64Data = tokenURI.replace('data:application/json;base64,', '');
           const jsonString = atob(base64Data);
           const metadata = JSON.parse(jsonString);
-          console.log(`[CardDisplay] Parsed base64 metadata:`, metadata);
+          logger.debug(`[CardDisplay] Parsed base64 metadata:`, metadata);
           setMetadata(metadata);
         } else if (tokenURI.startsWith('http')) {
           // HTTP URL - add auth header if it's a Supabase function
@@ -56,7 +57,7 @@ export function CardDisplay({ card, compact = false }: CardDisplayProps) {
             throw new Error(`Failed to fetch metadata: ${response.statusText}`);
           }
           const metadata = await response.json();
-          console.log(`[CardDisplay] Fetched HTTP metadata:`, metadata);
+          logger.debug(`[CardDisplay] Fetched HTTP metadata:`, metadata);
           setMetadata(metadata);
         } else {
           throw new Error('Invalid tokenURI format');
@@ -114,7 +115,7 @@ export function CardDisplay({ card, compact = false }: CardDisplayProps) {
             alt={metadata.name || `Card #${card.cardId.toString()}`}
             className="w-full h-full object-cover"
             onError={(e) => {
-              console.error('[CardDisplay] Image failed to load:', metadata.image);
+              logger.error('[CardDisplay] Image failed to load:', metadata.image);
               const target = e.currentTarget;
               target.style.display = 'none';
               if (target.parentElement) {

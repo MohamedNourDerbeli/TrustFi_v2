@@ -3,6 +3,7 @@ import React, { useEffect, useRef } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
+import { logger } from '../../lib/logger';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -30,7 +31,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
       
       // Only log if state actually changed
       if (lastLoggedStateRef.current !== currentState) {
-        console.log('[ProtectedRoute] Auth check complete:', {
+        logger.debug('[ProtectedRoute] Auth check complete:', {
           pathname: location.pathname,
           isConnected,
           hasProfile,

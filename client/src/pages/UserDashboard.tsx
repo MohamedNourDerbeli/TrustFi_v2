@@ -5,6 +5,7 @@ import { useProfile } from "../hooks/useProfile";
 import { supabase, type ClaimLogRow } from "../lib/supabase";
 import { Search, TrendingUp, Award, Sparkles, Filter, Grid, List, ChevronRight } from "lucide-react";
 import { CardDisplay } from "../components/shared/CardDisplay";
+import { LIMITS } from "../lib/constants";
 
 export const UserDashboard: React.FC = () => {
   const { address, isConnected } = useAuth();
@@ -28,7 +29,7 @@ export const UserDashboard: React.FC = () => {
           .select('*')
           .eq('profile_id', profileId.toString())
           .order('claimed_at', { ascending: false })
-          .limit(10);
+          .limit(LIMITS.MAX_RECENT_ACTIVITY);
 
         if (error) console.error('Error fetching activity:', error);
         else if (data) setRecentActivity(data as ClaimLogRow[]);

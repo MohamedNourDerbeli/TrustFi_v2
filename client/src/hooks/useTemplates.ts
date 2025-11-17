@@ -1,10 +1,12 @@
 // hooks/useTemplates.ts - Modern React Query implementation
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
-import { type Address, parseAbiItem } from 'viem';
+import { type Address } from 'viem';
 import { REPUTATION_CARD_CONTRACT_ADDRESS } from '../lib/contracts';
 import ReputationCardABI from '../lib/ReputationCard.abi.json';
 import type { Template, CreateTemplateParams } from '../types/template';
+import { logger } from '../lib/logger';
+import { CACHE_TIMES, LIMITS } from '../lib/constants';
 
 export interface UseTemplatesReturn {
   templates: Template[];
@@ -20,7 +22,7 @@ async function fetchTemplatesData(publicClient: any, profileId?: bigint | null, 
   // Instead of scanning blocks, we'll try reading templates directly
   // Start from template ID 1 and read until we hit an invalid template (issuer = 0x0)
   const templateIds: bigint[] = [];
-  const MAX_TEMPLATES = 100; // Safety limit to prevent infinite loops
+  const MAX_TEMPLATES = LIMITS.MAX_TEMPLATES; // Safety limit to prevent infinite loops
   
   // Try reading templates sequentially
   for (let i = 1; i <= MAX_TEMPLATES; i++) {
@@ -43,7 +45,7 @@ async function fetchTemplatesData(publicClient: any, profileId?: bigint | null, 
       templateIds.push(BigInt(i));
     } catch (error) {
       // If we get an error, assume we've reached the end
-      console.log(`Stopped at template ${i}`);
+      logger.debug(`Stopped at template ${i}`);
       break;
     }
   }
@@ -123,8 +125,8 @@ export function useTemplates(profileId?: bigint | null, includeAll: boolean = fa
     queryKey: ['templates', profileId?.toString(), includeAll],
     queryFn: () => fetchTemplatesData(publicClient!, profileId, includeAll),
     enabled: !!publicClient,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes
+    staleTime: CACHE_TIMES.TEMPLATES_STALE,
+    gcTime: CACHE_TIMES.TEMPLATES_GC,
     refetchOnWindowFocus: false,
     refetchOnMount: false,
   });
@@ -148,6 +150,7 @@ export function useTemplates(profileId?: bigint | null, includeAll: boolean = fa
         params.endTime,
       ],
       account: address,
+      chain: walletClient.chain,
     });
 
     // Wait for transaction confirmation
@@ -172,6 +175,7 @@ export function useTemplates(profileId?: bigint | null, includeAll: boolean = fa
       functionName: 'setTemplatePaused',
       args: [templateId, isPaused],
       account: address,
+      chain: walletClient.chain,
     });
 
     // Wait for transaction confirmation
@@ -191,6 +195,7 @@ export function useTemplates(profileId?: bigint | null, includeAll: boolean = fa
     }
 
     try {
+      // @ts-ignore - wagmi v2 type issue with readContract
       const hasClaimed = await publicClient.readContract({
         address: REPUTATION_CARD_CONTRACT_ADDRESS as Address,
         abi: ReputationCardABI,

@@ -5,6 +5,13 @@ import { useProfile } from '../../hooks/useProfile';
 import { AvatarUpload } from './AvatarUpload';
 import { BannerUpload } from './BannerUpload';
 import type { ProfileMetadata } from '../../types/profile';
+import {
+  validateDisplayName,
+  validateUsername,
+  validateBio,
+  validateUrl,
+  validateFields,
+} from '../../lib/validation';
 
 export function ProfileEdit() {
   const { address } = useAccount();
@@ -64,22 +71,19 @@ export function ProfileEdit() {
   };
 
   const validateForm = (): string | null => {
-    if (formData.displayName && formData.displayName.length > 50) {
-      return 'Display name must be 50 characters or less';
+    // Validate all fields using validation utilities
+    const result = validateFields([
+      () => validateDisplayName(formData.displayName || ''),
+      () => validateUsername(formData.username || ''),
+      () => validateBio(formData.bio || ''),
+      () => validateUrl(formData.websiteUrl || '', 'Website URL'),
+    ]);
+
+    if (!result.isValid) {
+      return result.error;
     }
 
-    if (formData.bio && formData.bio.length > 500) {
-      return 'Bio must be 500 characters or less';
-    }
-
-    if (formData.websiteUrl) {
-      try {
-        new URL(formData.websiteUrl);
-      } catch {
-        return 'Please enter a valid website URL';
-      }
-    }
-
+    // Additional Twitter handle validation
     if (formData.twitterHandle && formData.twitterHandle.startsWith('@')) {
       return 'Twitter handle should not include the @ symbol';
     }

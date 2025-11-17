@@ -12,6 +12,7 @@ import { supabase } from '../../lib/supabase';
 import { showSuccessNotification, showErrorNotification } from '../../lib/notifications';
 import { uploadToPinata, uploadJSONToPinata, validateImageFile } from '../../lib/pinata';
 import { ArrowLeft, Upload, Zap, Link2, AlertCircle, CheckCircle, Image as ImageIcon } from 'lucide-react';
+import { logger } from '../../lib/logger';
 
 interface TemplateData {
   template_id: string;
@@ -288,8 +289,8 @@ export const IssueCardForm: React.FC = () => {
 
     // Skip blockchain verification for now due to RPC issues
     // The contract will validate the template when the transaction is submitted
-    console.log('⚠️ Skipping blockchain verification due to RPC reliability issues');
-    console.log('Template will be validated by the contract during transaction');
+    logger.info('⚠️ Skipping blockchain verification due to RPC reliability issues');
+    logger.info('Template will be validated by the contract during transaction');
     
     // Note: If the template doesn't exist on-chain, the transaction will fail with "Template missing"
     // This is expected behavior and protects against issuing cards for non-existent templates

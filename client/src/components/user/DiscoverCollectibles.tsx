@@ -9,6 +9,8 @@ import { parseContractError } from '../../lib/errors';
 import type { Collectible } from '../../types/collectible';
 import type { Address, Hex } from 'viem';
 import { Sparkles, Award, Zap, Users, CheckCircle, Lock, AlertCircle, Filter, Grid, List, Search } from 'lucide-react';
+import { logger } from '../../lib/logger';
+import { SPECIAL_TEMPLATES } from '../../lib/constants';
 
 interface CollectibleCardProps {
   collectible: Collectible & { isClaimable?: boolean };
@@ -19,7 +21,7 @@ interface CollectibleCardProps {
 }
 
 function CollectibleCard({ collectible, onClaim, hasProfile, isClaiming, viewMode }: CollectibleCardProps) {
-  const isKusamaLivingProfile = collectible.templateId === 999n;
+  const isKusamaLivingProfile = collectible.templateId === SPECIAL_TEMPLATES.KUSAMA_LIVING_PROFILE;
   
   let eligibilityStatus = '';
   let canClaim = false;
@@ -373,15 +375,15 @@ export function DiscoverCollectibles() {
         throw new Error('Collectible not found');
       }
 
-      const isKusamaLivingProfile = templateId === 999n;
+      const isKusamaLivingProfile = templateId === SPECIAL_TEMPLATES.KUSAMA_LIVING_PROFILE;
       let tokenURI: string;
 
       if (isKusamaLivingProfile) {
         tokenURI = `${collectible.tokenUri}${profileId.toString()}`;
-        console.log('[DiscoverCollectibles] Using dynamic URI for template 999:', tokenURI);
+        logger.debug('[DiscoverCollectibles] Using dynamic URI for template 999:', tokenURI);
       } else {
         tokenURI = collectible.tokenUri;
-        console.log('[DiscoverCollectibles] Using static URI:', tokenURI);
+        logger.debug('[DiscoverCollectibles] Using static URI:', tokenURI);
       }
 
       const { data: signatureData, error: signatureError } = await supabase.functions.invoke('generate-signature', {

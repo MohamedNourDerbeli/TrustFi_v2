@@ -5,6 +5,8 @@ import { type PublicClient, type Address } from 'viem';
 import { REPUTATION_CARD_CONTRACT_ADDRESS } from './contracts';
 import ReputationCardABI from './ReputationCard.abi.json';
 import { supabase } from './supabase';
+import { logger } from './logger';
+import { LIMITS } from './constants';
 
 export interface TemplateSyncResult {
   templateId: bigint;
@@ -66,7 +68,7 @@ export async function syncTemplateToDatabase(
       };
     }
 
-    console.log(`[syncTemplateToDatabase] Successfully synced template ${templateId}`);
+    logger.info(`[syncTemplateToDatabase] Successfully synced template ${templateId}`);
     return {
       templateId,
       success: true,
@@ -94,11 +96,11 @@ export async function syncAllTemplatesToDatabase(
   failed: number;
   results: TemplateSyncResult[];
 }> {
-  console.log('[syncAllTemplatesToDatabase] Starting template sync...');
+  logger.info('[syncAllTemplatesToDatabase] Starting template sync...');
   
   const results: TemplateSyncResult[] = [];
   let consecutiveEmpty = 0;
-  const MAX_CONSECUTIVE_EMPTY = 5; // Stop after 5 consecutive empty templates
+  const MAX_CONSECUTIVE_EMPTY = LIMITS.MAX_CONSECUTIVE_EMPTY; // Stop after consecutive empty templates
 
   for (let i = 1; i <= maxTemplateId; i++) {
     const result = await syncTemplateToDatabase(publicClient, BigInt(i));
@@ -107,7 +109,7 @@ export async function syncAllTemplatesToDatabase(
     if (!result.success && result.error?.includes('does not exist')) {
       consecutiveEmpty++;
       if (consecutiveEmpty >= MAX_CONSECUTIVE_EMPTY) {
-        console.log(`[syncAllTemplatesToDatabase] Stopping after ${MAX_CONSECUTIVE_EMPTY} consecutive empty templates`);
+        logger.info(`[syncAllTemplatesToDatabase] Stopping after ${MAX_CONSECUTIVE_EMPTY} consecutive empty templates`);
         break;
       }
     } else {
@@ -118,7 +120,7 @@ export async function syncAllTemplatesToDatabase(
   const synced = results.filter(r => r.success).length;
   const failed = results.filter(r => !r.success && !r.error?.includes('does not exist')).length;
 
-  console.log(`[syncAllTemplatesToDatabase] Sync complete: ${synced} synced, ${failed} failed, ${results.length} total`);
+  logger.info(`[syncAllTemplatesToDatabase] Sync complete: ${synced} synced, ${failed} failed, ${results.length} total`);
 
   return {
     total: results.length,
@@ -159,7 +161,7 @@ export async function updateTemplateSupply(
       return false;
     }
 
-    console.log(`[updateTemplateSupply] Updated template ${templateId} supply to ${currentSupply}`);
+    logger.info(`[updateTemplateSupply] Updated template ${templateId} supply to ${currentSupply}`);
     return true;
   } catch (error) {
     console.error(`[updateTemplateSupply] Exception updating template ${templateId}:`, error);

@@ -7,6 +7,7 @@ import { PROFILE_NFT_CONTRACT_ADDRESS, REPUTATION_CARD_CONTRACT_ADDRESS } from '
 import ProfileNFTAbi from '../lib/ProfileNFT.abi.json';
 import ReputationCardAbi from '../lib/ReputationCard.abi.json';
 import { useDataCache } from './DataCacheContext';
+import { CACHE_TIMES } from '../lib/constants';
 
 // Role hashes
 const DEFAULT_ADMIN_ROLE = '0x0000000000000000000000000000000000000000000000000000000000000000';
@@ -88,7 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const cacheKey = `hasProfile_${lowerAddress}`;
 
     // Check cache first
-    if (isCacheValid(cacheKey, 60 * 1000)) { // 1 minute cache
+    if (isCacheValid(cacheKey, CACHE_TIMES.AUTH_CACHE_TTL)) {
       const cachedValue = getCache<boolean>(cacheKey);
       if (cachedValue !== null) {
         setHasProfile(cachedValue);
@@ -118,7 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // If profileId is 0, user doesn't have a profile
       if (profileIdResult === 0n) {
         setHasProfile(false);
-        setCache(cacheKey, false, 60 * 1000);
+        setCache(cacheKey, false, CACHE_TIMES.AUTH_CACHE_TTL);
         return;
       }
 
@@ -133,16 +134,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.error('[AuthContext] Error checking profile:', error);
         // If there's an error but we have on-chain profile, still consider it valid
         setHasProfile(true);
-        setCache(cacheKey, true, 60 * 1000);
+        setCache(cacheKey, true, CACHE_TIMES.AUTH_CACHE_TTL);
       } else {
         const profileExists = !!data || profileIdResult > 0n;
         setHasProfile(profileExists);
-        setCache(cacheKey, profileExists, 60 * 1000);
+        setCache(cacheKey, profileExists, CACHE_TIMES.AUTH_CACHE_TTL);
       }
     } catch (err) {
       console.error('[AuthContext] Exception checking profile:', err);
       setHasProfile(false);
-      setCache(cacheKey, false, 60 * 1000);
+      setCache(cacheKey, false, CACHE_TIMES.AUTH_CACHE_TTL);
     } finally {
       setIsCheckingProfile(false);
       checkInProgressRef.current = false;

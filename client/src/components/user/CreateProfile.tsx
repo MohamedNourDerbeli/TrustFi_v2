@@ -18,6 +18,7 @@ import {
   createInitialState,
   type CreateProfileState
 } from '../../lib/createProfileFlow'
+import { validateDisplayName, validateUsername } from '../../lib/validation'
 
 interface ProfileFormData {
   displayName: string
@@ -135,17 +136,38 @@ export function CreateProfile () {
   }, [formData.username, checkUsernameAvailability])
 
   const validateForm = (): string | null => {
-    if (!formData.displayName.trim()) return 'Display name is required'
-    if (formData.displayName.length > 50)
-      return 'Display name must be 50 characters or less'
-    if (!formData.username.trim()) return 'Username is required'
-    if (formData.username.length < 3 || formData.username.length > 20)
-      return 'Username must be 3-20 characters'
-    if (!/^[a-z0-9_]+$/.test(formData.username))
-      return 'Username can only contain lowercase letters, numbers, and underscores'
-    if (usernameAvailable === false) return 'Username is already taken'
-    if (isCheckingUsername) return 'Checking username availability...'
-    return null
+    // Validate display name
+    const displayNameResult = validateDisplayName(formData.displayName);
+    if (!displayNameResult.isValid) {
+      return displayNameResult.error;
+    }
+
+    // Validate username
+    const usernameResult = validateUsername(formData.username);
+    if (!usernameResult.isValid) {
+      return usernameResult.error;
+    }
+
+    // Additional username checks
+    if (!formData.username.trim()) {
+      return 'Username is required';
+    }
+
+    // Username must be lowercase
+    if (formData.username !== formData.username.toLowerCase()) {
+      return 'Username must be lowercase';
+    }
+
+    // Check username availability
+    if (usernameAvailable === false) {
+      return 'Username is already taken';
+    }
+
+    if (isCheckingUsername) {
+      return 'Checking username availability...';
+    }
+
+    return null;
   }
 
   const handleSubmit = async (e: React.FormEvent) => {

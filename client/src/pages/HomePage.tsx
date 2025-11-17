@@ -4,6 +4,8 @@ import toast from "react-hot-toast";
 import { useAuth } from "../hooks/useAuth";
 import { supabase } from "../lib/supabase";
 import { LoadingSpinner } from "../components/shared/LoadingSpinner";
+import { logger } from "../lib/logger";
+import { LIMITS } from "../lib/constants";
 
 interface RecentActivity {
   id: string;
@@ -28,7 +30,7 @@ export const HomePage: React.FC = () => {
       
       // Only log when loading is complete to reduce noise
       if (lastLoggedStateRef.current !== currentState && !isLoading) {
-        console.log('[HomePage] Auth ready:', { isConnected, hasProfile });
+        logger.debug('[HomePage] Auth ready:', { isConnected, hasProfile });
         lastLoggedStateRef.current = currentState;
       }
     }
@@ -52,7 +54,7 @@ export const HomePage: React.FC = () => {
           .from('claims_log')
           .select('*')
           .order('claimed_at', { ascending: false })
-          .limit(5);
+          .limit(LIMITS.MAX_PLATFORM_ACTIVITY);
 
         if (error) {
           console.error('Error fetching recent activity:', error);
@@ -67,6 +69,8 @@ export const HomePage: React.FC = () => {
     };
 
     fetchRecentActivity();
+    // supabase is a stable singleton, no need to add to dependencies
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (

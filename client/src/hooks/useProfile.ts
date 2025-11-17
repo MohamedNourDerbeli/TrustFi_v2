@@ -8,6 +8,8 @@ import ReputationCardABI from '../lib/ReputationCard.abi.json';
 import { supabase, type ProfileRow } from '../lib/supabase';
 import type { Profile } from '../types/profile';
 import type { Card } from '../types/card';
+import { logger } from '../lib/logger';
+import { CACHE_TIMES } from '../lib/constants';
 
 export interface UseProfileReturn {
   profile: Profile | null;
@@ -53,7 +55,7 @@ async function fetchProfileData(address: Address, publicClient: any) {
       args: [profileIdResult],
     }) as [bigint[], bigint[], number[], Address[]];
 
-    console.log('[useProfile] Cards from contract:', { cardIds, templateIds, tiers, issuers });
+    logger.debug('[useProfile] Cards from contract:', { cardIds, templateIds, tiers, issuers });
 
     for (let i = 0; i < cardIds.length; i++) {
       cards.push({
@@ -70,7 +72,7 @@ async function fetchProfileData(address: Address, publicClient: any) {
     console.error('[useProfile] Error fetching cards:', error);
   }
   
-  console.log('[useProfile] Final cards array:', cards);
+  logger.debug('[useProfile] Final cards array:', cards);
 
   // Fetch profile metadata from Supabase
   const { data: profileData } = await supabase
@@ -119,8 +121,8 @@ export function useProfile(walletAddress?: Address): UseProfileReturn {
     queryKey: ['profile', address?.toLowerCase()],
     queryFn: () => fetchProfileData(address!, publicClient!),
     enabled: !!address && !!publicClient,
-    staleTime: 2 * 60 * 1000, // 2 minutes
-    gcTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: CACHE_TIMES.PROFILE_STALE,
+    gcTime: CACHE_TIMES.PROFILE_GC,
     refetchOnWindowFocus: false,
     refetchOnMount: false,
   });

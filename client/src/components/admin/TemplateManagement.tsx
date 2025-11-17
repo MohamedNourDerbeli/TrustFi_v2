@@ -6,6 +6,7 @@ import { REPUTATION_CARD_CONTRACT_ADDRESS } from '../../lib/contracts';
 import ReputationCardAbi from '../../lib/ReputationCard.abi.json';
 import { supabase } from '../../lib/supabase';
 import toast from 'react-hot-toast';
+import { logger } from '../../lib/logger';
 import {
   FileText,
   ArrowLeft,
@@ -21,6 +22,12 @@ import {
   Grid,
   List,
 } from 'lucide-react';
+import { on } from 'events';
+import { on } from 'events';
+import { on } from 'events';
+import { type } from 'os';
+import { type } from 'os';
+import { type } from 'os';
 
 interface Template {
   template_id: string;
@@ -92,7 +99,7 @@ export const TemplateManagement: React.FC = () => {
           toast.error('Failed to load templates');
         } else {
           setTemplates(data || []);
-          console.log('Loaded templates:', data);
+          logger.debug('Loaded templates:', data);
         }
       } catch (err) {
         console.error('Error fetching templates:', err);
