@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useWalletClient, useAccount } from 'wagmi';
+import { useWalletClient, useAccount, usePublicClient } from 'wagmi';
 import { type Address } from 'viem';
 import { REPUTATION_CARD_CONTRACT_ADDRESS } from '../../lib/contracts';
 import ReputationCardAbi from '../../lib/ReputationCard.abi.json';
@@ -37,6 +37,7 @@ interface Template {
 
 export const TemplateManagement: React.FC = () => {
   const { data: walletClient } = useWalletClient();
+  const publicClient = usePublicClient();
   const { address } = useAccount();
   const { templates: blockchainTemplates, loading: templatesLoading, refreshTemplates } = useTemplates(null, true); // includeAll = true
 
@@ -118,7 +119,8 @@ export const TemplateManagement: React.FC = () => {
         chain: walletClient.chain,
       } as any);
 
-      await walletClient.waitForTransactionReceipt({ hash });
+      // Use public client to wait for confirmation (walletClient has no waitForTransactionReceipt)
+      await publicClient!.waitForTransactionReceipt({ hash });
 
       // Refresh templates from blockchain
       await refreshTemplates();
