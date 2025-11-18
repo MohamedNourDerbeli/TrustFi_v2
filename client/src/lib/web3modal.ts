@@ -1,34 +1,37 @@
 // lib/web3modal.ts
 // Lazy initialization helper for Web3Modal to keep initial bundles smaller.
 
+// --- START: Global Fetch Interceptor for WalletConnect Analytics ---
+// This code runs immediately upon module import to ensure the interceptor is
+// active before any WalletConnect code can make a network request.
+if (typeof window !== 'undefined' && typeof window.fetch === 'function') {
+  const originalFetch = window.fetch.bind(window);
+  window.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    try {
+      const url = typeof input === 'string' ? input : (input as Request).url;
+      // Check for the WalletConnect analytics endpoint
+      if (typeof url === 'string' && url.startsWith('https://pulse.walletconnect.org/' )) {
+        // Immediately return a successful, empty response (204 No Content)
+        // This prevents the browser from even attempting the CORS-failing request.
+        return new Response(null, { status: 204, statusText: 'No Content' });
+      }
+    } catch (e) {
+      // Log error but proceed with original fetch
+      console.error('WalletConnect fetch interceptor error:', e);
+    }
+    // Use 'as any' to satisfy the type-casting needed for the original fetch call
+    return originalFetch(input as any, init);
+  }) as typeof window.fetch;
+  console.info('[Web3Modal] Global fetch interceptor for WalletConnect analytics is active.');
+}
+// --- END: Global Fetch Interceptor ---
+
 let initializing: Promise<void> | null = null;
 let initialized = false;
 
 export async function ensureWeb3Modal(): Promise<void> {
   if (initialized) return;
   if (initializing) return initializing;
-
-  // --- START: Moved Fetch Interceptor for Early Execution ---
-  // As a hard fallback, silence analytics network calls that can fail CORS
-  if (typeof window !== 'undefined' && typeof window.fetch === 'function') {
-    const originalFetch = window.fetch.bind(window);
-    window.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-      try {
-        const url = typeof input === 'string' ? input : (input as Request).url;
-        // Check for the WalletConnect analytics endpoint
-        if (typeof url === 'string' && url.startsWith('https://pulse.walletconnect.org/' )) {
-          // Immediately return a successful, empty response (204 No Content)
-          return new Response(null, { status: 204, statusText: 'No Content' });
-        }
-      } catch (e) {
-        // Log error but proceed with original fetch
-        console.error('Fetch interceptor error:', e);
-      }
-      // Use 'as any' to satisfy the type-casting needed for the original fetch call
-      return originalFetch(input as any, init);
-    }) as typeof window.fetch;
-  }
-  // --- END: Moved Fetch Interceptor ---
 
   initializing = (async () => {
     const { createWeb3Modal } = await import('@web3modal/wagmi/react');
