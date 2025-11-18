@@ -1,183 +1,191 @@
-# 🚀 TrustFi Reputation Platform
+# TrustFi Reputation Platform
 
-A decentralized reputation system built on Ethereum that allows users to create profiles and earn verifiable reputation cards from authorized issuers.
+A web3 reputation and collectibles platform. Users mint a Profile NFT, collect Reputation Cards, and verify credentials. Issuers manage templates and issue cards. Admins supervise and configure the system.
 
-## ✨ Features
+This repository contains:
+- client: React + TypeScript + Vite app (wagmi/viem, Tailwind, motion)
+- contracts: Hardhat workspace with ProfileNFT and ReputationCard contracts
+- supabase: SQL schema and Edge Function references for off-chain features (claim links, activity log, dynamic metadata)
 
-### 🎯 **Core Functionality**
-- **User Profiles**: Create and manage decentralized identity profiles
-- **Reputation Cards**: Earn verifiable credentials from authorized issuers
-- **Admin Panel**: Comprehensive issuer management and system oversight
-- **Multi-Wallet Support**: MetaMask and Talisman wallet integration
+Key integrations:
+- Supabase (database + functions)
+- KILT credentials for verification display in dashboard
+- Moonbase Alpha / Paseo EVM (configurable), with local dev support
 
-### 🛡️ **Admin Features**
-- **Issuer Management**: Add/remove authorized credential issuers
-- **System Statistics**: Monitor platform activity and usage
-- **Access Control**: Secure admin authentication via contract ownership
-- **Real-time Updates**: Live transaction feedback and status updates
+## Features
 
-## 🏗️ **Architecture**
+- Profiles: Profile NFT with score and on-chain linkage to Reputation Cards
+- Reputation Cards: tiered collectibles with template limits and points
+- Issuer Portal: create/manage templates and issue cards (signature/direct claim)
+- Admin Portal: manage issuers, review templates, and system stats
+- Dashboard: search, filters, list/grid views, activity timeline, progress/achievements
+- Credential Verification: KILT credentials mapped to card_id and surfaced in UI
+- Hackathon Role Sandbox: optional local override buttons to test Admin/Issuer flows
 
-### **Smart Contracts**
-- **ProfileNFT**: Manages user profiles as NFTs
-- **ReputationCard**: Handles credential issuance and verification
+## Architecture
 
-### **Frontend**
-- **React + TypeScript**: Modern, type-safe frontend
-- **TailwindCSS**: Clean, responsive design
-- **Ethers.js**: Ethereum blockchain interaction
+- Contracts
+   - ProfileNFT: profile minting, linking cards, score tracking, access control
+   - ReputationCard: templates, issuance, point tiers, pausing, access control
+- Frontend
+   - React + TypeScript + Vite, Tailwind, motion/react, lucide-react
+   - wagmi + viem for wallet and contract I/O
+   - Supabase client for data/cache, Edge Function calls
+- Data
+   - Supabase tables: profiles, templates_cache, claim_links, claims_log, collectibles, issuers, etc. (SQL in client/)
+   - Optional Edge Functions (e.g., generate-signature) invoked from the app
 
-## 🚀 **Quick Start**
+## Getting Started
 
-### **Prerequisites**
-```bash
-Node.js >= 18
-npm or yarn
-MetaMask browser extension
+Prerequisites
+- Node.js 18+
+- Git
+- A Supabase project (URL + anon key)
+- Wallet extension (MetaMask, Talisman)
+
+Clone and install
 ```
-
-### **1. Clone & Install**
-```bash
-git clone <repository-url>
+git clone https://github.com/MohamedNourDerbeli/TrustFi_v2.git
 cd TrustFi_v2
+
+# Frontend deps
+cd client
 npm install
-cd client && npm install
+
+# Contracts deps
+cd ../contracts
+npm install
 ```
 
-### **2. Start Local Blockchain**
-```bash
-# Terminal 1: Start Hardhat node
-npx hardhat node
+### Environment configuration
+
+client/.env (example)
+```
+VITE_SUPABASE_URL=https://YOUR-PROJECT.supabase.co
+VITE_SUPABASE_ANON_KEY=YOUR_ANON_KEY
+
+# Dynamic metadata base url (used for template 999 demo)
+VITE_DYNAMIC_METADATA_URI=https://YOUR-PROJECT.supabase.co/functions/v1/dynamic-metadata?wallet=
+
+# Contract addresses (after you deploy contracts)
+VITE_PROFILE_NFT_ADDRESS=0x...
+VITE_REPUTATION_CARD_ADDRESS=0x...
+
+# Optional: show role override buttons in Dashboard for judging
+VITE_ENABLE_HACKATHON_ROLE_BUTTONS=true
 ```
 
-### **3. Deploy Contracts**
-```bash
-# Terminal 2: Deploy contracts
-npx hardhat run scripts/fresh-deploy.js --network localhost
+contracts/.env
+```
+PRIVATE_KEY=0xYOUR_PRIVATE_KEY
+MOONBASE_RPC_URL=https://rpc.api.moonbase.moonbeam.network
+# Optional additional networks are in hardhat.config.ts
 ```
 
-### **4. Start Frontend**
-```bash
-# Terminal 3: Start React app
+### Supabase setup
+
+Run the SQL files in `client/` to create the tables and views used by the app:
+- `client/supabase-schema.sql`
+- `client/supabase-issuers-table.sql`
+- `client/supabase-collectibles-table.sql`
+- `client/supabase-template-counter.sql`
+- `client/supabase-claim-links-table.sql`
+
+If you use the signature flow, deploy the Edge Function referenced by the app (e.g., `generate-signature`). Ensure RLS policies allow your usage.
+
+### Smart contracts
+
+Compile
+```
+cd contracts
+npx hardhat compile
+```
+
+Deploy (example: Moonbase Alpha)
+```
+cd contracts
+npx hardhat run scripts/deploy.ts --network moonbaseAlpha
+```
+
+After deploying, update `client/.env` with the new addresses. Then sync ABIs to the frontend:
+```
+pwsh ./scripts/sync-abis.ps1
+```
+
+### Frontend (dev)
+
+```
 cd client
 npm run dev
 ```
 
-### **5. Setup MetaMask**
-1. **Add Hardhat Network:**
-   - Network Name: `Hardhat Local`
-   - RPC URL: `http://127.0.0.1:8545`
-   - Chain ID: `31337`
-   - Currency: `ETH`
+Navigate to:
+- `/dashboard` User Dashboard
+- `/discover` Discover collectibles
+- `/admin` Admin Portal (requires admin)
+- `/issuer` Issuer Portal (requires issuer)
 
-2. **Import Admin Account:**
-   - Private Key: `0x6527d94cfbcd7d52564ee5c59cfcfd5582d43b090721780c7d8d39c2d2b91be3`
-   - Address: `0x91eD606b65D33e3446d9450AD15115f6a1e0E7f5`
+To quickly evaluate restricted areas during judging, enable `VITE_ENABLE_HACKATHON_ROLE_BUTTONS=true` and use the buttons on the dashboard to locally assume roles. This does not grant on-chain permissions.
 
-## 🎮 **Usage**
+### Build & preview
 
-### **For Users**
-1. Connect your wallet
-2. Create a profile
-3. Earn reputation cards from authorized issuers
-4. View and manage your credentials
+```
+cd client
+npm run build
+npm run preview
+```
 
-### **For Admins**
-1. Connect with admin account
-2. Navigate to Admin panel
-3. Manage authorized issuers
-4. Monitor system statistics
-
-## 📁 **Clean Project Structure**
+## Project Structure (high level)
 
 ```
 TrustFi_v2/
-├── 📄 README.md                    # Main project documentation
-├── 📄 FINAL_SETUP_SUMMARY.md       # Detailed setup guide
-├── 🔧 scripts/fresh-deploy.js      # Production deployment
-├── 📁 contracts/                   # Smart contracts
-│   ├── ProfileNFT.sol
-│   └── ReputationCard.sol
-├── 📁 client/                      # React frontend
-│   ├── src/
-│   │   ├── components/            # React components
-│   │   ├── services/              # Blockchain services
-│   │   ├── hooks/                 # Custom React hooks
-│   │   └── config/                # Configuration files
-│   └── package.json
-├── 📁 ignition/                    # Hardhat Ignition modules
-├── 📁 typechain-types/             # Generated TypeScript types
-├── 📁 artifacts/contracts/         # Contract ABIs
-└── ⚙️  Configuration files          # hardhat.config.ts, package.json, etc.
+├─ client/
+│  ├─ src/
+│  │  ├─ components/ (admin, issuer, user, shared, auth)
+│  │  ├─ pages/ (Dashboard, Discover, Profile, etc.)
+│  │  ├─ lib/ (contracts.ts, supabase.ts, template-sync.ts, *.abi.json)
+│  │  ├─ routes/ (AppRoutes)
+│  │  ├─ contexts/ (AuthContext, DataCacheContext)
+│  │  └─ hooks/ (auth, templates, collectibles, etc.)
+│  └─ vite.config.ts
+├─ contracts/
+│  ├─ contracts/ (ProfileNFT.sol, ReputationCard.sol)
+│  ├─ scripts/ (deploy.ts, deploy-templates.ts, etc.)
+│  └─ hardhat.config.ts
+└─ scripts/
+    └─ sync-abis.ps1 (copy ABIs into client/src/lib)
 ```
 
-## 🛠️ **Development**
+## Roles & Access
 
-### **Available Scripts**
+- DEFAULT_ADMIN_ROLE: full admin on contracts
+- TEMPLATE_MANAGER_ROLE: issuer privileges on ReputationCard
+- Frontend `ProtectedRoute` enforces `requireAdmin` and `requireIssuer`
+- Optional hackathon override sets `isAdmin`/`isIssuer` locally via `localStorage`
 
-```bash
-# Smart Contract Development
-npx hardhat compile              # Compile contracts
-npx hardhat test                 # Run tests
-npx hardhat node                 # Start local node
+## Troubleshooting
 
-# Deployment
-npx hardhat run scripts/fresh-deploy.js --network localhost
+404 on `/dashboard`
+- Ensure the route exists (it is defined in `client/src/routes/index.tsx`) and wallet is connected; some sections are behind `ProtectedRoute`.
 
-# Frontend Development
-cd client
-npm run dev                      # Start dev server
-npm run build                    # Build for production
-npm run preview                  # Preview production build
+Vite EPERM rename on Windows
 ```
-
-### **Contract Addresses (Local)**
-- **ProfileNFT**: `0xedaaAa2393De28d15cacCBa6933B1b24215a8699`
-- **ReputationCard**: `0x61cd4010d3bA7456755651D130e013F3EEf6bFdf`
-
-## 🔧 **Troubleshooting**
-
-### **Common Issues**
-
-**"Access Denied" in Admin Panel:**
-- Ensure you're using the correct admin account
-- Verify MetaMask is on Hardhat Local network (Chain ID: 31337)
-- Redeploy contracts if needed
-
-**Contract Not Found:**
-```bash
-# Restart Hardhat node and redeploy
-npx hardhat node
-npx hardhat run scripts/fresh-deploy.js --network localhost
+# From client folder
+Remove-Item "node_modules/.vite" -Recurse -Force
+npm run dev
 ```
+The project also sets a stable `cacheDir` and forces prebundling in `vite.config.ts` to reduce lock issues.
 
-**MetaMask Issues:**
-- Reset account in MetaMask settings
-- Clear browser cache
-- Ensure correct network selection
+Images/metadata not loading for a card
+- Frontend falls back to a visual placeholder; check `VITE_DYNAMIC_METADATA_URI` or the tokenURI on chain.
 
-## 🤝 **Contributing**
+Credentials not shown as verified
+- A KILT credential is mapped to a `card_id`. The app shows verified status when it finds a matching, non-revoked credential for that card.
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+## License
 
-## 📄 **License**
+MIT
 
-MIT License - see LICENSE file for details
+## Acknowledgements
 
-## 🎯 **Roadmap**
-
-- [ ] Multi-chain deployment
-- [ ] Enhanced reputation scoring
-- [ ] Mobile app development
-- [ ] Integration with external identity providers
-- [ ] Advanced analytics dashboard
-
----
-
-**✨ Project is now clean, organized, and production-ready!**
-
-**Built with ❤️ using React, TypeScript, Hardhat, and Ethereum**
+Built with React, TypeScript, Vite, wagmi/viem, Tailwind, Hardhat, and Supabase. Thanks to the Moonbeam/Moonbase and KILT communities.
