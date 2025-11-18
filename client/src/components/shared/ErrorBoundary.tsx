@@ -29,9 +29,14 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    if (process.env.NODE_ENV === 'development') {
+    // Always log to console so production users can share details
+    try {
+      // eslint-disable-next-line no-console
       console.error('[ErrorBoundary] Caught error:', error);
+      // eslint-disable-next-line no-console
       console.error('[ErrorBoundary] Error info:', errorInfo);
+    } catch {
+      /* ignore */
     }
 
     if (this.props.onError) {
@@ -72,7 +77,8 @@ export class ErrorBoundary extends Component<Props, State> {
             React.createElement('p', { className: 'text-gray-600 mb-6' },
               'We encountered an unexpected error. Don\'t worry, your data is safe.'
             ),
-            process.env.NODE_ENV === 'development' && React.createElement('div', { className: 'mb-6 p-4 bg-red-50 rounded-lg border border-red-200 text-left' },
+            // In development always show details; in production only when explicitly enabled
+            ((process.env.NODE_ENV === 'development') || (import.meta as any).env?.VITE_SHOW_ERRORS === 'true') && React.createElement('div', { className: 'mb-6 p-4 bg-red-50 rounded-lg border border-red-200 text-left' },
               React.createElement('p', { className: 'text-xs font-mono text-red-800 break-all' },
                 errorMessage
               )
