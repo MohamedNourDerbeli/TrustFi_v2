@@ -1,8 +1,7 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-import path from 'path'
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import path from 'path';
 
-// https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
   resolve: {
@@ -12,31 +11,39 @@ export default defineConfig({
     },
   },
   build: {
-    // Enable minification
     minify: 'terser',
     terserOptions: {
       compress: {
-        drop_console: true, // Remove console.logs in production
+        drop_console: true,
         drop_debugger: true,
       },
     },
-    // Optimize chunk splitting
     rollupOptions: {
       output: {
         manualChunks: {
-          // Split vendor chunks
-          'react-vendor': ['react', 'react-dom'],
-          'ethers-vendor': ['ethers'],
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          'wagmi-vendor': ['wagmi', 'viem'],
+          'query-vendor': ['@tanstack/react-query'],
+          admin: [
+            './src/components/admin/AdminDashboard.tsx',
+            './src/components/admin/CreateTemplate.tsx',
+            './src/components/admin/IssuerManagement.tsx',
+            './src/components/admin/TemplateManagement.tsx',
+          ],
+          issuer: [
+            './src/components/issuer/IssuerDashboard.tsx',
+            './src/components/issuer/TemplateList.tsx',
+            './src/components/issuer/IssueCardForm.tsx',
+            './src/components/issuer/ClaimLinkGenerator.tsx',
+          ],
         },
       },
     },
-    // Increase chunk size warning limit
     chunkSizeWarningLimit: 1000,
-    // Enable source maps for debugging (optional)
     sourcemap: false,
   },
-  // Optimize dependencies
   optimizeDeps: {
-    include: ['react', 'react-dom', 'ethers'],
+    include: ['react', 'react-dom', 'react-router-dom', 'wagmi', 'viem', '@tanstack/react-query'],
+    force: true,
   },
-})
+});
