@@ -6,6 +6,8 @@ import { visualizer } from 'rollup-plugin-visualizer';
 export default defineConfig({
   // Use a custom cache directory to avoid Windows lock issues on node_modules/.vite
   cacheDir: 'node_modules/.vite-cache',
+  // Explicit base ensures correct asset URLs on Vercel/static hosting
+  base: '/',
   plugins: [
     react(),
     tailwindcss(),
