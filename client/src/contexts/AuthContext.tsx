@@ -247,7 +247,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     checkIssuerDid();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [address, isConnected, isTemplateManager, isAdminOnProfile, isAdminOnReputation, isIssuerFromDb]);
+  }, [address, isConnected, isTemplateManager, isAdminOnProfile, isAdminOnReputation]);
 
   const connect = () => {
     const connector = connectors[0];
