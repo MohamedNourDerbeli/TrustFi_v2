@@ -25,6 +25,20 @@ export async function ensureWeb3Modal(): Promise<void> {
       console.info(`[Web3Modal] init on origin=${origin} projectId=*${pidSuffix}`);
     } catch {}
 
+    // As a hard fallback, silence analytics network calls that can fail CORS
+    if (typeof window !== 'undefined' && typeof window.fetch === 'function') {
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+        try {
+          const url = typeof input === 'string' ? input : (input as Request).url;
+          if (typeof url === 'string' && url.startsWith('https://pulse.walletconnect.org/')) {
+            return new Response(null, { status: 204, statusText: 'No Content' });
+          }
+        } catch {}
+        return originalFetch(input as any, init);
+      }) as typeof window.fetch;
+    }
+
     createWeb3Modal({
       wagmiConfig: config,
       projectId: projectId || 'missing_project_id',
