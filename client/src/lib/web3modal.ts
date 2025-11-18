@@ -8,6 +8,28 @@ export async function ensureWeb3Modal(): Promise<void> {
   if (initialized) return;
   if (initializing) return initializing;
 
+  // --- START: Moved Fetch Interceptor for Early Execution ---
+  // As a hard fallback, silence analytics network calls that can fail CORS
+  if (typeof window !== 'undefined' && typeof window.fetch === 'function') {
+    const originalFetch = window.fetch.bind(window);
+    window.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      try {
+        const url = typeof input === 'string' ? input : (input as Request).url;
+        // Check for the WalletConnect analytics endpoint
+        if (typeof url === 'string' && url.startsWith('https://pulse.walletconnect.org/' )) {
+          // Immediately return a successful, empty response (204 No Content)
+          return new Response(null, { status: 204, statusText: 'No Content' });
+        }
+      } catch (e) {
+        // Log error but proceed with original fetch
+        console.error('Fetch interceptor error:', e);
+      }
+      // Use 'as any' to satisfy the type-casting needed for the original fetch call
+      return originalFetch(input as any, init);
+    }) as typeof window.fetch;
+  }
+  // --- END: Moved Fetch Interceptor ---
+
   initializing = (async () => {
     const { createWeb3Modal } = await import('@web3modal/wagmi/react');
     const { config, chains } = await import('./wagmi');
@@ -24,20 +46,6 @@ export async function ensureWeb3Modal(): Promise<void> {
       const pidSuffix = projectId ? String(projectId).slice(-6) : 'none';
       console.info(`[Web3Modal] init on origin=${origin} projectId=*${pidSuffix}`);
     } catch {}
-
-    // As a hard fallback, silence analytics network calls that can fail CORS
-    if (typeof window !== 'undefined' && typeof window.fetch === 'function') {
-      const originalFetch = window.fetch.bind(window);
-      window.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-        try {
-          const url = typeof input === 'string' ? input : (input as Request).url;
-          if (typeof url === 'string' && url.startsWith('https://pulse.walletconnect.org/')) {
-            return new Response(null, { status: 204, statusText: 'No Content' });
-          }
-        } catch {}
-        return originalFetch(input as any, init);
-      }) as typeof window.fetch;
-    }
 
     createWeb3Modal(({
       wagmiConfig: config,
@@ -64,7 +72,7 @@ export async function ensureWeb3Modal(): Promise<void> {
       walletImages: {
         talisman: 'https://raw.githubusercontent.com/TalismanSociety/brand-kit/main/assets/icon/mark-gradient.svg'
       }
-    }) as any);
+    } ) as any);
 
     initialized = true;
   })().catch((e) => {
