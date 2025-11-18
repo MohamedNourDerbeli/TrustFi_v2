@@ -1,6 +1,7 @@
 // components/auth/ConnectWalletButton.tsx
 import React from 'react';
 import { useWeb3Modal } from '@web3modal/wagmi/react';
+import { ensureWeb3Modal } from '../../lib/web3modal';
 import { useAccount, useDisconnect } from 'wagmi';
 
 const truncate = (addr: string) => `${addr.slice(0,6)}...${addr.slice(-4)}`;
@@ -28,7 +29,10 @@ export const ConnectWalletButton: React.FC = () => {
 
   return (
     <button
-      onClick={() => open()}
+      onClick={async () => {
+        await ensureWeb3Modal();
+        open();
+      }}
       className="px-6 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold shadow-sm transition-colors"
     >
       Connect Wallet

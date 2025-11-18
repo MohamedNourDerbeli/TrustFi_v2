@@ -2,7 +2,7 @@
 // Simplified wagmi configuration using Web3Modal's helper to avoid deep connector imports.
 import { createConfig, http } from 'wagmi';
 import { moonbaseAlpha } from 'wagmi/chains';
-import { injected, walletConnect, coinbaseWallet } from '@wagmi/connectors';
+import { injected, walletConnect } from '@wagmi/connectors';
 
 const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || '';
 const envRpc = (() => {
@@ -45,7 +45,6 @@ const talismanTarget = () => {
 const connectors = [
   injected({ shimDisconnect: true }),
   injected({ shimDisconnect: true, target: talismanTarget }),
-  coinbaseWallet({ appName: 'TrustFi' }),
   projectId ? walletConnect({ projectId }) : null,
 ].filter(Boolean);
 

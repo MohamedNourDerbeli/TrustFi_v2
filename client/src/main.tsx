@@ -9,15 +9,14 @@ import { config } from './lib/wagmi';
 import { queryClient } from './lib/queryClient';
 import { AuthProvider } from './contexts/AuthContext';
 import { DataCacheProvider } from './contexts/DataCacheContext';
-// Initialize Web3Modal (side-effect import)
-import './lib/web3modal';
+// Web3Modal is lazily initialized on first use; no side-effect import here
 
 // Enforce dark theme before rendering to avoid FOUC
 if (typeof document !== 'undefined') {
   const el = document.documentElement;
   el.dataset.theme = 'dark';
   el.classList.add('dark');
-  try { localStorage.setItem('tf-theme', 'dark'); } catch {}
+  try { localStorage.setItem('tf-theme', 'dark'); } catch { /* ignore */ }
 }
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
@@ -27,7 +26,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         <DataCacheProvider>
           <AuthProvider>
             <App />
-            <ReactQueryDevtools initialIsOpen={false} />
+            {import.meta.env.DEV ? <ReactQueryDevtools initialIsOpen={false} /> : null}
           </AuthProvider>
         </DataCacheProvider>
       </WagmiConfig>

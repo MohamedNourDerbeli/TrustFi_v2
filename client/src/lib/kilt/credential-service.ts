@@ -5,7 +5,6 @@
  * verification, and storage.
  */
 
-import * as Kilt from '@kiltprotocol/sdk-js';
 import { supabase } from '../supabase';
 import type {
   ClaimInput,
