@@ -4,6 +4,8 @@ import tailwindcss from '@tailwindcss/vite';
 import { visualizer } from 'rollup-plugin-visualizer';
 
 export default defineConfig({
+  // Use a custom cache directory to avoid Windows lock issues on node_modules/.vite
+  cacheDir: 'node_modules/.vite-cache',
   plugins: [
     react(),
     tailwindcss(),
@@ -49,5 +51,7 @@ export default defineConfig({
   // Optimize dependencies
   optimizeDeps: {
     include: ['react', 'react-dom', 'react-router-dom', 'wagmi', 'viem'],
+    // Force re-bundle on start if cache corrupt; helps recover from EPERM rename failures
+    force: true,
   },
 });

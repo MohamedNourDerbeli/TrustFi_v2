@@ -27,6 +27,9 @@ export interface AuthContextValue {
   connect: () => void;
   disconnect: () => void;
   refreshProfile: () => Promise<void>;
+  grantDevAdmin: () => void;
+  grantDevIssuer: () => void;
+  clearDevRoles: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -274,23 +277,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isIssuer = !!(isTemplateManager || isAdmin);
   const isLoading = isCheckingProfile;
 
+  // Hackathon / dev overrides (optional). Enabled only if env flag is set.
+  const hackathonEnabled = import.meta.env.VITE_ENABLE_HACKATHON_ROLE_BUTTONS === 'true';
+  const devAdmin = hackathonEnabled && typeof window !== 'undefined' && localStorage.getItem('tf_dev_admin') === '1';
+  const devIssuer = hackathonEnabled && typeof window !== 'undefined' && localStorage.getItem('tf_dev_issuer') === '1';
+
+  const effectiveIsAdmin = isAdmin || devAdmin;
+  const effectiveIsIssuer = isIssuer || devIssuer || effectiveIsAdmin;
+
   // Refresh profile by clearing cache and re-checking
   const refreshProfile = async () => {
     await checkProfile(true);
+  };
+
+  const grantDevAdmin = () => {
+    if (!hackathonEnabled) return;
+    localStorage.setItem('tf_dev_admin', '1');
+    // force re-render by updating a piece of state (profile refresh sufficient)
+    refreshProfile();
+  };
+  const grantDevIssuer = () => {
+    if (!hackathonEnabled) return;
+    localStorage.setItem('tf_dev_issuer', '1');
+    refreshProfile();
+  };
+  const clearDevRoles = () => {
+    localStorage.removeItem('tf_dev_admin');
+    localStorage.removeItem('tf_dev_issuer');
+    refreshProfile();
   };
 
   const value: AuthContextValue = {
     address,
     isConnected,
     hasProfile,
-    isAdmin,
-    isIssuer,
+    isAdmin: effectiveIsAdmin,
+    isIssuer: effectiveIsIssuer,
     isLoading,
     userDid,
     issuerDid,
     connect,
     disconnect,
     refreshProfile,
+    grantDevAdmin,
+    grantDevIssuer,
+    clearDevRoles,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

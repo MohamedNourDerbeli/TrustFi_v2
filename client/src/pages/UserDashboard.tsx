@@ -11,7 +11,7 @@ import type { VerifiableCredential } from "../types/kilt";
 import { motion } from "motion/react";
 
 export const UserDashboard: React.FC = () => {
-  const { address, isConnected, hasProfile, userDid } = useAuth();
+  const { address, isConnected, hasProfile, userDid, isAdmin, isIssuer, grantDevAdmin, grantDevIssuer, clearDevRoles } = useAuth();
   const { profile, profileId, score, cards, loading: profileLoading } = useProfile(address);
   const [recentActivity, setRecentActivity] = useState<ClaimLogRow[]>([]);
   const [loadingActivity, setLoadingActivity] = useState(true);
@@ -193,6 +193,46 @@ export const UserDashboard: React.FC = () => {
     <div className="min-h-screen tf-app-bg">
       <div className="mx-auto w-full max-w-[1800px] px-4 pb-16 sm:px-6 lg:px-8">
         {/* Collection Hero */}
+        {/* Hackathon Role Utility (dev/test only) */}
+        {import.meta.env.VITE_ENABLE_HACKATHON_ROLE_BUTTONS === 'true' && (
+          <div className="mt-4 mb-8 tf-glass-alt rounded-2xl border tf-border p-5 flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-gray-200 tracking-wide">Hackathon Role Sandbox</h3>
+              {(isAdmin || isIssuer) && (
+                <button onClick={clearDevRoles} className="text-xs px-3 py-1 rounded-lg bg-red-600/80 hover:bg-red-600 text-white font-medium transitional">
+                  Reset Roles
+                </button>
+              )}
+            </div>
+            <p className="text-xs text-gray-400 leading-relaxed">
+              Temporary front-end override for judges. Grants role flags locally so protected routes can be explored. Does not alter on-chain permissions.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {!isIssuer && (
+                <button
+                  onClick={grantDevIssuer}
+                  className="px-3 py-2 text-xs font-semibold rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow hover:shadow-lg active:scale-[0.97]"
+                >
+                  Become Issuer (Local)
+                </button>
+              )}
+              {!isAdmin && (
+                <button
+                  onClick={grantDevAdmin}
+                  className="px-3 py-2 text-xs font-semibold rounded-xl bg-gradient-to-r from-pink-500 to-rose-600 text-white shadow hover:shadow-lg active:scale-[0.97]"
+                >
+                  Become Admin (Local)
+                </button>
+              )}
+              {(isAdmin || isIssuer) && (
+                <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg bg-green-600/20 text-green-300">
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                  Active: {isAdmin ? 'Admin' : 'Issuer'} role
+                </span>
+              )}
+            </div>
+          </div>
+        )}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
