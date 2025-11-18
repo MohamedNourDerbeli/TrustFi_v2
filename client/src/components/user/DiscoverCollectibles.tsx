@@ -176,7 +176,8 @@ function CollectibleCard({ collectible, onClaim, hasProfile, isClaiming, viewMod
   }
 
   return (
-    <div className="group bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg overflow-hidden border border-white/20 hover:shadow-2xl transition-all duration-300 hover:scale-105">
+    <div className="rounded-2xl p-[1px] bg-gradient-to-br from-blue-500/40 via-purple-500/40 to-pink-500/40 hover:from-blue-500/60 hover:via-purple-500/60 hover:to-pink-500/60 transition-all duration-300">
+      <div className="group bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg overflow-hidden border border-white/20 hover:shadow-2xl transition-all duration-300 hover:scale-105">
       {/* Banner with Gradient Overlay */}
       <div className="relative h-40 overflow-hidden">
         {collectible.bannerUrl ? (
@@ -346,6 +347,7 @@ function CollectibleCard({ collectible, onClaim, hasProfile, isClaiming, viewMod
           )}
         </button>
       </div>
+    </div>
     </div>
   );
 }

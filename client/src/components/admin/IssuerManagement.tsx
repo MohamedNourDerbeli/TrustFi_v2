@@ -6,7 +6,8 @@ import { REPUTATION_CARD_CONTRACT_ADDRESS } from '../../lib/contracts';
 import ReputationCardABI from '../../lib/ReputationCard.abi.json';
 import { supabase } from '../../lib/supabase';
 import toast from 'react-hot-toast';
-import { Shield, UserPlus, UserMinus, Users, ArrowLeft, AlertCircle, CheckCircle } from 'lucide-react';
+import { Shield, UserPlus, UserMinus, Users, ArrowLeft, AlertCircle, CheckCircle, Sparkles } from 'lucide-react';
+import { type Address as ViemAddress } from 'viem';
 
 const TEMPLATE_MANAGER_ROLE = keccak256(toHex('TEMPLATE_MANAGER_ROLE'));
 
@@ -182,6 +183,96 @@ export const IssuerManagement: React.FC = () => {
     }
   };
 
+  // Seed 3 sample templates for an issuer (on-chain) and cache to Supabase
+  const seedTemplatesForIssuer = async (issuerAddress: Address) => {
+    if (!walletClient || !address || !publicClient) {
+      toast.error('Please connect your wallet');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      toast.loading('Seeding templates...', { id: 'seed' });
+
+      // Find next template id (from counter, else from templates_cache)
+      let nextId = 1;
+      try {
+        const { data: counter, error: counterError } = await supabase
+          .from('template_counter')
+          .select('next_template_id')
+          .eq('id', 1)
+          .maybeSingle();
+        if (!counterError && counter?.next_template_id) {
+          nextId = Number(counter.next_template_id);
+        } else {
+          const { data: last, error: lastErr } = await supabase
+            .from('templates_cache')
+            .select('template_id')
+            .order('template_id', { ascending: false })
+            .limit(1);
+          if (!lastErr && last && last.length > 0) {
+            nextId = parseInt(last[0].template_id) + 1;
+          }
+        }
+      } catch {}
+
+      const seedDefs = [
+        { name: 'Starter Badge', tier: 1, max: 1000 },
+        { name: 'Contributor Badge', tier: 2, max: 500 },
+        { name: 'Elite Badge', tier: 3, max: 100 },
+      ];
+
+      for (let i = 0; i < seedDefs.length; i++) {
+        const def = seedDefs[i];
+        const templateId = BigInt(nextId + i);
+        // createTemplate(templateId, issuer, maxSupply, tier, start, end)
+        const hash = await walletClient.writeContract({
+          address: REPUTATION_CARD_CONTRACT_ADDRESS as Address,
+          abi: ReputationCardABI,
+          functionName: 'createTemplate',
+          args: [
+            templateId,
+            issuerAddress as ViemAddress,
+            BigInt(def.max),
+            def.tier,
+            0n,
+            0n,
+          ],
+          account: address,
+        } as any);
+
+        await publicClient.waitForTransactionReceipt({ hash });
+
+        // Cache to Supabase with friendly names
+        await supabase.from('templates_cache').upsert({
+          template_id: templateId.toString(),
+          issuer: issuerAddress.toLowerCase(),
+          name: def.name,
+          description: `Tier ${def.tier} credential`,
+          max_supply: String(def.max),
+          current_supply: '0',
+          tier: def.tier,
+          start_time: '0',
+          end_time: '0',
+          is_paused: false,
+        }, { onConflict: 'template_id' });
+      }
+
+      // Advance counter if present
+      try {
+        const newNext = nextId + seedDefs.length;
+        await supabase.from('template_counter').update({ next_template_id: newNext }).eq('id', 1);
+      } catch {}
+
+      toast.success('Seeded 3 templates for issuer', { id: 'seed' });
+    } catch (err: any) {
+      console.error('Error seeding templates:', err);
+      toast.error(err?.message || 'Failed to seed templates', { id: 'seed' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 py-8">
       <div className="container mx-auto px-4 max-w-7xl">
@@ -327,7 +418,7 @@ export const IssuerManagement: React.FC = () => {
               </p>
             </div>
           ) : (
-            <div className="space-y-3">
+                <div className="space-y-3">
               {issuers.map((issuer) => (
                 <div
                   key={issuer}
@@ -347,6 +438,13 @@ export const IssuerManagement: React.FC = () => {
                             <CheckCircle className="w-3 h-3" />
                             TEMPLATE_MANAGER_ROLE
                           </span>
+                          <button
+                            onClick={() => seedTemplatesForIssuer(issuer)}
+                            disabled={loading}
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-purple-700 hover:to-pink-700 transition-colors"
+                          >
+                            <Sparkles className="w-3 h-3" /> Seed templates
+                          </button>
                         </div>
                       </div>
                     </div>

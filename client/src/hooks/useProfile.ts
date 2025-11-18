@@ -36,13 +36,7 @@ async function fetchProfileData(address: Address, publicClient: any) {
     return { profile: null, profileId: null, score: 0n, cards: [] };
   }
 
-  // Fetch score from contract
-  const scoreResult = await publicClient.readContract({
-    address: PROFILE_NFT_CONTRACT_ADDRESS as `0x${string}`,
-    abi: ProfileNFTABI,
-    functionName: 'profileIdToScore',
-    args: [profileIdResult],
-  }) as bigint;
+  // Note: Score is computed off-chain from card tiers (no on-chain read)
 
   // Fetch card details directly from ReputationCard contract
   const cards: Card[] = [];
@@ -97,16 +91,20 @@ async function fetchProfileData(address: Address, publicClient: any) {
       twitterHandle: profileRow.twitter_handle || undefined,
       discordHandle: profileRow.discord_handle || undefined,
       websiteUrl: profileRow.website_url || undefined,
-      score: scoreResult,
+      // Will be replaced with off-chain computed score below
+      score: 0n,
       cards: cards,
       createdAt: new Date(profileRow.created_at),
     };
   }
 
+  // Compute off-chain score: sum of card tiers
+  const offChainScore = cards.reduce((acc, c) => acc + BigInt(c.tier || 0), 0n);
+
   return {
     profile,
     profileId: profileIdResult,
-    score: scoreResult,
+    score: offChainScore,
     cards: cards,
   };
 }

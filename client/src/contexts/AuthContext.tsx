@@ -27,6 +27,7 @@ export interface AuthContextValue {
   connect: () => void;
   disconnect: () => void;
   refreshProfile: () => Promise<void>;
+  // issuer is determined on-chain only; no DB grant path exposed
   grantDevAdmin: () => void;
   grantDevIssuer: () => void;
   clearDevRoles: () => void;
@@ -46,6 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [issuerDid, setIssuerDid] = useState<DidDocument | null>(null);
   const checkInProgressRef = useRef(false);
   const lastCheckedAddressRef = useRef<string | null>(null);
+  // no DB-based issuer flag; use strictly on-chain roles
 
   // Removed excessive debug logging
 
@@ -228,6 +230,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [address, isConnected, publicClient]);
 
+  // Also check issuer status from Supabase
+  // Removed Supabase issuer status checks to ensure issuer is on-chain only
+
   // Check for issuer DID when user becomes an issuer
   useEffect(() => {
     const checkIssuerDid = async () => {
@@ -242,7 +247,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     checkIssuerDid();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [address, isConnected, isTemplateManager, isAdminOnProfile, isAdminOnReputation]);
+  }, [address, isConnected, isTemplateManager, isAdminOnProfile, isAdminOnReputation, isIssuerFromDb]);
 
   const connect = () => {
     const connector = connectors[0];

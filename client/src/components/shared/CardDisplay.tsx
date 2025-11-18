@@ -243,10 +243,13 @@ export function CardDisplay({ card, credential, compact = false }: CardDisplayPr
   }
 
   return (
-    <div className="tf-card">
-      <div className="tf-card-media">
+    <div className="group rounded-2xl p-[1px] bg-gradient-to-br from-blue-500/40 via-purple-500/40 to-pink-500/40 hover:from-blue-500/60 hover:via-purple-500/60 hover:to-pink-500/60 transition-all duration-300 hover:shadow-xl">
+      <div className="tf-card rounded-2xl overflow-hidden bg-white/80 backdrop-blur-sm border border-white/30 group-hover:border-white/50 transition-colors">
+        <div className="tf-card-media relative">
         {credential && <CredentialBadge card={card} credential={credential} compact={compact} />}
-        <div className={`tf-card-tier t${card.tier}`}>T{card.tier}</div>
+          <div className={`absolute top-3 left-3 px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wide text-white shadow-lg bg-gradient-to-r ${card.tier === 1 ? 'from-green-500 to-green-600' : card.tier === 2 ? 'from-blue-500 to-blue-600' : 'from-purple-500 to-purple-600'}`}>
+            T{card.tier}
+          </div>
         {metadata.image ? (
           <img
             src={metadata.image}
@@ -267,6 +270,7 @@ export function CardDisplay({ card, credential, compact = false }: CardDisplayPr
                 target.parentElement.classList.add(`tier-${card.tier}`);
               }
             }}
+              className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-500"
           />
         ) : (
           <div className="flex flex-col items-center justify-center text-white">
@@ -274,28 +278,29 @@ export function CardDisplay({ card, credential, compact = false }: CardDisplayPr
             <div className="text-xs tracking-wide mt-1">Tier {card.tier}</div>
           </div>
         )}
-      </div>
-      <div className="tf-card-footer">
-        <div className="flex items-center">
-          <span className="tf-card-title" title={metadata.name}>{metadata.name || `Card #${card.cardId.toString()}`}</span>
-          <span className="tf-card-pts">{tierPoints} pts</span>
         </div>
-        {metadata.description && !compact && (
-          <p className="text-xs line-clamp-2" style={{color:'var(--tf-text-muted)'}}>{metadata.description}</p>
-        )}
-        <div className="tf-card-meta">
-          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
-          <span>{new Date(card.claimedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-        </div>
-        {Array.isArray(metadata.attributes) && metadata.attributes.length > 0 && !compact && (
-          <div className="tf-attr-tags">
-            {(metadata.attributes as Array<{ trait_type: string; value: string | number }>).slice(0,3).map((attr, idx:number) => (
-              <span key={idx} className="tf-attr-tag" title={`${attr.trait_type}: ${attr.value}`}>{attr.trait_type}: {attr.value}</span>
-            ))}
+        <div className="tf-card-footer p-4">
+          <div className="flex items-center">
+            <span className="tf-card-title" title={metadata.name}>{metadata.name || `Card #${card.cardId.toString()}`}</span>
+            <span className="tf-card-pts">{tierPoints} pts</span>
           </div>
-        )}
+          {metadata.description && !compact && (
+            <p className="text-xs line-clamp-2" style={{color:'var(--tf-text-muted)'}}>{metadata.description}</p>
+          )}
+          <div className="tf-card-meta">
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            <span>{new Date(card.claimedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+          </div>
+          {Array.isArray(metadata.attributes) && metadata.attributes.length > 0 && !compact && (
+            <div className="tf-attr-tags">
+              {(metadata.attributes as Array<{ trait_type: string; value: string | number }>).slice(0,3).map((attr, idx:number) => (
+                <span key={idx} className="tf-attr-tag" title={`${attr.trait_type}: ${attr.value}`}>{attr.trait_type}: {attr.value}</span>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

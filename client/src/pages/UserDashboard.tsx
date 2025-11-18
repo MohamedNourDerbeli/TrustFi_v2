@@ -9,6 +9,7 @@ import { LIMITS } from "../lib/constants";
 import { getCredentialsByHolder } from "../lib/kilt/credential-service";
 import type { VerifiableCredential } from "../types/kilt";
 import { motion } from "motion/react";
+import toast from "react-hot-toast";
 
 export const UserDashboard: React.FC = () => {
   const { address, isConnected, hasProfile, userDid, isAdmin, isIssuer, grantDevAdmin, grantDevIssuer, clearDevRoles } = useAuth();
@@ -231,6 +232,13 @@ export const UserDashboard: React.FC = () => {
                 </span>
               )}
             </div>
+          </div>
+        )}
+        {/* Issuer role is on-chain only. If not issuer, show a hint for contacting an admin. */}
+        {!isIssuer && isConnected && (
+          <div className="mt-4 tf-glass-alt rounded-2xl border tf-border p-5">
+            <h3 className="text-sm font-semibold text-gray-200 tracking-wide mb-1">Issuer Access</h3>
+            <p className="text-xs text-gray-400">You don't have issuer permissions yet. Ask an admin to grant TEMPLATE_MANAGER_ROLE to your address from Admin → Issuers.</p>
           </div>
         )}
         <motion.div
