@@ -39,17 +39,18 @@ export async function ensureWeb3Modal(): Promise<void> {
       }) as typeof window.fetch;
     }
 
-    createWeb3Modal({
+    createWeb3Modal(({
       wagmiConfig: config,
       projectId: projectId || 'missing_project_id',
       chains,
       themeMode: 'dark',
-      themeVariables: {
+      // Cast to any to support both legacy CSS var keys and new variable typings across versions
+      themeVariables: ({
         '--w3m-accent-color': '#2563eb',
         '--w3m-background-color': '#111111',
         '--w3m-font-family': 'Inter, system-ui, sans-serif',
         '--w3m-border-radius': '16px'
-      },
+      } as unknown) as any,
       // v5 supports both legacy flag and new object; we set both defensively
       enableAnalytics: false,
       analytics: { enabled: false },
@@ -63,7 +64,7 @@ export async function ensureWeb3Modal(): Promise<void> {
       walletImages: {
         talisman: 'https://raw.githubusercontent.com/TalismanSociety/brand-kit/main/assets/icon/mark-gradient.svg'
       }
-    });
+    }) as any);
 
     initialized = true;
   })().catch((e) => {
