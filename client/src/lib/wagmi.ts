@@ -2,9 +2,7 @@
 // Simplified wagmi configuration using Web3Modal's helper to avoid deep connector imports.
 import { createConfig, http } from 'wagmi';
 import { moonbaseAlpha } from 'wagmi/chains';
-import { injected, walletConnect } from '@wagmi/connectors';
-
-const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || '';
+import { injected } from '@wagmi/connectors';
 const envRpc = (() => {
   try {
     return import.meta.env.VITE_RPC_URL;
@@ -22,31 +20,12 @@ if (envRpc && envRpc.trim()) {
   else console.warn('[wagmi] Browser RPC CORS risk, using public fallback:', envRpc);
 }
 
-export const chains = [moonbaseAlpha];
+export const chains = [moonbaseAlpha] as const;
 
-const talismanTarget = () => {
-  if (typeof window === 'undefined') return undefined;
-  const anyWindow = window as unknown as Record<string, any>;
-  const ethereum = anyWindow.ethereum;
-  const providers: any[] = ethereum?.providers ?? (ethereum ? [ethereum] : []);
-  const fromProviders = providers.find((provider) => provider?.isTalisman);
-  const fromNamespace = anyWindow.talismanEth?.provider ?? anyWindow.talisman?.ethereum;
-  const provider = fromProviders || fromNamespace;
-  if (!provider) return undefined;
+// Talisman support removed for now to keep MetaMask-only flow
 
-  return {
-    id: 'talisman',
-    name: 'Talisman',
-    icon: 'https://raw.githubusercontent.com/TalismanSociety/brand-kit/main/assets/icon/mark-gradient.svg',
-    provider: () => provider,
-  } as const;
-};
-
-const connectors = [
-  injected({ shimDisconnect: true }),
-  injected({ shimDisconnect: true, target: talismanTarget }),
-  projectId ? walletConnect({ projectId }) : null,
-].filter(Boolean);
+// MetaMask only: use the injected connector targeted to MetaMask
+const connectors = [injected({ shimDisconnect: true, target: 'metaMask' })];
 
 export const config = createConfig({
   chains,
