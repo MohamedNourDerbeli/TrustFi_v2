@@ -12,6 +12,14 @@ Key integrations:
 - KILT credentials for verification display in dashboard
 - Moonbase Alpha / Paseo EVM (configurable), with local dev support
 
+## Overview & Objectives
+
+- Enable users to build portable, verifiable on-chain reputation via Profile NFTs and tiered Reputation Cards.
+- Give issuers a safe, role-gated portal to create templates and issue cards at scale (direct or signature flows).
+- Provide admins with visibility and control over issuers, templates, and platform health.
+- Offer a modern, responsive UX with grid/list views, search/filters, activity, and progress/achievements.
+- Ship a developer-friendly stack with clear envs, scripts, and an ABI sync workflow for fast iteration.
+
 ## Features
 
 - Profiles: Profile NFT with score and on-chain linkage to Reputation Cards
@@ -135,6 +143,15 @@ npm run build
 npm run preview
 ```
 
+## Setup & Usage (at a glance)
+
+1) Configure `client/.env` and `contracts/.env` (Supabase keys, RPC, private key, dynamic metadata URL).
+2) Run the SQL files in `client/` to provision Supabase tables and views.
+3) Compile and deploy contracts (e.g., Moonbase Alpha); update `client/.env` addresses.
+4) Sync ABIs to the frontend: `pwsh ./scripts/sync-abis.ps1`.
+5) Start the app: `npm run dev` in `client`. Visit `/dashboard`, `/discover`, `/issuer`, `/admin`.
+6) For judging, enable local role buttons by setting `VITE_ENABLE_HACKATHON_ROLE_BUTTONS=true` and toggling roles in the Dashboard panel.
+
 ## Project Structure (high level)
 
 ```
@@ -155,6 +172,15 @@ TrustFi_v2/
 └─ scripts/
     └─ sync-abis.ps1 (copy ABIs into client/src/lib)
 ```
+
+## Dependencies & Technologies
+
+- Frontend: React 18, TypeScript, Vite, Tailwind CSS, motion/react, lucide-react
+- Web3: wagmi v2, viem, WalletConnect/appkit (via wagmi connectors)
+- State/Data: React Contexts, hooks, optional @tanstack/react-query chunk
+- Backend-as-a-Service: Supabase (Postgres, Auth, Edge Functions)
+- Smart contracts: Hardhat, Solidity 0.8.x, OpenZeppelin Contracts
+- Target networks: Moonbase Alpha (default config), Paseo EVM; local Hardhat supported
 
 ## Roles & Access
 
