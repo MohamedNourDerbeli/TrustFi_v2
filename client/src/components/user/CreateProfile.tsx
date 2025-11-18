@@ -3,8 +3,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   useAccount,
-  useContractWrite,
-  useWaitForTransaction,
+  useWriteContract,
+  useWaitForTransactionReceipt,
   usePublicClient
 } from 'wagmi'
 import { useAuth } from '../../hooks/useAuth'
@@ -52,18 +52,23 @@ export function CreateProfile () {
   )
 
   const {
-    write: writeContract,
-    data: txData,
-    isLoading: isPending
-  } = useContractWrite({
-    address: PROFILE_NFT_CONTRACT_ADDRESS as `0x${string}`,
-    abi: ProfileNFTABI as any,
-    functionName: 'createProfile'
-  } as any)
+    writeContract: wagmiWriteContract,
+    data: txHash,
+    isPending
+  } = useWriteContract()
+
+  // Wrap wagmi v2 writeContract to match flow's expected signature
+  const writeContract = ({ args }: { args: [string] }) =>
+    wagmiWriteContract({
+      address: PROFILE_NFT_CONTRACT_ADDRESS as `0x${string}`,
+      abi: ProfileNFTABI as any,
+      functionName: 'createProfile',
+      args
+    } as any)
 
   const { isLoading: isConfirming, isSuccess: isConfirmed } =
-    useWaitForTransaction({
-      hash: txData?.hash
+    useWaitForTransactionReceipt({
+      hash: txHash as any
     })
 
   // Check existing profile on-chain & Supabase
@@ -216,7 +221,7 @@ export function CreateProfile () {
   useEffect(() => {
     if (
       isConfirmed &&
-      txData?.hash &&
+      txHash &&
       address &&
       publicClient &&
       generatedTokenURI
@@ -230,14 +235,14 @@ export function CreateProfile () {
           refreshProfile,
           navigate
         },
-        txData.hash,
+        txHash as string,
         generatedTokenURI,
         setFlowState
       )
     }
   }, [
     isConfirmed,
-    txData,
+    txHash,
     address,
     publicClient,
     generatedTokenURI,

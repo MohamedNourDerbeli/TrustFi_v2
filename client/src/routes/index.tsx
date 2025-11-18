@@ -49,14 +49,16 @@ export const AppRoutes: React.FC = () => {
       />
 
       {/* User Routes - Require Wallet Connection */}
+
       <Route 
         path="/dashboard" 
         element={
-          <ProtectedRoute requireProfile>
+          <ProtectedRoute>
             <UserDashboard />
           </ProtectedRoute>
         } 
       />
+
       <Route 
         path="/discover" 
         element={

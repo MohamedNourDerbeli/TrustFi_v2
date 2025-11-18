@@ -1,5 +1,6 @@
 // components/shared/CardDisplay.tsx
 import { useState, useEffect } from 'react';
+import { motion } from 'motion/react';
 import { usePublicClient } from 'wagmi';
 import { REPUTATION_CARD_CONTRACT_ADDRESS } from '../../lib/contracts';
 import ReputationCardABI from '../../lib/ReputationCard.abi.json';
@@ -37,6 +38,7 @@ export function CardDisplay({ card, credential, compact = false }: CardDisplayPr
   const [metadata, setMetadata] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [imageFailed, setImageFailed] = useState(false);
 
   useEffect(() => {
     async function fetchMetadata() {
@@ -61,6 +63,7 @@ export function CardDisplay({ card, credential, compact = false }: CardDisplayPr
               const dyn = await res.json();
               logger.debug('[CardDisplay] Loaded dynamic Kusama metadata:', dyn);
               setMetadata(dyn);
+              setImageFailed(false);
               setLoading(false);
               return; // skip on-chain tokenURI path
             } catch (e) {
@@ -70,62 +73,40 @@ export function CardDisplay({ card, credential, compact = false }: CardDisplayPr
           }
         }
 
-        // Fetch tokenURI from contract
+        // Fetch tokenURI from contract (standard metadata path)
         // @ts-expect-error wagmi v2 typing quirk for readContract
         const tokenURI = await publicClient.readContract({
           address: REPUTATION_CARD_CONTRACT_ADDRESS as Address,
           abi: ReputationCardABI,
           functionName: 'tokenURI',
-          args: [card.cardId],
-        }) as unknown as string;
+          args: [card.cardId]
+        });
 
-        logger.debug(`[CardDisplay] TokenURI for card ${card.cardId.toString()}:`, tokenURI);
-
-        // Fetch metadata from tokenURI
-        if (tokenURI.startsWith('data:application/json;base64,')) {
-          // Base64 encoded JSON
-          const base64Data = tokenURI.replace('data:application/json;base64,', '');
-          const jsonString = atob(base64Data);
-          const metadata = JSON.parse(jsonString);
-          logger.debug(`[CardDisplay] Parsed base64 metadata:`, metadata);
-          setMetadata(metadata);
-        } else if (tokenURI.startsWith('http')) {
-          // HTTP URL - add auth header if it's a Supabase function
-          const headers: HeadersInit = {};
-          if (tokenURI.includes('supabase.co/functions')) {
-            const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-            if (anonKey) {
-              headers['Authorization'] = `Bearer ${anonKey}`;
-            }
+        if (typeof tokenURI === 'string' && tokenURI.length > 0) {
+          let url = tokenURI;
+          // Handle ipfs:// URIs
+          if (url.startsWith('ipfs://')) {
+            url = `https://ipfs.io/ipfs/${url.replace('ipfs://', '')}`;
           }
-          
           try {
-            const response = await fetch(tokenURI, { headers });
-            if (!response.ok) {
-              // If IPFS gateway fails, create fallback metadata
-              if (tokenURI.includes('ipfs.io') || tokenURI.includes('pinata') || tokenURI.includes('ipfs://')) {
-                console.warn('[CardDisplay] IPFS gateway failed, using fallback metadata');
-                setMetadata(createFallbackMetadata(card));
-                return;
-              }
-              throw new Error(`Failed to fetch metadata: ${response.statusText}`);
+            const res = await fetch(url);
+            if (res.ok) {
+              const json = await res.json();
+              setMetadata(json);
+              setImageFailed(false);
+              setLoading(false);
+              return;
+            } else {
+              throw new Error(`Metadata HTTP ${res.status}`);
             }
-            const metadata = await response.json();
-            logger.debug(`[CardDisplay] Fetched HTTP metadata:`, metadata);
-            setMetadata(metadata);
-          } catch (fetchError) {
-            // Fallback to generated metadata if fetch fails
-            console.error('[CardDisplay] Fetch failed, using fallback:', fetchError);
-            setMetadata(createFallbackMetadata(card));
+          } catch (e) {
+            logger.warn('[CardDisplay] Failed to fetch tokenURI metadata, using fallback', e);
           }
-        } else {
-          // Unknown format - create fallback
-          console.warn('[CardDisplay] Unknown tokenURI format, using fallback');
-          setMetadata(createFallbackMetadata(card));
         }
-      } catch (err) {
-        console.error('[CardDisplay] Error fetching card metadata:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load card');
+
+        // Fallback metadata if nothing loaded
+        setMetadata(createFallbackMetadata(card));
+        setImageFailed(true);
       } finally {
         setLoading(false);
       }
@@ -134,11 +115,58 @@ export function CardDisplay({ card, credential, compact = false }: CardDisplayPr
     fetchMetadata();
   }, [card, publicClient]);
 
+  useEffect(() => {
+    setImageFailed(false);
+  }, [card.cardId, metadata?.image]);
+
+  const renderFallbackVisual = (variant: 'grid' | 'list') => (
+    <div
+      className={`flex h-full w-full items-center justify-center ${
+        variant === 'grid'
+          ? 'bg-gradient-to-br from-indigo-500/60 via-purple-500/60 to-blue-500/60'
+          : 'bg-slate-800/80'
+      } text-white`}
+    >
+      <div className="text-center">
+        <div className={variant === 'grid' ? 'text-3xl font-black' : 'text-base font-semibold'}>
+          #{card.cardId.toString()}
+        </div>
+        <div
+          className={`${
+            variant === 'grid'
+              ? 'mt-1 text-xs tracking-wide uppercase text-slate-100/90'
+              : 'mt-0.5 text-[10px] uppercase tracking-wide text-slate-300/80'
+          }`}
+        >
+          Tier {card.tier}
+        </div>
+      </div>
+    </div>
+  );
+
   if (loading) {
+    if (compact) {
+      return (
+        <div className="grid animate-pulse grid-cols-1 gap-4 rounded-2xl border border-white/10 bg-slate-950/40 p-4 sm:grid-cols-[minmax(0,2.6fr)_repeat(4,minmax(0,1fr))]">
+          <div className="flex items-center gap-4">
+            <div className="h-14 w-14 rounded-xl bg-slate-800/70" />
+            <div className="flex-1 space-y-2">
+              <div className="h-4 w-32 rounded bg-slate-800/70" />
+              <div className="h-3 w-20 rounded bg-slate-800/60" />
+            </div>
+          </div>
+          <div className="hidden sm:block h-4 w-20 rounded bg-slate-800/70" />
+          <div className="hidden sm:block h-4 w-16 rounded bg-slate-800/70" />
+          <div className="hidden sm:block h-4 w-24 rounded bg-slate-800/70" />
+          <div className="hidden sm:block h-4 w-28 rounded bg-slate-800/70" />
+        </div>
+      );
+    }
+
     return (
-      <div className="tf-card tf-card-skeleton">
+      <div className="tf-card tf-card-skeleton tf-card-grid">
         <div className="tf-card-media">
-          <div className="animate-spin rounded-full h-12 w-12 border-2 border-t-transparent border-white/70"></div>
+          <div className="h-12 w-12 animate-spin rounded-full border-2 border-t-transparent border-white/70"></div>
         </div>
         <div className="tf-card-footer">
           <div className="h-3 w-5/6 rounded bg-gray-200" />
@@ -146,7 +174,7 @@ export function CardDisplay({ card, credential, compact = false }: CardDisplayPr
             <div className="h-3 w-1/3 rounded bg-gray-200" />
             <div className="h-3 w-1/4 rounded bg-gray-200" />
           </div>
-          <div className="flex gap-1 flex-wrap">
+          <div className="flex flex-wrap gap-1">
             <div className="h-4 w-14 rounded bg-gray-200" />
             <div className="h-4 w-12 rounded bg-gray-200" />
           </div>
@@ -155,27 +183,64 @@ export function CardDisplay({ card, credential, compact = false }: CardDisplayPr
     );
   }
 
+  const tierPoints = card.tier === 1 ? 10 : card.tier === 2 ? 50 : 200;
+  const issueDate = new Date(card.claimedAt).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  });
+  const issueTime = new Date(card.claimedAt).toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+
   if (error || !metadata) {
-    return (
-      <div className="tf-card" style={{borderColor:'var(--tf-danger)'}}>
-        <div className="tf-card-media" style={{background:'linear-gradient(135deg,#dc2626,#f87171)'}}>
-          <div className="text-center text-white">
-            <div className="text-3xl font-black mb-1">⚠️</div>
-            <div className="text-xs font-semibold tracking-wide">Failed to load</div>
+    if (compact) {
+      return (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.2, ease: 'easeOut' }}
+          className="grid grid-cols-1 gap-4 rounded-2xl border border-rose-500/40 bg-rose-500/10 p-4 text-sm sm:grid-cols-[minmax(0,2.6fr)_repeat(4,minmax(0,1fr))]"
+        >
+          <div className="flex items-center gap-4">
+            <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-rose-500/30 text-xl">⚠️</div>
+            <div className="flex flex-col">
+              <span className="font-semibold text-rose-100">Card #{card.cardId.toString()}</span>
+              <span className="text-xs text-rose-200/80">{error || 'Failed to load metadata'}</span>
+            </div>
           </div>
+          <div className="hidden sm:flex items-center text-xs font-semibold uppercase text-rose-200/80">Tier {card.tier}</div>
+          <div className="hidden sm:flex items-center text-xs text-rose-200/80">{tierPoints} pts</div>
+          <div className="hidden sm:flex items-center text-xs text-rose-200/80">Status unknown</div>
+          <div className="hidden sm:flex flex-col text-xs text-rose-200/80">
+            <span>{issueDate}</span>
+            <span>{issueTime}</span>
+          </div>
+        </motion.div>
+      );
+    }
+
+    return (
+      <motion.article
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.2, ease: 'easeOut' }}
+        className="tf-card tf-card-grid border border-rose-500/40 bg-rose-500/10"
+      >
+        <div className="tf-card-media">
+          {renderFallbackVisual('grid')}
         </div>
         <div className="tf-card-footer">
           <div className="flex items-center">
-            <span className="tf-card-title">Card #{card.cardId.toString()}</span>
-            <span className="tf-card-pts" style={{background:'linear-gradient(135deg,#dc2626,#ef4444)'}}>ERR</span>
+            <span className="tf-card-title" style={{ color: '#fecaca' }}>Card #{card.cardId.toString()}</span>
+            <span className="tf-card-pts" style={{ background: 'linear-gradient(135deg,#dc2626,#ef4444)' }}>ERR</span>
           </div>
-          <p className="text-xs" style={{color:'var(--tf-danger)'}}>{error}</p>
+          <p className="text-xs" style={{ color: '#fecaca' }}>{error || 'Failed to load metadata'}</p>
         </div>
-      </div>
+      </motion.article>
     );
   }
-
-  const tierPoints = card.tier === 1 ? 10 : card.tier === 2 ? 50 : 200;
 
   return (
     <div className="tf-card">

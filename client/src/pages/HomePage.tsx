@@ -142,67 +142,22 @@ export const HomePage: React.FC = () => {
         )}
       </div>
 
-      {/* Feature Highlights */}
-      <div className="grid md:grid-cols-3 gap-8 py-12 px-4">
-        <div className="rounded-2xl border border-gray-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/50 backdrop-blur supports-[backdrop-filter]:bg-white/60 supports-[backdrop-filter]:dark:bg-slate-900/40 shadow-md p-6">
-          <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/40 rounded-lg flex items-center justify-center mb-4">
-            <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-            </svg>
-          </div>
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">
-            Soulbound Profile
-          </h3>
-          <p className="text-gray-600">
-            Create a unique, non-transferable profile NFT that represents your identity across chains.
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-gray-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/50 backdrop-blur supports-[backdrop-filter]:bg-white/60 supports-[backdrop-filter]:dark:bg-slate-900/40 shadow-md p-6">
-          <div className="w-12 h-12 bg-green-100 dark:bg-emerald-900/40 rounded-lg flex items-center justify-center mb-4">
-            <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
-            </svg>
-          </div>
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">
-            Reputation Cards
-          </h3>
-          <p className="text-gray-600">
-            Collect verifiable credentials from trusted issuers to build your reputation score.
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-gray-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/50 backdrop-blur supports-[backdrop-filter]:bg-white/60 supports-[backdrop-filter]:dark:bg-slate-900/40 shadow-md p-6">
-          <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/40 rounded-lg flex items-center justify-center mb-4">
-            <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-          </div>
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">
-            Composable System
-          </h3>
-          <p className="text-gray-600">
-            Your reputation is portable and composable across different applications and chains.
-          </p>
-        </div>
-      </div>
-
       {/* How It Works */}
       <section className="py-14 px-4">
         <h2 className="text-3xl font-bold text-gray-900 mb-8 text-center">How It Works</h2>
         <div className="grid md:grid-cols-3 gap-6">
-          <div className="rounded-2xl border border-gray-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/50 backdrop-blur supports-[backdrop-filter]:bg-white/60 supports-[backdrop-filter]:dark:bg-slate-900/40 shadow p-6">
+          <div className="rounded-2xl border border-gray-200 dark:border-slate-700 bg-white/90 dark:bg-slate-900/60 backdrop-blur supports-[backdrop-filter]:bg-white/70 supports-[backdrop-filter]:dark:bg-slate-900/50 shadow-md p-6">
             <div className="w-10 h-10 rounded-lg bg-blue-100 text-blue-700 grid place-items-center mb-4 font-semibold">1</div>
             <h3 className="text-lg font-semibold mb-2">Create Your Profile</h3>
             <p className="text-gray-600">Mint a soulbound Profile NFT to anchor your identity and start building a portable reputation.</p>
           </div>
-          <div className="rounded-2xl border border-gray-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/50 backdrop-blur supports-[backdrop-filter]:bg-white/60 supports-[backdrop-filter]:dark:bg-slate-900/40 shadow p-6">
-            <div className="w-10 h-10 rounded-lg bg-green-100 text-green-700 grid place-items-center mb-4 font-semibold">2</div>
+          <div className="rounded-2xl border border-gray-200 dark:border-slate-700 bg-white/90 dark:bg-slate-900/60 backdrop-blur supports-[backdrop-filter]:bg-white/70 supports-[backdrop-filter]:dark:bg-slate-900/50 shadow-md p-6">
+            <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 font-semibold">2</div>
             <h3 className="text-lg font-semibold mb-2">Collect Reputation Cards</h3>
             <p className="text-gray-600">Receive verifiable credentials from issuers for achievements, on-chain actions, and community contributions.</p>
           </div>
-          <div className="rounded-2xl border border-gray-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/50 backdrop-blur supports-[backdrop-filter]:bg-white/60 supports-[backdrop-filter]:dark:bg-slate-900/40 shadow p-6">
-            <div className="w-10 h-10 rounded-lg bg-purple-100 text-purple-700 grid place-items-center mb-4 font-semibold">3</div>
+          <div className="rounded-2xl border border-gray-200 dark:border-slate-700 bg-white/90 dark:bg-slate-900/60 backdrop-blur supports-[backdrop-filter]:bg-white/70 supports-[backdrop-filter]:dark:bg-slate-900/50 shadow-md p-6">
+            <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 font-semibold">3</div>
             <h3 className="text-lg font-semibold mb-2">Use Across Apps</h3>
             <p className="text-gray-600">Bring your score and badges anywhere. Gate features, boost trust, and unlock tailored experiences.</p>
           </div>

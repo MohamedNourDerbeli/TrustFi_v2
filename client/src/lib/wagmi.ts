@@ -1,69 +1,59 @@
 // lib/wagmi.ts
-import { configureChains, createConfig } from 'wagmi';
+// Simplified wagmi configuration using Web3Modal's helper to avoid deep connector imports.
+import { createConfig, http } from 'wagmi';
 import { moonbaseAlpha } from 'wagmi/chains';
-import { InjectedConnector } from 'wagmi/connectors/injected';
-import { WalletConnectConnector } from 'wagmi/connectors/walletConnect';
-import { CoinbaseWalletConnector } from 'wagmi/connectors/coinbaseWallet';
-import { jsonRpcProvider } from 'wagmi/providers/jsonRpc';
+import { injected, walletConnect, coinbaseWallet } from '@wagmi/connectors';
 
-// WalletConnect project ID - should be set in .env
 const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || '';
-
-// Use private RPC if available, fallback to public
-// IMPORTANT: Browser-based JSON-RPC calls will fail CORS on many private endpoints (e.g. dwellir.com UUID URLs).
-// Detect known CORS-hostile domains and automatically switch to a public RPC to keep the dapp functional.
-const envRpc = import.meta.env.VITE_RPC_URL;
-const PUBLIC_FALLBACK_RPC = moonbaseAlpha.rpcUrls.default.http[0];
-const CORS_RISK_PATTERN = /dwellir\.com|\.onrender\.com|localhost:8545/i; // extend as needed
-
-// If running in a browser and the custom RPC matches a risky pattern, ignore it.
-let rpcUrl = PUBLIC_FALLBACK_RPC;
-if (envRpc && envRpc.trim().length > 0) {
-  if (typeof window === 'undefined') {
-    // Node/server-side can use the private endpoint directly
-    rpcUrl = envRpc;
-  } else if (!CORS_RISK_PATTERN.test(envRpc)) {
-    rpcUrl = envRpc;
-  } else {
-    console.warn('[wagmi] Detected RPC that is likely to fail CORS in browser; using public fallback:', envRpc);
+const envRpc = (() => {
+  try {
+    return import.meta.env.VITE_RPC_URL;
+  } catch {
+    return undefined;
   }
+})();
+
+const PUBLIC_FALLBACK_RPC = moonbaseAlpha.rpcUrls.default.http[0];
+const CORS_RISK_PATTERN = /dwellir\.com|\.onrender\.com|localhost:8545/i;
+let rpcUrl = PUBLIC_FALLBACK_RPC;
+if (envRpc && envRpc.trim()) {
+  if (typeof window === 'undefined') rpcUrl = envRpc;
+  else if (!CORS_RISK_PATTERN.test(envRpc)) rpcUrl = envRpc;
+  else console.warn('[wagmi] Browser RPC CORS risk, using public fallback:', envRpc);
 }
 
-const { chains, publicClient, webSocketPublicClient } = configureChains(
-  [moonbaseAlpha],
-  [
-    jsonRpcProvider({
-      rpc: (chain) => ({
-        http: rpcUrl,
-      }),
-    }),
-  ]
-);
+export const chains = [moonbaseAlpha];
+
+const talismanTarget = () => {
+  if (typeof window === 'undefined') return undefined;
+  const anyWindow = window as unknown as Record<string, any>;
+  const ethereum = anyWindow.ethereum;
+  const providers: any[] = ethereum?.providers ?? (ethereum ? [ethereum] : []);
+  const fromProviders = providers.find((provider) => provider?.isTalisman);
+  const fromNamespace = anyWindow.talismanEth?.provider ?? anyWindow.talisman?.ethereum;
+  const provider = fromProviders || fromNamespace;
+  if (!provider) return undefined;
+
+  return {
+    id: 'talisman',
+    name: 'Talisman',
+    icon: 'https://raw.githubusercontent.com/TalismanSociety/brand-kit/main/assets/icon/mark-gradient.svg',
+    provider: () => provider,
+  } as const;
+};
+
+const connectors = [
+  injected({ shimDisconnect: true }),
+  injected({ shimDisconnect: true, target: talismanTarget }),
+  coinbaseWallet({ appName: 'TrustFi' }),
+  projectId ? walletConnect({ projectId }) : null,
+].filter(Boolean);
 
 export const config = createConfig({
-  autoConnect: true,
-  connectors: [
-    new InjectedConnector({ chains }),
-    new CoinbaseWalletConnector({
-      chains,
-      options: {
-        appName: 'TrustFi',
-      },
-    }),
-    ...(projectId
-      ? [
-          new WalletConnectConnector({
-            chains,
-            options: {
-              projectId,
-            },
-          }),
-        ]
-      : []),
-  ],
-  publicClient,
-  webSocketPublicClient,
+  chains,
+  transports: { [moonbaseAlpha.id]: http(rpcUrl) },
+  multiInjectedProviderDiscovery: true,
+  connectors: connectors as Parameters<typeof createConfig>[0]['connectors'],
 });
 
-// Export chain for easy access
-export { moonbaseAlpha, chains };
+export { moonbaseAlpha };

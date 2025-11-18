@@ -9,6 +9,16 @@ import { config } from './lib/wagmi';
 import { queryClient } from './lib/queryClient';
 import { AuthProvider } from './contexts/AuthContext';
 import { DataCacheProvider } from './contexts/DataCacheContext';
+// Initialize Web3Modal (side-effect import)
+import './lib/web3modal';
+
+// Enforce dark theme before rendering to avoid FOUC
+if (typeof document !== 'undefined') {
+  const el = document.documentElement;
+  el.dataset.theme = 'dark';
+  el.classList.add('dark');
+  try { localStorage.setItem('tf-theme', 'dark'); } catch {}
+}
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

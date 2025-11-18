@@ -8,6 +8,7 @@ import { CardDisplay } from "../components/shared/CardDisplay";
 import { LIMITS } from "../lib/constants";
 import { getCredentialsByHolder } from "../lib/kilt/credential-service";
 import type { VerifiableCredential } from "../types/kilt";
+import { motion } from "motion/react";
 
 export const UserDashboard: React.FC = () => {
   const { address, isConnected, hasProfile, userDid } = useAuth();
@@ -190,9 +191,14 @@ export const UserDashboard: React.FC = () => {
 
   return (
     <div className="min-h-screen tf-app-bg">
-      <div className="max-w-[1800px] mx-auto px-4 py-4">
+      <div className="mx-auto w-full max-w-[1800px] px-4 pb-16 sm:px-6 lg:px-8">
         {/* Collection Hero */}
-        <div className="tf-collection-hero">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, ease: 'easeOut' }}
+          className="tf-collection-hero mt-6"
+        >
           <div className="hero-bg" style={profile?.bannerUrl ? { backgroundImage:`url(${profile.bannerUrl})` } : { background:'linear-gradient(120deg,#0f172a,#1e3a8a)' }} />
           <div className="tf-collection-gradient"></div>
           <div className="tf-collection-overlay">
@@ -215,7 +221,8 @@ export const UserDashboard: React.FC = () => {
                   <span className="tf-badge font-mono">{address?.slice(0,6)}...{address?.slice(-4)}</span>
                   {userDid && (
                     <button onClick={copyDidToClipboard} className="tf-badge font-mono">
-                      DID {userDid.uri.slice(0,12)}...{userDid.uri.slice(-6)} {didCopied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+                      DID {userDid.uri.slice(0,12)}...{userDid.uri.slice(-6)}{" "}
+                      {didCopied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
                     </button>
                   )}
                   {!userDid && hasProfile && <span className="tf-badge">Creating DID...</span>}
@@ -245,201 +252,151 @@ export const UserDashboard: React.FC = () => {
               </div>
             </div>
           </div>
-        </div>
+        </motion.div>
 
-        {/* Tabs */}
-        <div className="tf-collection-tabs">
-          <div className="tf-collection-tab active">Items</div>
-          <div className="tf-collection-tab">Activity</div>
-          <div className="tf-collection-tab">Traits</div>
-          <div className="tf-collection-tab">About</div>
-        </div>
+        <div className="space-y-14 pt-12">
+          {/* Toolbar */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, ease: 'easeOut', delay: 0.05 }}
+            className="tf-toolbar flex flex-wrap gap-4"
+          >
+            <div className="relative flex-1 min-w-[220px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{color:'var(--tf-text-muted)'}} />
+              <input
+                type="text"
+                placeholder="Search by ID or trait"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="tf-input"
+              />
+            </div>
+            <div className="hidden md:flex items-center gap-2">
+              <button onClick={() => setSortBy('date')} className={`tf-chip ${sortBy==='date' ? 'active' : ''}`}>Latest</button>
+              <button onClick={() => setSortBy('tier')} className={`tf-chip ${sortBy==='tier' ? 'active' : ''}`}>Tier</button>
+            </div>
+            <div className="hidden sm:flex items-center gap-2">
+              <button onClick={() => setFilterVerified('all')} className={`tf-chip ${filterVerified==='all' ? 'active' : ''}`}>All</button>
+              <button onClick={() => setFilterVerified('verified')} className={`tf-chip ${filterVerified==='verified' ? 'active' : ''}`}>Verified</button>
+              <button onClick={() => setFilterVerified('unverified')} className={`tf-chip ${filterVerified==='unverified' ? 'active' : ''}`}>Unverified</button>
+            </div>
+          </motion.div>
 
-        {/* Toolbar */}
-        <div className="tf-toolbar mt-4">
-          <div className="relative flex-1 min-w-[220px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{color:'var(--tf-text-muted)'}} />
-            <input
-              type="text"
-              placeholder="Search by ID or trait"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="tf-input"
-            />
-          </div>
-          <div className="hidden md:flex items-center gap-2">
-            <button onClick={() => setSortBy('date')} className={`tf-chip ${sortBy==='date' ? 'active' : ''}`}>Latest</button>
-            <button onClick={() => setSortBy('tier')} className={`tf-chip ${sortBy==='tier' ? 'active' : ''}`}>Tier</button>
-          </div>
-          <div className="hidden sm:flex items-center gap-2">
-            <button onClick={() => setFilterVerified('all')} className={`tf-chip ${filterVerified==='all' ? 'active' : ''}`}>All</button>
-            <button onClick={() => setFilterVerified('verified')} className={`tf-chip ${filterVerified==='verified' ? 'active' : ''}`}>Verified</button>
-            <button onClick={() => setFilterVerified('unverified')} className={`tf-chip ${filterVerified==='unverified' ? 'active' : ''}`}>Unverified</button>
-          </div>
-        </div>
-
-        {/* Quick Actions */}
-        {/*
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <Link to="/discover" className="group bg-white/80 backdrop-blur-sm rounded-xl p-4 shadow-lg hover:shadow-xl transition-all duration-300 border border-white/20 hover:scale-105">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center group-hover:scale-110 transition-transform">
-                <Sparkles className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <p className="font-semibold text-gray-900">Discover</p>
-                <p className="text-xs text-gray-600">New cards</p>
-              </div>
-            </div>
-          </Link>
-          <Link to="/leaderboard" className="group bg-white/80 backdrop-blur-sm rounded-xl p-4 shadow-lg hover:shadow-xl transition-all duration-300 border border-white/20 hover:scale-105">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center group-hover:scale-110 transition-transform">
-                <TrendingUp className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <p className="font-semibold text-gray-900">Leaderboard</p>
-                <p className="text-xs text-gray-600">Rankings</p>
-              </div>
-            </div>
-          </Link>
-          <Link to="/marketplace" className="group bg-white/80 backdrop-blur-sm rounded-xl p-4 shadow-lg hover:shadow-xl transition-all duration-300 border border-white/20 hover:scale-105">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-pink-500 to-orange-500 flex items-center justify-center group-hover:scale-110 transition-transform">
-                <Award className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <p className="font-semibold text-gray-900">Marketplace</p>
-                <p className="text-xs text-gray-600">Trade</p>
-              </div>
-            </div>
-          </Link>
-          <Link to="/achievements" className="group bg-white/80 backdrop-blur-sm rounded-xl p-4 shadow-lg hover:shadow-xl transition-all duration-300 border border-white/20 hover:scale-105">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500 to-teal-500 flex items-center justify-center group-hover:scale-110 transition-transform">
-                <Award className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <p className="font-semibold text-gray-900">Achievements</p>
-                <p className="text-xs text-gray-600">Badges</p>
-              </div>
-            </div>
-          </Link>
-        </div>
-            */}
+        {/* Quick Actions hidden until UX finalized */}
         {/* My Cards */}
-        <div className="tf-glass rounded-2xl shadow-xl p-6 border tf-border">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        <motion.section
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, ease: 'easeOut', delay: 0.12 }}
+          className="tf-glass rounded-3xl border tf-border p-6 shadow-2xl lg:p-8"
+        >
+          <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                <Sparkles className="w-6 h-6 text-purple-600" />
+              <h2 className="flex items-center gap-2 text-2xl font-bold text-gray-900">
+                <Sparkles className="h-6 w-6 text-purple-500" />
                 My Cards
               </h2>
-              <p className="text-sm text-gray-600 mt-1">
+              <p className="mt-1 text-sm text-gray-600">
                 {cards.length} total collectibles
                 {verifiedCredentialsCount > 0 && (
-                  <span className="ml-2 text-green-600 font-semibold">
+                  <span className="ml-2 font-semibold text-green-500">
                     • {verifiedCredentialsCount} verified
                   </span>
                 )}
               </p>
             </div>
-            
             <div className="flex items-center gap-3">
-              <div className="relative flex-1 sm:flex-initial">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Search cards..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full sm:w-48 pl-10 pr-4 py-2 bg-gray-100 border-0 rounded-xl focus:ring-2 focus:ring-purple-500 text-sm transition-all"
-                />
-              </div>
-              
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className="p-2 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors"
+                className={`rounded-xl border border-white/10 bg-white/20 p-2 text-slate-600 transition hover:border-indigo-400/40 hover:bg-indigo-500/10 dark:text-slate-200`}
+                aria-label="Toggle filters"
               >
-                <Filter className="w-5 h-5 text-gray-600" />
+                <Filter className="h-5 w-5" />
               </button>
-              
-              <div className="flex bg-gray-100 rounded-xl p-1">
+              <div className="flex items-center rounded-xl border border-white/10 bg-white/30 p-1 dark:border-white/5 dark:bg-slate-800/60">
                 <button
                   onClick={() => setViewMode("grid")}
-                  className={`p-2 rounded-lg transition-colors ${viewMode === "grid" ? "bg-white shadow-sm" : "hover:bg-gray-200"}`}
+                  className={`rounded-lg px-3 py-2 transition ${viewMode === "grid" ? "bg-white/90 text-slate-900 shadow" : "text-slate-500 hover:bg-white/30 dark:text-slate-300"}`}
+                  aria-label="Grid view"
                 >
-                  <Grid className="w-4 h-4 text-gray-600" />
+                  <Grid className="h-4 w-4" />
                 </button>
                 <button
                   onClick={() => setViewMode("list")}
-                  className={`p-2 rounded-lg transition-colors ${viewMode === "list" ? "bg-white shadow-sm" : "hover:bg-gray-200"}`}
+                  className={`rounded-lg px-3 py-2 transition ${viewMode === "list" ? "bg-white/90 text-slate-900 shadow" : "text-slate-500 hover:bg-white/30 dark:text-slate-300"}`}
+                  aria-label="List view"
                 >
-                  <List className="w-4 h-4 text-gray-600" />
+                  <List className="h-4 w-4" />
                 </button>
               </div>
             </div>
           </div>
 
           {showFilters && (
-            <div className="mb-6 p-4 tf-glass-alt rounded-xl border tf-border animate-in slide-in-from-top">
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+              className="mb-6 rounded-2xl border border-white/10 bg-white/70 p-4 shadow-inner dark:bg-slate-950/60"
+            >
               <div className="space-y-3">
                 <div>
-                  <p className="text-xs font-semibold text-gray-600 mb-2">Sort By</p>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-gray-600 dark:text-slate-300">Sort By</p>
                   <div className="flex flex-wrap gap-2">
                     <button
                       onClick={() => setSortBy("date")}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                      className={`px-4 py-2 text-sm font-medium transition-all ${
                         sortBy === "date"
-                          ? "bg-purple-600 text-white shadow-lg"
-                          : "bg-white text-gray-700 hover:bg-gray-100"
+                          ? "rounded-lg bg-purple-600 text-white shadow-lg"
+                          : "rounded-lg bg-white/80 text-gray-700 hover:bg-white"
                       }`}
                     >
                       Latest First
                     </button>
                     <button
                       onClick={() => setSortBy("tier")}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                      className={`px-4 py-2 text-sm font-medium transition-all ${
                         sortBy === "tier"
-                          ? "bg-purple-600 text-white shadow-lg"
-                          : "bg-white text-gray-700 hover:bg-gray-100"
+                          ? "rounded-lg bg-purple-600 text-white shadow-lg"
+                          : "rounded-lg bg-white/80 text-gray-700 hover:bg-white"
                       }`}
                     >
                       Highest Tier
                     </button>
                   </div>
                 </div>
-                
+
                 <div>
-                  <p className="text-xs font-semibold text-gray-600 mb-2">Verification Status</p>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-gray-600 dark:text-slate-300">Verification Status</p>
                   <div className="flex flex-wrap gap-2">
                     <button
                       onClick={() => setFilterVerified("all")}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                      className={`px-4 py-2 text-sm font-medium transition-all ${
                         filterVerified === "all"
-                          ? "bg-purple-600 text-white shadow-lg"
-                          : "bg-white text-gray-700 hover:bg-gray-100"
+                          ? "rounded-lg bg-purple-600 text-white shadow-lg"
+                          : "rounded-lg bg-white/80 text-gray-700 hover:bg-white"
                       }`}
                     >
                       All Cards
                     </button>
                     <button
                       onClick={() => setFilterVerified("verified")}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-1 ${
+                      className={`flex items-center gap-1 px-4 py-2 text-sm font-medium transition-all ${
                         filterVerified === "verified"
-                          ? "bg-green-600 text-white shadow-lg"
-                          : "bg-white text-gray-700 hover:bg-gray-100"
+                          ? "rounded-lg bg-green-600 text-white shadow-lg"
+                          : "rounded-lg bg-white/80 text-gray-700 hover:bg-white"
                       }`}
                     >
-                      <Shield className="w-4 h-4" />
+                      <Shield className="h-4 w-4" />
                       Verified Only
                     </button>
                     <button
                       onClick={() => setFilterVerified("unverified")}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                      className={`px-4 py-2 text-sm font-medium transition-all ${
                         filterVerified === "unverified"
-                          ? "bg-gray-600 text-white shadow-lg"
-                          : "bg-white text-gray-700 hover:bg-gray-100"
+                          ? "rounded-lg bg-slate-700 text-white shadow-lg"
+                          : "rounded-lg bg-white/80 text-gray-700 hover:bg-white"
                       }`}
                     >
                       Unverified Only
@@ -447,7 +404,7 @@ export const UserDashboard: React.FC = () => {
                   </div>
                 </div>
               </div>
-            </div>
+            </motion.div>
           )}
 
           {/* Credentials Loading Error */}
@@ -464,7 +421,7 @@ export const UserDashboard: React.FC = () => {
           )}
 
           {profileLoading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid justify-items-center gap-6 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
               {[1, 2, 3].map(i => (
                 <div key={i} className="animate-pulse">
                   <div className="h-48 bg-gray-200 rounded-xl"></div>
@@ -474,7 +431,16 @@ export const UserDashboard: React.FC = () => {
             </div>
           ) : filteredCards.length > 0 ? (
             <>
-              <div className={viewMode === "grid" ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6" : "space-y-4"}>
+              {viewMode === "list" && (
+                <div className="hidden sm:grid grid-cols-[minmax(0,2.6fr)_repeat(4,minmax(0,1fr))] gap-4 px-2 pb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+                  <span>Item</span>
+                  <span>Tier</span>
+                  <span>Points</span>
+                  <span>Status</span>
+                  <span>Claimed</span>
+                </div>
+              )}
+              <div className={viewMode === "grid" ? "grid justify-items-center gap-6 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4" : "flex flex-col gap-3"}>
                 {paginatedCards.map(card => {
                   const cardIdStr = card.cardId.toString();
                   const credential = credentialsByCardId.get(cardIdStr);
@@ -483,6 +449,7 @@ export const UserDashboard: React.FC = () => {
                       key={cardIdStr} 
                       card={card} 
                       credential={credential}
+                      compact={viewMode === "list"}
                     />
                   );
                 })}
@@ -564,74 +531,78 @@ export const UserDashboard: React.FC = () => {
               )}
             </div>
           )}
-        </div>
+        </motion.section>
 
-        {/* Score Breakdown */}
-        <div className="tf-glass rounded-2xl shadow-xl p-6 border tf-border">
-          <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-            <TrendingUp className="w-6 h-6 text-blue-600" />
-            Score Breakdown
-          </h2>
-          {profileLoading ? (
-            <div className="animate-pulse space-y-4">
-              {[1, 2, 3].map(i => (
-                <div key={i} className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-gray-200 rounded-xl"></div>
-                  <div className="flex-1 h-8 bg-gray-200 rounded"></div>
-                </div>
-              ))}
-            </div>
-          ) : cards.length > 0 ? (
-            <div className="space-y-4">
-              {tierStats.map(({ tier, count, points }) => (
-                <div key={tier} className="group">
-                  <div className="flex justify-between items-center mb-2">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-bold text-white shadow-lg ${
-                        tier === 1 ? 'bg-gradient-to-br from-green-400 to-green-600' :
-                        tier === 2 ? 'bg-gradient-to-br from-blue-400 to-blue-600' :
-                        'bg-gradient-to-br from-purple-400 to-purple-600'
-                      }`}>
-                        T{tier}
+        <motion.section
+          initial={{ opacity: 0, y: 28 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: 'easeOut', delay: 0.18 }}
+          className="grid gap-10 lg:grid-cols-2"
+        >
+          <div className="tf-glass rounded-2xl border tf-border p-6 shadow-xl">
+            <h2 className="mb-6 flex items-center gap-2 text-xl font-bold text-gray-900">
+              <TrendingUp className="h-6 w-6 text-blue-600" />
+              Score Breakdown
+            </h2>
+            {profileLoading ? (
+              <div className="space-y-4 animate-pulse">
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="flex items-center gap-4">
+                    <div className="h-12 w-12 rounded-xl bg-gray-200"></div>
+                    <div className="h-8 flex-1 rounded bg-gray-200"></div>
+                  </div>
+                ))}
+              </div>
+            ) : cards.length > 0 ? (
+              <div className="space-y-4">
+                {tierStats.map(({ tier, count, points }) => (
+                  <div key={tier} className="group">
+                    <div className="mb-2 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className={`flex h-12 w-12 items-center justify-center rounded-xl font-bold text-white shadow-lg ${
+                          tier === 1 ? 'bg-gradient-to-br from-green-400 to-green-600' :
+                          tier === 2 ? 'bg-gradient-to-br from-blue-400 to-blue-600' :
+                          'bg-gradient-to-br from-purple-400 to-purple-600'
+                        }`}>
+                          T{tier}
+                        </div>
+                        <div>
+                          <p className="font-semibold text-gray-900">Tier {tier} Cards</p>
+                          <p className="text-xs text-gray-600">{count} cards collected</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-semibold text-gray-900">Tier {tier} Cards</p>
-                        <p className="text-xs text-gray-600">{count} cards collected</p>
-                      </div>
+                      <span className="text-lg font-bold text-gray-900">{points} pts</span>
                     </div>
-                    <span className="text-lg font-bold text-gray-900">{points} pts</span>
+                    <div className="relative h-2 overflow-hidden rounded-full bg-gray-200">
+                      <div
+                        className={`absolute inset-y-0 left-0 rounded-full transition-all duration-500 ${
+                          tier === 1 ? 'bg-gradient-to-r from-green-400 to-green-600' :
+                          tier === 2 ? 'bg-gradient-to-r from-blue-400 to-blue-600' :
+                          'bg-gradient-to-r from-purple-400 to-purple-600'
+                        }`}
+                        style={{ width: `${cards.length > 0 ? (count / cards.length) * 100 : 0}%` }}
+                      ></div>
+                    </div>
                   </div>
-                  <div className="relative h-2 bg-gray-200 rounded-full overflow-hidden">
-                    <div
-                      className={`absolute inset-y-0 left-0 rounded-full transition-all duration-500 ${
-                        tier === 1 ? 'bg-gradient-to-r from-green-400 to-green-600' :
-                        tier === 2 ? 'bg-gradient-to-r from-blue-400 to-blue-600' :
-                        'bg-gradient-to-r from-purple-400 to-purple-600'
-                      }`}
-                      style={{ width: `${cards.length > 0 ? (count / cards.length) * 100 : 0}%` }}
-                    ></div>
-                  </div>
+                ))}
+                <div className="flex items-center justify-between border-t-2 border-gray-200 pt-4">
+                  <span className="text-lg font-bold text-gray-900">Total Score</span>
+                  <span className="text-2xl font-black text-transparent bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text">
+                    {score}
+                  </span>
                 </div>
-              ))}
-              <div className="pt-4 border-t-2 border-gray-200 flex justify-between items-center">
-                <span className="text-lg font-bold text-gray-900">Total Score</span>
-                <span className="text-2xl font-black bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                  {score}
-                </span>
               </div>
-            </div>
-          ) : (
-            <div className="text-center py-8">
-              <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-                <Award className="w-8 h-8 text-gray-400" />
+            ) : (
+              <div className="py-8 text-center">
+                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100">
+                  <Award className="h-8 w-8 text-gray-400" />
+                </div>
+                <p className="text-gray-600">No cards yet. Start collecting to build your score!</p>
               </div>
-              <p className="text-gray-600">No cards yet. Start collecting to build your score!</p>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
 
-        {/* Recent Activity */}
-        <div className="tf-glass rounded-2xl shadow-xl p-6 border tf-border">
+          <div className="tf-glass rounded-2xl border tf-border p-6 shadow-xl">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
               <Award className="w-6 h-6 text-green-600" />
@@ -709,6 +680,7 @@ export const UserDashboard: React.FC = () => {
             </div>
           )}
         </div>
+        </motion.section>
 
         {/* Progress Indicator */}
         {cards.length > 0 && cards.length < 10 && (
@@ -756,40 +728,40 @@ export const UserDashboard: React.FC = () => {
           </div>
         )}
       </div>
-
-      <style>{`
-        .scrollbar-hide::-webkit-scrollbar {
-          display: none;
-        }
-        .scrollbar-hide {
-          -ms-overflow-style: none;
-          scrollbar-width: none;
-        }
-        @keyframes slide-in-from-top {
-          from {
-            opacity: 0;
-            transform: translateY(-10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        @keyframes slide-in-from-bottom {
-          from {
-            opacity: 0;
-            transform: translateY(10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        .animate-in {
-          animation-duration: 0.5s;
-          animation-fill-mode: both;
-        }
-      `}</style>
     </div>
+    <style>{`
+      .scrollbar-hide::-webkit-scrollbar {
+        display: none;
+      }
+      .scrollbar-hide {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+      @keyframes slide-in-from-top {
+        from {
+          opacity: 0;
+          transform: translateY(-10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      @keyframes slide-in-from-bottom {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      .animate-in {
+        animation-duration: 0.5s;
+        animation-fill-mode: both;
+      }
+    `}</style>
+  </div>
   );
 };
